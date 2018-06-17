@@ -101,17 +101,7 @@ enum AnyValType {
     F64,
     Any(char),
     AnySeq,
-    None,
 }
-
-trait AnyValTypeBuilder {
-    fn append()
-}
-
-fn filter(v: Vec<AnyValType>) -> Vec<AnyValType> {
-    v.into_iter().filter(|x| *x != AnyValType::None).collect()
-}
-
 impl From<ValType> for AnyValType {
     fn from(other: ValType) -> Self {
         match other {
@@ -122,12 +112,41 @@ impl From<ValType> for AnyValType {
         }
     }
 }
-impl From<ResultType> for AnyValType {
-    fn from(other: ResultType) -> Self {
-        match other {
-            Some(t) => t.into(),
-            None => AnyValType::None,
+
+trait AnyValTypeBuilder<T> {
+    fn append(self, e: T) -> Vec<AnyValType>;
+}
+impl AnyValTypeBuilder<ValType> for Vec<AnyValType> {
+    fn append(mut self, e: ValType) -> Vec<AnyValType> {
+        self.push(e.into());
+        self
+    }
+}
+impl AnyValTypeBuilder<ResultType> for Vec<AnyValType> {
+    fn append(mut self, e: ResultType) -> Vec<AnyValType> {
+        if let Some(e) = e {
+            AnyValTypeBuilder::append(self, e)
+        } else {
+            self
         }
+    }
+}
+impl AnyValTypeBuilder<AnyValType> for Vec<AnyValType> {
+    fn append(mut self, e: AnyValType) -> Vec<AnyValType> {
+        self.push(e);
+        self
+    }
+}
+impl AnyValTypeBuilder<Vec<AnyValType>> for Vec<AnyValType> {
+    fn append(mut self, e: Vec<AnyValType>) -> Vec<AnyValType> {
+        self.extend(e);
+        self
+    }
+}
+impl AnyValTypeBuilder<Vec<ValType>> for Vec<AnyValType> {
+    fn append(mut self, e: Vec<ValType>) -> Vec<AnyValType> {
+        self.extend(e.into_iter().map(|x| x.into()));
+        self
     }
 }
 
@@ -154,8 +173,8 @@ impl From<FuncType> for AnyFuncType {
 
 macro_rules! ty {
     ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
-        args: filter(vec![$($a.into()),*]),
-        results: filter(vec![$($r.into()),*]),
+        args:    { let v = vec![]; $( let v = v.append($a); )* v },
+        results: { let v = vec![]; $( let v = v.append($r); )* v },
     })
 }
 
@@ -348,7 +367,7 @@ impl<'a> Ctx<'a> {
                     self.error(InstrCallIndirectElemTypeNotAnyFunc)?;
                 }
                 let ty = self.type_(x)?;
-                ty![ty.args, I32 ; ty.result]
+                ty![ty.args, I32 ; ty.results]
             }
 
 
