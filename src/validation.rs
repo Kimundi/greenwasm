@@ -82,6 +82,9 @@ impl<'a> Ctx<'a> {
             ..Default::default()
         }
     }
+    fn is_valid_with(&self, _ty: &AnyFuncType, _valid_type: &AnyFuncType) -> VResult<()> {
+        unimplemented!()
+    }
 }
 
 macro_rules! valid {
@@ -167,11 +170,6 @@ impl From<FuncType> for AnyFuncType {
         }
     }
 }
-impl AnyFuncType {
-    fn is_valid_with(&self, _valid_type: &Self) -> VResult<()> {
-        unimplemented!()
-    }
-}
 
 macro_rules! ty {
     ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
@@ -213,7 +211,7 @@ impl<'a> Ctx<'a> {
     valid!(self, _global_types: GlobalType, {
     });
 
-    valid_with!(self, instruction: Instr, valid_ty, {
+    valid_with!(self, instruction: Instr, valid_with_ty, {
         use self::Instr::*;
         use self::ValType::*;
 
@@ -371,10 +369,10 @@ impl<'a> Ctx<'a> {
             }
         };
 
-        ty.is_valid_with(valid_ty)?;
+        self.is_valid_with(&ty, &valid_with_ty)?;
     });
 
-    valid_with!(self, instruction_sequence: [Instr], valid_ty, {
+    valid_with!(self, instruction_sequence: [Instr], valid_with_ty, {
 
     });
 }
