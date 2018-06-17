@@ -9,15 +9,17 @@ use super::structure::types::Limits;
 use super::structure::instructions::Instr;
 
 #[derive(Default)]
-pub struct Ctx {
-    pub types: Vec<FuncType>,
-    pub funcs: Vec<FuncType>,
-    pub tables: Vec<TableType>,
-    pub mems: Vec<MemType>,
-    pub globals: Vec<GlobalType>,
-    pub locals: Vec<ValType>,
-    pub labels: Vec<ResultType>,
-    pub return_: Option<ResultType>,
+pub struct Ctx<'a> {
+    prepended_to: Option<&'a Ctx<'a>>,
+
+    types: Vec<FuncType>,
+    funcs: Vec<FuncType>,
+    tables: Vec<TableType>,
+    mems: Vec<MemType>,
+    globals: Vec<GlobalType>,
+    locals: Vec<ValType>,
+    labels: Vec<ResultType>,
+    return_: Option<ResultType>,
 }
 
 pub type VResult = Result<(), ValidationError>;
@@ -26,7 +28,7 @@ pub struct ValidationError {
 }
 use self::ValidationErrorEnum::*;
 
-impl Ctx {
+impl<'a> Ctx<'a> {
     fn error(&self, error: ValidationErrorEnum) -> VResult {
         Err(ValidationError {
             kind: error
@@ -46,7 +48,7 @@ pub enum ValidationErrorEnum {
     InstrStoreOveraligned,
 }
 
-impl Ctx {
+impl<'a> Ctx<'a> {
     fn local(&self, x: u32) -> Result<ValType, ValidationError> {
         unimplemented!()
     }
@@ -55,6 +57,13 @@ impl Ctx {
     }
     fn mem(&self, x: u32) -> Result<MemType, ValidationError> {
         unimplemented!()
+    }
+    fn with_prepended_label(&'a self, resulttype: ResultType) -> Ctx<'a> {
+        Ctx {
+            prepended_to: Some(self),
+            labels: vec![resulttype],
+            ..Default::default()
+        }
     }
 }
 
@@ -67,7 +76,64 @@ macro_rules! valid {
     )
 }
 
-impl Ctx {
+enum AnyValType {
+    I32,
+    I64,
+    F32,
+    F64,
+    Any(char),
+}
+impl From<ValType> for AnyValType {
+    fn from(other: ValType) -> Self {
+        match other {
+            I32 => AnyValType::I32,
+            I64 => AnyValType::I64,
+            F32 => AnyValType::F32,
+            F64 => AnyValType::F64,
+        }
+    }
+}
+
+fn any(t: char) -> AnyValType {
+    AnyValType::Any(t)
+}
+
+enum AnySeq {
+    Seq(Vec<AnyValType>),
+    Any,
+}
+impl From<Vec<AnyValType>> for AnySeq {
+    fn from(other: Vec<AnyValType>) -> Self {
+        AnySeq::Seq(other)
+    }
+}
+
+pub struct AnyFuncType {
+    args: AnySeq,
+    results: AnySeq,
+}
+
+macro_rules! ty {
+    (any;any) => (AnyFuncType {
+        args: AnySeq::Any,
+        results: AnySeq::Any,
+    });
+    ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
+        args: vec![$($a.into()),*].into(),
+        results: vec![$($r.into()),*].into(),
+    })
+}
+
+macro_rules! valid_with {
+    ($self:ident, $name:ident: $type:ty, $valid_ty:ident, $b:block) => (
+        pub fn $name(&$self, $name: &$type, $valid_ty: &AnyFuncType) -> VResult {
+            $b
+            $self.ok()
+        }
+    )
+}
+
+impl<'a> Ctx<'a> {
     valid!(self, limit: Limits, {
         if limit.max.unwrap_or(0) < limit.min {
             self.error(LimitMaxSmallerMin)?
@@ -91,85 +157,54 @@ impl Ctx {
     valid!(self, _global_types: GlobalType, {
     });
 
-    valid!(self, instruction: Instr, {
+    valid_with!(self, instruction: Instr, valid_ty, {
         use self::Instr::*;
         use self::ValType::*;
 
-        enum AnyValType {
-            I32,
-            I64,
-            F32,
-            F64,
-            Any(char),
-        }
-        impl From<ValType> for AnyValType {
-            fn from(other: ValType) -> Self {
-                match other {
-                    I32 => AnyValType::I32,
-                    I64 => AnyValType::I64,
-                    F32 => AnyValType::F32,
-                    F64 => AnyValType::F64,
-                }
-            }
-        }
-        let any = |t| AnyValType::Any(t);
-
-        struct AnyFuncType {
-            args: Vec<AnyValType>,
-            results: Vec<AnyValType>,
-        }
-
-        macro_rules! fty{
-            ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
-                args: vec![$($a.into()),*],
-                results: vec![$($r.into()),*],
-            })
-        }
-
         let ty = match *instruction {
             // numeric instructions
-            TConst(x)       => fty![               ; x.ty()],
-            TUnop(x)        => fty![x.ty()         ; x.ty()],
-            TBinop(x)       => fty![x.ty(), x.ty() ; x.ty()],
-            IxxTestop(x, _) => fty![x.ty()         ; I32   ],
-            TRelop(x)       => fty![x.ty(), x.ty() ; x.ty()],
+            TConst(x)       => ty![               ; x.ty()],
+            TUnop(x)        => ty![x.ty()         ; x.ty()],
+            TBinop(x)       => ty![x.ty(), x.ty() ; x.ty()],
+            IxxTestop(x, _) => ty![x.ty()         ; I32   ],
+            TRelop(x)       => ty![x.ty(), x.ty() ; x.ty()],
             // cvtops
-            TReinterpret(t)          => fty![t.from_ty() ; t.ty() ],
-            IxxTruncFxx(t2, _, t1)   => fty![t1.ty()     ; t2.ty()],
-            I32WrapI64               => fty![I64         ; I32    ],
-            I64ExtendI32(_)          => fty![I32         ; I64    ],
-            FxxConvertUxx(t2, _, t1) => fty![t1.ty()     ; t2.ty()],
-            F32DemoteF64             => fty![F64         ; F32    ],
-            F64PromoteF32            => fty![F32         ; F64    ],
+            TReinterpret(t)          => ty![t.from_ty() ; t.ty() ],
+            IxxTruncFxx(t2, _, t1)   => ty![t1.ty()     ; t2.ty()],
+            I32WrapI64               => ty![I64         ; I32    ],
+            I64ExtendI32(_)          => ty![I32         ; I64    ],
+            FxxConvertUxx(t2, _, t1) => ty![t1.ty()     ; t2.ty()],
+            F32DemoteF64             => ty![F64         ; F32    ],
+            F64PromoteF32            => ty![F32         ; F64    ],
 
             // parametric instructions
-            Drop   => fty![any('t')                ;         ],
-            Select => fty![any('t'), any('t'), I32 ; any('t')],
+            Drop   => ty![any('t')                ;         ],
+            Select => ty![any('t'), any('t'), I32 ; any('t')],
 
             // variable instructions
             GetLocal(x) => {
                 let t = self.local(x)?;
-                fty![ ; t]
+                ty![ ; t]
             }
             SetLocal(x) => {
                 let t = self.local(x)?;
-                fty![t ; ]
+                ty![t ; ]
             }
             TeeLocal(x) => {
                 let t = self.local(x)?;
-                fty![t ; t]
+                ty![t ; t]
             }
             GetGlobal(x) => {
                 let mut_t = self.global(x)?;
                 let t = mut_t.valtype;
-                fty![ ; t]
+                ty![ ; t]
             }
             SetGlobal(x) => {
                 let mut_t = self.global(x)?;
                 let t = mut_t.valtype;
                 use super::structure::types::Mut;
                 if let Mut::Var = mut_t.mutability {
-                    fty![t ; ]
+                    ty![t ; ]
                 } else {
                     return self.error(InstrSetGlobalNotVar);
                 }
@@ -196,11 +231,11 @@ impl Ctx {
                 };
                 let load = |t: ValType, memarg: Memarg, bit_width| {
                     validate(t, memarg, bit_width,
-                             InstrLoadOveraligned, fty![I32 ; t])
+                             InstrLoadOveraligned, ty![I32 ; t])
                 };
                 let store = |t: ValType, memarg: Memarg, bit_width| {
                     validate(t, memarg, bit_width,
-                             InstrStoreOveraligned, fty![I32, t ; ])
+                             InstrStoreOveraligned, ty![I32, t ; ])
                 };
 
                 match *load_store_instr {
@@ -217,6 +252,26 @@ impl Ctx {
                     _ => unreachable!(),
                 }
             }
+            CurrentMemory => { self.mem(0)?; ty![    ; I32] }
+            GrowMemory    => { self.mem(0)?; ty![I32 ; I32] }
+
+            // control instructions
+            Nop => ty![ ; ],
+            Unreachable => ty![any ; any],
+            Block(resulttype, ref block) => {
+                let C = self.with_prepended_label(resulttype);
+
+                let ty = if let Some(t) = resulttype {
+                    ty![ ; t]
+                } else {
+                    ty![ ; ]
+                };
+
+                C.instruction_sequence(block, &ty)?;
+
+                ty
+            }
+
 
             _ => unimplemented!(),
         };
@@ -226,7 +281,7 @@ impl Ctx {
         unimplemented!()
     });
 
-    valid!(self, instruction_sequence: [Instr], {
+    valid_with!(self, instruction_sequence: [Instr], valid_ty, {
 
     });
 }
