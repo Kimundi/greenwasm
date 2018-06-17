@@ -88,14 +88,16 @@ impl Ctx {
         }
 
         let ty = match *instruction {
-            I32Const(_) => fty![; I32],
-            I64Const(_) => fty![; I64],
-            F32Const(_) => fty![; F32],
-            F64Const(_) => fty![; F64],
-
+            TConst(v) => fty![; v.ty()],
+            TUnop(v) => fty![v.ty(); v.ty()],
+            TBinop(v) => fty![v.ty(), v.ty(); v.ty()],
 
             _ => panic!(),
         };
+
+        // TODO: What to do with type?
+
+        panic!()
     });
 
     valid!(self, instruction_sequence: [Instr], {
