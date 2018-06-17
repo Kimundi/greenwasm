@@ -85,15 +85,6 @@ impl<'a> Ctx<'a> {
     }
 }
 
-macro_rules! valid {
-    ($self:ident, $name:ident: $type:ty, $b:block) => (
-        pub fn $name(&$self, $name: &$type) -> VResult<()> {
-            $b
-            Ok(())
-        }
-    )
-}
-
 #[derive(Eq, PartialEq)]
 enum AnyValType {
     I32,
@@ -186,27 +177,27 @@ macro_rules! valid_with {
 }
 
 impl<'a> Ctx<'a> {
-    valid!(self, limit: Limits, {
+    valid_with!((self, limit: Limits) -> () {
         if limit.max.unwrap_or(0) < limit.min {
             self.error(LimitMaxSmallerMin)?
         }
     });
 
-    valid!(self, function_type: FuncType, {
+    valid_with!((self, function_type: FuncType) -> () {
         if function_type.results.len() > 1 {
             self.error(FunctionTypeResultArityGreaterOne)?
         }
     });
 
-    valid!(self, table_type: TableType, {
+    valid_with!((self, table_type: TableType) -> () {
         self.limit(&table_type.limits)?;
     });
 
-    valid!(self, memory_type: MemType, {
+    valid_with!((self, memory_type: MemType) -> () {
         self.limit(&memory_type.limits)?;
     });
 
-    valid!(self, _global_types: GlobalType, {
+    valid_with!((self, _global_types: GlobalType) -> () {
     });
 
     valid_with!((self, instruction: Instr) -> AnyFuncType {
