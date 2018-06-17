@@ -78,6 +78,11 @@ impl<'a> Ctx<'a> {
     fn is_valid_with(&self, _ty: &AnyFuncType, _valid_type: &AnyFuncType) -> VResult<()> {
         unimplemented!()
     }
+    fn find_ty_prefix(&self, _t2: &[AnyValType], _t: &[AnyValType])
+        -> VResult<Vec<AnyValType>>
+    {
+        unimplemented!()
+    }
 }
 
 macro_rules! valid {
@@ -172,8 +177,8 @@ macro_rules! ty {
 }
 
 macro_rules! valid_with {
-    ($self:ident, $name:ident: $type:ty, $b:block) => (
-        pub fn $name(&$self, $name: &$type) -> VResult<AnyFuncType> {
+    (($self:ident, $name:ident: $type:ty) -> $rt:ty $b:block) => (
+        pub fn $name(&$self, $name: &$type) -> VResult<$rt> {
             let ty = $b;
             Ok(ty)
         }
@@ -204,7 +209,7 @@ impl<'a> Ctx<'a> {
     valid!(self, _global_types: GlobalType, {
     });
 
-    valid_with!(self, instruction: Instr, {
+    valid_with!((self, instruction: Instr) -> AnyFuncType {
         use self::Instr::*;
         use self::ValType::*;
 
@@ -365,10 +370,22 @@ impl<'a> Ctx<'a> {
         ty
     });
 
-    valid_with!(self, instruction_sequence: [Instr], {
-        let mut ty = ty![any_seq('t') ; any_seq('t')];
+    valid_with!((self, instruction_sequence: [Instr]) -> AnyFuncType {
+        let mut instrs_ty = ty![any_seq('t') ; any_seq('t')];
 
+        for instr_n in instruction_sequence {
+            let AnyFuncType {
+                args:    t1,
+                results: t2,
+            } = instrs_ty;
+            let AnyFuncType {
+                args:    t,
+                results: t3,
+            } = self.instruction(instr_n)?;
+            let t0 = self.find_ty_prefix(&t2, &t)?;
+            instrs_ty = ty![t1 ; t0, t3];
+        }
 
-        unimplemented!()
+        instrs_ty
     });
 }
