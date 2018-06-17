@@ -1,2 +1,2 @@
-mod instantiation;
-mod invocation;
+pub mod instantiation;
+pub mod invocation;
