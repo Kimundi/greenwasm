@@ -62,7 +62,9 @@ pub struct Limits {
     pub max: Option<U32>,
 }
 
-pub type MemType = Limits;
+pub struct MemType {
+    pub limits: Limits,
+}
 
 pub struct TableType {
     pub limits: Limits,

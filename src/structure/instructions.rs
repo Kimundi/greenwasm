@@ -52,11 +52,11 @@ pub struct Expr {
 
 pub enum Instr {
     // numeric instructions
-    I32Const(I32),       I64Const(I64),     F32Const(F32),     F64Const(F64),
-    I32IUnop(IUnop),     I64IUnop(IUnop),   F32IUnop(FUnop),   F64IUnop(FUnop),
-    I32IBinop(IBinop),   I64IBinop(IBinop), F32IBinop(FBinop), F64IBinop(FBinop),
-    I32ITestop(ITestop), I64ITestop(ITestop),
-    I32IRelop(IRelop),   I64IRelop(IRelop), F32IRelop(FRelop), F64IRelop(FRelop),
+    I32Const(I32),      I64Const(I64),    F32Const(F32),    F64Const(F64),
+    I32Unop(IUnop),     I64Unop(IUnop),   F32Unop(FUnop),   F64Unop(FUnop),
+    I32Binop(IBinop),   I64Binop(IBinop), F32Binop(FBinop), F64Binop(FBinop),
+    I32Testop(ITestop), I64Testop(ITestop),
+    I32Relop(IRelop),   I64Relop(IRelop), F32Relop(FRelop), F64Relop(FRelop),
 
     I32WrapI64, I64ExtendUI32, I64ExtendSI32,
 
