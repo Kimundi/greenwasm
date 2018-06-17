@@ -26,20 +26,6 @@ pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
     pub kind: ValidationErrorEnum,
 }
-use self::ValidationErrorEnum::*;
-
-impl<'a> Ctx<'a> {
-    fn error(&self, error: ValidationErrorEnum) -> VResult<()> {
-        Err(ValidationError {
-            kind: error
-        })
-    }
-
-    fn ok(&self) -> VResult<()> {
-        Ok(())
-    }
-}
-
 pub enum ValidationErrorEnum {
     LimitMaxSmallerMin,
     FunctionTypeResultArityGreaterOne,
@@ -49,8 +35,15 @@ pub enum ValidationErrorEnum {
     InstrBrTableNotSameLabelType,
     InstrCallIndirectElemTypeNotAnyFunc,
 }
+use self::ValidationErrorEnum::*;
 
 impl<'a> Ctx<'a> {
+    fn error(&self, error: ValidationErrorEnum) -> VResult<()> {
+        Err(ValidationError {
+            kind: error
+        })
+    }
+
     fn local(&self, _x: u32) -> VResult<ValType> {
         unimplemented!()
     }
@@ -91,7 +84,7 @@ macro_rules! valid {
     ($self:ident, $name:ident: $type:ty, $b:block) => (
         pub fn $name(&$self, $name: &$type) -> VResult<()> {
             $b
-            $self.ok()
+            Ok(())
         }
     )
 }
@@ -179,10 +172,10 @@ macro_rules! ty {
 }
 
 macro_rules! valid_with {
-    ($self:ident, $name:ident: $type:ty, $valid_ty:ident, $b:block) => (
-        pub fn $name(&$self, $name: &$type, $valid_ty: &AnyFuncType) -> VResult<()> {
-            $b
-            $self.ok()
+    ($self:ident, $name:ident: $type:ty, $b:block) => (
+        pub fn $name(&$self, $name: &$type) -> VResult<AnyFuncType> {
+            let ty = $b;
+            Ok(ty)
         }
     )
 }
@@ -211,7 +204,7 @@ impl<'a> Ctx<'a> {
     valid!(self, _global_types: GlobalType, {
     });
 
-    valid_with!(self, instruction: Instr, valid_with_ty, {
+    valid_with!(self, instruction: Instr, {
         use self::Instr::*;
         use self::ValType::*;
 
@@ -314,20 +307,20 @@ impl<'a> Ctx<'a> {
             Block(resulttype, ref block) => {
                 let self_ = self.with_prepended_label(resulttype);
                 let ty = ty![ ; resulttype];
-                self_.instruction_sequence(block, &ty)?;
+                self_.is_valid_with(&self_.instruction_sequence(block)?, &ty)?;
                 ty
             }
             Loop(resulttype, ref block) => {
                 let self_ = self.with_prepended_label(None);
                 let ty = ty![ ; resulttype];
-                self_.instruction_sequence(block, &ty)?;
+                self_.is_valid_with(&self_.instruction_sequence(block)?, &ty)?;
                 ty
             }
             IfElse(resulttype, ref if_block, ref else_block) => {
                 let self_ = self.with_prepended_label(resulttype);
                 let ty = ty![ ; resulttype];
-                self_.instruction_sequence(if_block, &ty)?;
-                self_.instruction_sequence(else_block, &ty)?;
+                self_.is_valid_with(&self_.instruction_sequence(if_block)?, &ty)?;
+                self_.is_valid_with(&self_.instruction_sequence(else_block)?, &ty)?;
                 ty![I32 ; resulttype]
             }
             Br(labelidx) => {
@@ -369,10 +362,13 @@ impl<'a> Ctx<'a> {
             }
         };
 
-        self.is_valid_with(&ty, &valid_with_ty)?;
+        ty
     });
 
-    valid_with!(self, instruction_sequence: [Instr], valid_with_ty, {
+    valid_with!(self, instruction_sequence: [Instr], {
+        let mut ty = ty![any_seq('t') ; any_seq('t')];
 
+
+        unimplemented!()
     });
 }
