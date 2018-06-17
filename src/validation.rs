@@ -41,13 +41,19 @@ impl Ctx {
 pub enum ValidationErrorEnum {
     LimitMaxSmallerMin,
     FunctionTypeResultArityGreaterOne,
+    InstrSetGlobalNotVar,
+    InstrLoadOveraligned,
+    InstrStoreOveraligned,
 }
 
 impl Ctx {
-    fn local_defined(&self, x: u32) -> VResult {
+    fn local(&self, x: u32) -> Result<ValType, ValidationError> {
         unimplemented!()
     }
-    fn local_type(&self, x: u32) -> ValType {
+    fn global(&self, x: u32) -> Result<GlobalType, ValidationError> {
+        unimplemented!()
+    }
+    fn mem(&self, x: u32) -> Result<MemType, ValidationError> {
         unimplemented!()
     }
 }
@@ -142,27 +148,82 @@ impl Ctx {
 
             // variable instructions
             GetLocal(x) => {
-                self.local_defined(x)?;
-                let t = self.local_type(x);
+                let t = self.local(x)?;
                 fty![ ; t]
             }
             SetLocal(x) => {
-                self.local_defined(x)?;
-                let t = self.local_type(x);
+                let t = self.local(x)?;
                 fty![t ; ]
             }
             TeeLocal(x) => {
-                self.local_defined(x)?;
-                let t = self.local_type(x);
+                let t = self.local(x)?;
                 fty![t ; t]
             }
+            GetGlobal(x) => {
+                let mut_t = self.global(x)?;
+                let t = mut_t.valtype;
+                fty![ ; t]
+            }
+            SetGlobal(x) => {
+                let mut_t = self.global(x)?;
+                let t = mut_t.valtype;
+                use super::structure::types::Mut;
+                if let Mut::Var = mut_t.mutability {
+                    fty![t ; ]
+                } else {
+                    return self.error(InstrSetGlobalNotVar);
+                }
+            }
 
-            _ => panic!(),
+            // memory instructions
+            ref load_store_instr @ TLoad(..) |
+            ref load_store_instr @ IxxLoad8(..) |
+            ref load_store_instr @ IxxLoad16(..) |
+            ref load_store_instr @ I64Load32(..) |
+            ref load_store_instr @ TStore(..) |
+            ref load_store_instr @ IxxStore8(..) |
+            ref load_store_instr @ IxxStore16(..) |
+            ref load_store_instr @ I64Store32(..) => {
+                use super::structure::instructions::Memarg;
+
+                let validate = |t: ValType, memarg: Memarg, bit_width, e, r| {
+                    self.mem(0)?;
+                    let align = 1u32 << memarg.align;
+                    if align > (bit_width / 8) {
+                        self.error(e)?;
+                    }
+                    Ok(r)
+                };
+                let load = |t: ValType, memarg: Memarg, bit_width| {
+                    validate(t, memarg, bit_width,
+                             InstrLoadOveraligned, fty![I32 ; t])
+                };
+                let store = |t: ValType, memarg: Memarg, bit_width| {
+                    validate(t, memarg, bit_width,
+                             InstrStoreOveraligned, fty![I32, t ; ])
+                };
+
+                match *load_store_instr {
+                    TLoad(t, memarg)        => load(t, memarg, t.bit_width())?,
+                    IxxLoad8(t, _, memarg)  => load(t.ty(), memarg, 8)?,
+                    IxxLoad16(t, _, memarg) => load(t.ty(), memarg, 16)?,
+                    I64Load32(_, memarg)    => load(I64, memarg, 32)?,
+
+                    TStore(t, memarg)       => store(t, memarg, t.bit_width())?,
+                    IxxStore8(t, memarg)    => store(t.ty(), memarg, 8)?,
+                    IxxStore16(t, memarg)   => store(t.ty(), memarg, 16)?,
+                    I64Store32(memarg)      => store(I64, memarg, 32)?,
+
+                    _ => unreachable!(),
+                }
+            }
+
+            _ => unimplemented!(),
         };
 
         // TODO: What to do with type?
 
-        panic!()
+        unimplemented!()
     });
 
     valid!(self, instruction_sequence: [Instr], {
