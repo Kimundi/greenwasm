@@ -22,20 +22,20 @@ pub struct Ctx<'a> {
     return_: Option<ResultType>,
 }
 
-pub type VResult = Result<(), ValidationError>;
+pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
     pub kind: ValidationErrorEnum,
 }
 use self::ValidationErrorEnum::*;
 
 impl<'a> Ctx<'a> {
-    fn error(&self, error: ValidationErrorEnum) -> VResult {
+    fn error(&self, error: ValidationErrorEnum) -> VResult<()> {
         Err(ValidationError {
             kind: error
         })
     }
 
-    fn ok(&self) -> VResult {
+    fn ok(&self) -> VResult<()> {
         Ok(())
     }
 }
@@ -51,28 +51,28 @@ pub enum ValidationErrorEnum {
 }
 
 impl<'a> Ctx<'a> {
-    fn local(&self, x: u32) -> Result<ValType, ValidationError> {
+    fn local(&self, _x: u32) -> VResult<ValType> {
         unimplemented!()
     }
-    fn global(&self, x: u32) -> Result<GlobalType, ValidationError> {
+    fn global(&self, _x: u32) -> VResult<GlobalType> {
         unimplemented!()
     }
-    fn mem(&self, x: u32) -> Result<MemType, ValidationError> {
+    fn mem(&self, _x: u32) -> VResult<MemType> {
         unimplemented!()
     }
-    fn label(&self, x: u32) -> Result<ResultType, ValidationError> {
+    fn label(&self, _x: u32) -> VResult<ResultType> {
         unimplemented!()
     }
-    fn return_(&self) -> Result<ResultType, ValidationError> {
+    fn return_(&self) -> VResult<ResultType> {
         unimplemented!()
     }
-    fn func(&self, x: u32) -> Result<FuncType, ValidationError> {
+    fn func(&self, _x: u32) -> VResult<FuncType> {
         unimplemented!()
     }
-    fn table(&self, x: u32) -> Result<TableType, ValidationError> {
+    fn table(&self, _x: u32) -> VResult<TableType> {
         unimplemented!()
     }
-    fn type_(&self, x: u32) -> Result<FuncType, ValidationError> {
+    fn type_(&self, _x: u32) -> VResult<FuncType> {
         unimplemented!()
     }
     fn with_prepended_label(&'a self, resulttype: ResultType) -> Ctx<'a> {
@@ -86,7 +86,7 @@ impl<'a> Ctx<'a> {
 
 macro_rules! valid {
     ($self:ident, $name:ident: $type:ty, $b:block) => (
-        pub fn $name(&$self, $name: &$type) -> VResult {
+        pub fn $name(&$self, $name: &$type) -> VResult<()> {
             $b
             $self.ok()
         }
@@ -100,7 +100,7 @@ enum AnyValType {
     F32,
     F64,
     Any(char),
-    AnySeq,
+    AnySeq(char),
 }
 impl From<ValType> for AnyValType {
     fn from(other: ValType) -> Self {
@@ -114,37 +114,34 @@ impl From<ValType> for AnyValType {
 }
 
 trait AnyValTypeBuilder<T> {
-    fn append(self, e: T) -> Vec<AnyValType>;
+    fn append(self, e: T) -> Self;
 }
 impl AnyValTypeBuilder<ValType> for Vec<AnyValType> {
-    fn append(mut self, e: ValType) -> Vec<AnyValType> {
+    fn append(mut self, e: ValType) -> Self {
         self.push(e.into());
         self
     }
 }
 impl AnyValTypeBuilder<ResultType> for Vec<AnyValType> {
-    fn append(mut self, e: ResultType) -> Vec<AnyValType> {
-        if let Some(e) = e {
-            AnyValTypeBuilder::append(self, e)
-        } else {
-            self
-        }
+    fn append(mut self, e: ResultType) -> Self {
+        self.extend(e.map(|x| x.into()));
+        self
     }
 }
 impl AnyValTypeBuilder<AnyValType> for Vec<AnyValType> {
-    fn append(mut self, e: AnyValType) -> Vec<AnyValType> {
+    fn append(mut self, e: AnyValType) -> Self {
         self.push(e);
         self
     }
 }
 impl AnyValTypeBuilder<Vec<AnyValType>> for Vec<AnyValType> {
-    fn append(mut self, e: Vec<AnyValType>) -> Vec<AnyValType> {
+    fn append(mut self, e: Vec<AnyValType>) -> Self {
         self.extend(e);
         self
     }
 }
 impl AnyValTypeBuilder<Vec<ValType>> for Vec<AnyValType> {
-    fn append(mut self, e: Vec<ValType>) -> Vec<AnyValType> {
+    fn append(mut self, e: Vec<ValType>) -> Self {
         self.extend(e.into_iter().map(|x| x.into()));
         self
     }
@@ -154,8 +151,8 @@ fn any(t: char) -> AnyValType {
     AnyValType::Any(t)
 }
 
-fn any_seq() -> AnyValType {
-    AnyValType::AnySeq
+fn any_seq(t: char) -> AnyValType {
+    AnyValType::AnySeq(t)
 }
 
 pub struct AnyFuncType {
@@ -170,6 +167,11 @@ impl From<FuncType> for AnyFuncType {
         }
     }
 }
+impl AnyFuncType {
+    fn is_valid_with(&self, _valid_type: &Self) -> VResult<()> {
+        unimplemented!()
+    }
+}
 
 macro_rules! ty {
     ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
@@ -180,7 +182,7 @@ macro_rules! ty {
 
 macro_rules! valid_with {
     ($self:ident, $name:ident: $type:ty, $valid_ty:ident, $b:block) => (
-        pub fn $name(&$self, $name: &$type, $valid_ty: &AnyFuncType) -> VResult {
+        pub fn $name(&$self, $name: &$type, $valid_ty: &AnyFuncType) -> VResult<()> {
             $b
             $self.ok()
         }
@@ -310,7 +312,7 @@ impl<'a> Ctx<'a> {
 
             // control instructions
             Nop => ty![ ; ],
-            Unreachable => ty![any_seq() ; any_seq()],
+            Unreachable => ty![any_seq('t') ; any_seq('u')],
             Block(resulttype, ref block) => {
                 let self_ = self.with_prepended_label(resulttype);
                 let ty = ty![ ; resulttype];
@@ -332,7 +334,7 @@ impl<'a> Ctx<'a> {
             }
             Br(labelidx) => {
                 let resulttype = self.label(labelidx)?;
-                ty![any_seq(), resulttype ; any_seq()]
+                ty![any_seq('t'), resulttype ; any_seq('u')]
             }
             BrIf(labelidx) => {
                 let resulttype = self.label(labelidx)?;
@@ -340,19 +342,17 @@ impl<'a> Ctx<'a> {
             }
             BrTable(ref labelindices, labelidx_n) => {
                 let resulttype = self.label(labelidx_n)?;
-
                 for &li in labelindices {
                     let resulttype_i = self.label(li)?;
                     if resulttype_i != resulttype {
                         self.error(InstrBrTableNotSameLabelType)?;
                     }
                 }
-
-                ty![any_seq(), resulttype, I32 ; any_seq()]
+                ty![any_seq('t'), resulttype, I32 ; any_seq('u')]
             }
             Return => {
                 let resulttype = self.return_()?;
-                ty![any_seq(), resulttype ; any_seq()]
+                ty![any_seq('t'), resulttype ; any_seq('u')]
             }
             Call(x) => {
                 self.func(x)?.into()
@@ -369,14 +369,9 @@ impl<'a> Ctx<'a> {
                 let ty = self.type_(x)?;
                 ty![ty.args, I32 ; ty.results]
             }
-
-
-            _ => unimplemented!(),
         };
 
-        // TODO: What to do with type?
-
-        unimplemented!()
+        ty.is_valid_with(valid_ty)?;
     });
 
     valid_with!(self, instruction_sequence: [Instr], valid_ty, {
