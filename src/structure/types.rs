@@ -40,7 +40,7 @@ pub type F64 = f64;
 pub type Name = String;
 pub type Codepoint = char;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum ValType {
     I32,
     I64,
@@ -75,7 +75,7 @@ pub struct TableType {
     pub elemtype: ElemType,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum ElemType {
     AnyFunc,
 }
@@ -86,7 +86,7 @@ pub struct GlobalType {
     pub valtype: ValType,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Mut {
     Const,
     Var,

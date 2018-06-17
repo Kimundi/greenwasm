@@ -46,6 +46,8 @@ pub enum ValidationErrorEnum {
     InstrSetGlobalNotVar,
     InstrLoadOveraligned,
     InstrStoreOveraligned,
+    InstrBrTableNotSameLabelType,
+    InstrCallIndirectElemTypeNotAnyFunc,
 }
 
 impl<'a> Ctx<'a> {
@@ -59,6 +61,18 @@ impl<'a> Ctx<'a> {
         unimplemented!()
     }
     fn label(&self, x: u32) -> Result<ResultType, ValidationError> {
+        unimplemented!()
+    }
+    fn return_(&self) -> Result<ResultType, ValidationError> {
+        unimplemented!()
+    }
+    fn func(&self, x: u32) -> Result<FuncType, ValidationError> {
+        unimplemented!()
+    }
+    fn table(&self, x: u32) -> Result<TableType, ValidationError> {
+        unimplemented!()
+    }
+    fn type_(&self, x: u32) -> Result<FuncType, ValidationError> {
         unimplemented!()
     }
     fn with_prepended_label(&'a self, resulttype: ResultType) -> Ctx<'a> {
@@ -88,6 +102,10 @@ enum AnyValType {
     Any(char),
     AnySeq,
     None,
+}
+
+trait AnyValTypeBuilder {
+    fn append()
 }
 
 fn filter(v: Vec<AnyValType>) -> Vec<AnyValType> {
@@ -124,6 +142,14 @@ fn any_seq() -> AnyValType {
 pub struct AnyFuncType {
     args: Vec<AnyValType>,
     results: Vec<AnyValType>,
+}
+impl From<FuncType> for AnyFuncType {
+    fn from(FuncType { args, results }: FuncType) -> Self {
+        AnyFuncType {
+            args: args.into_iter().map(|x| x.into()).collect(),
+            results: results.into_iter().map(|x| x.into()).collect(),
+        }
+    }
 }
 
 macro_rules! ty {
@@ -212,11 +238,10 @@ impl<'a> Ctx<'a> {
                 let mut_t = self.global(x)?;
                 let t = mut_t.valtype;
                 use super::structure::types::Mut;
-                if let Mut::Var = mut_t.mutability {
-                    ty![t ; ]
-                } else {
-                    return self.error(InstrSetGlobalNotVar);
+                if mut_t.mutability != Mut::Var  {
+                    self.error(InstrSetGlobalNotVar)?;
                 }
+                ty![t ; ]
             }
 
             // memory instructions
@@ -269,37 +294,61 @@ impl<'a> Ctx<'a> {
             Unreachable => ty![any_seq() ; any_seq()],
             Block(resulttype, ref block) => {
                 let self_ = self.with_prepended_label(resulttype);
-
                 let ty = ty![ ; resulttype];
                 self_.instruction_sequence(block, &ty)?;
                 ty
             }
             Loop(resulttype, ref block) => {
                 let self_ = self.with_prepended_label(None);
-
                 let ty = ty![ ; resulttype];
                 self_.instruction_sequence(block, &ty)?;
                 ty
             }
             IfElse(resulttype, ref if_block, ref else_block) => {
                 let self_ = self.with_prepended_label(resulttype);
-
                 let ty = ty![ ; resulttype];
-
                 self_.instruction_sequence(if_block, &ty)?;
                 self_.instruction_sequence(else_block, &ty)?;
-
                 ty![I32 ; resulttype]
             }
             Br(labelidx) => {
                 let resulttype = self.label(labelidx)?;
-
                 ty![any_seq(), resulttype ; any_seq()]
             }
             BrIf(labelidx) => {
                 let resulttype = self.label(labelidx)?;
-
                 ty![resulttype, I32; resulttype]
+            }
+            BrTable(ref labelindices, labelidx_n) => {
+                let resulttype = self.label(labelidx_n)?;
+
+                for &li in labelindices {
+                    let resulttype_i = self.label(li)?;
+                    if resulttype_i != resulttype {
+                        self.error(InstrBrTableNotSameLabelType)?;
+                    }
+                }
+
+                ty![any_seq(), resulttype, I32 ; any_seq()]
+            }
+            Return => {
+                let resulttype = self.return_()?;
+                ty![any_seq(), resulttype ; any_seq()]
+            }
+            Call(x) => {
+                self.func(x)?.into()
+            }
+            CallIndirect(x) => {
+                let TableType {
+                    limits,
+                    elemtype,
+                } = self.table(0)?;
+                use super::structure::types::ElemType;
+                if elemtype != ElemType::AnyFunc {
+                    self.error(InstrCallIndirectElemTypeNotAnyFunc)?;
+                }
+                let ty = self.type_(x)?;
+                ty![ty.args, I32 ; ty.result]
             }
 
 
