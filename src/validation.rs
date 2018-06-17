@@ -76,13 +76,20 @@ macro_rules! valid {
     )
 }
 
+#[derive(Eq, PartialEq)]
 enum AnyValType {
     I32,
     I64,
     F32,
     F64,
     Any(char),
+    None,
 }
+
+fn filter(v: Vec<AnyValType>) -> Vec<AnyValType> {
+    v.into_iter().filter(|x| *x != AnyValType::None).collect()
+}
+
 impl From<ValType> for AnyValType {
     fn from(other: ValType) -> Self {
         match other {
@@ -90,6 +97,14 @@ impl From<ValType> for AnyValType {
             I64 => AnyValType::I64,
             F32 => AnyValType::F32,
             F64 => AnyValType::F64,
+        }
+    }
+}
+impl From<ResultType> for AnyValType {
+    fn from(other: ResultType) -> Self {
+        match other {
+            Some(t) => t.into(),
+            None => AnyValType::None,
         }
     }
 }
@@ -119,8 +134,8 @@ macro_rules! ty {
         results: AnySeq::Any,
     });
     ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
-        args: vec![$($a.into()),*].into(),
-        results: vec![$($r.into()),*].into(),
+        args: filter(vec![$($a.into()),*]).into(),
+        results: filter(vec![$($r.into()),*]).into(),
     })
 }
 
@@ -261,15 +276,26 @@ impl<'a> Ctx<'a> {
             Block(resulttype, ref block) => {
                 let C = self.with_prepended_label(resulttype);
 
-                let ty = if let Some(t) = resulttype {
-                    ty![ ; t]
-                } else {
-                    ty![ ; ]
-                };
-
+                let ty = ty![ ; resulttype];
                 C.instruction_sequence(block, &ty)?;
-
                 ty
+            }
+            Loop(resulttype, ref block) => {
+                let C = self.with_prepended_label(None);
+
+                let ty = ty![ ; resulttype];
+                C.instruction_sequence(block, &ty)?;
+                ty
+            }
+            IfElse(resulttype, ref if_block, ref else_block) => {
+                let C = self.with_prepended_label(resulttype);
+
+                let ty = ty![ ; resulttype];
+
+                C.instruction_sequence(if_block, &ty)?;
+                C.instruction_sequence(else_block, &ty)?;
+
+                panic!()
             }
 
 

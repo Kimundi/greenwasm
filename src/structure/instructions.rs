@@ -234,7 +234,7 @@ pub enum Instr {
     Unreachable,
     Block(ResultType, Vec<Instr>),
     Loop(ResultType, Vec<Instr>),
-    If(ResultType, Vec<Instr>, Vec<Instr>),
+    IfElse(ResultType, Vec<Instr>, Vec<Instr>),
     Br(LabelIdx),
     BrIf(LabelIdx),
     BrTable(Wec<LabelIdx>, LabelIdx),
