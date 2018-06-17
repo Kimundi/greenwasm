@@ -7,6 +7,7 @@ use super::structure::types::ResultType;
 use super::structure::types::Limits;
 
 use super::structure::instructions::Instr;
+use super::structure::instructions::Expr;
 
 #[derive(Default)]
 pub struct Ctx<'a> {
@@ -83,6 +84,9 @@ impl<'a> Ctx<'a> {
     {
         unimplemented!()
     }
+    fn any_vec_to_option(&self, vec: Vec<AnyValType>) -> Option<AnyValType> {
+        unimplemented!()
+    }
 }
 
 #[derive(Eq, PartialEq)]
@@ -93,7 +97,18 @@ enum AnyValType {
     F64,
     Any(char),
     AnySeq(char),
+    AnyOpt(char),
 }
+fn any(t: char) -> AnyValType {
+    AnyValType::Any(t)
+}
+fn any_seq(t: char) -> AnyValType {
+    AnyValType::AnySeq(t)
+}
+fn any_opt(t: char) -> AnyValType {
+    AnyValType::AnyOpt(t)
+}
+
 impl From<ValType> for AnyValType {
     fn from(other: ValType) -> Self {
         match other {
@@ -139,14 +154,6 @@ impl AnyValTypeBuilder<Vec<ValType>> for Vec<AnyValType> {
     }
 }
 
-fn any(t: char) -> AnyValType {
-    AnyValType::Any(t)
-}
-
-fn any_seq(t: char) -> AnyValType {
-    AnyValType::AnySeq(t)
-}
-
 pub struct AnyFuncType {
     args: Vec<AnyValType>,
     results: Vec<AnyValType>,
@@ -159,6 +166,8 @@ impl From<FuncType> for AnyFuncType {
         }
     }
 }
+
+pub type AnyResultType = Option<AnyValType>;
 
 macro_rules! ty {
     ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
@@ -378,5 +387,11 @@ impl<'a> Ctx<'a> {
         }
 
         instrs_ty
+    });
+
+    valid_with!((self, expr: Expr) -> AnyResultType {
+        let instrs_ty = self.instruction_sequence(&expr.body)?;
+        self.is_valid_with(&instrs_ty, &ty![ ; any_opt('t')])?;
+        self.any_vec_to_option(instrs_ty.results)
     });
 }
