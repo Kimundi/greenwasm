@@ -97,10 +97,10 @@ fn filter(v: Vec<AnyValType>) -> Vec<AnyValType> {
 impl From<ValType> for AnyValType {
     fn from(other: ValType) -> Self {
         match other {
-            I32 => AnyValType::I32,
-            I64 => AnyValType::I64,
-            F32 => AnyValType::F32,
-            F64 => AnyValType::F64,
+            ValType::I32 => AnyValType::I32,
+            ValType::I64 => AnyValType::I64,
+            ValType::F32 => AnyValType::F32,
+            ValType::F64 => AnyValType::F64,
         }
     }
 }
@@ -268,32 +268,38 @@ impl<'a> Ctx<'a> {
             Nop => ty![ ; ],
             Unreachable => ty![any_seq() ; any_seq()],
             Block(resulttype, ref block) => {
-                let C = self.with_prepended_label(resulttype);
+                let self_ = self.with_prepended_label(resulttype);
 
                 let ty = ty![ ; resulttype];
-                C.instruction_sequence(block, &ty)?;
+                self_.instruction_sequence(block, &ty)?;
                 ty
             }
             Loop(resulttype, ref block) => {
-                let C = self.with_prepended_label(None);
+                let self_ = self.with_prepended_label(None);
 
                 let ty = ty![ ; resulttype];
-                C.instruction_sequence(block, &ty)?;
+                self_.instruction_sequence(block, &ty)?;
                 ty
             }
             IfElse(resulttype, ref if_block, ref else_block) => {
-                let C = self.with_prepended_label(resulttype);
+                let self_ = self.with_prepended_label(resulttype);
 
                 let ty = ty![ ; resulttype];
 
-                C.instruction_sequence(if_block, &ty)?;
-                C.instruction_sequence(else_block, &ty)?;
+                self_.instruction_sequence(if_block, &ty)?;
+                self_.instruction_sequence(else_block, &ty)?;
 
                 ty![I32 ; resulttype]
             }
             Br(labelidx) => {
                 let resulttype = self.label(labelidx)?;
-                unimplemented!()
+
+                ty![any_seq(), resulttype ; any_seq()]
+            }
+            BrIf(labelidx) => {
+                let resulttype = self.label(labelidx)?;
+
+                ty![resulttype, I32; resulttype]
             }
 
 
