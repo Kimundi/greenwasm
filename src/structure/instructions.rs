@@ -59,6 +59,12 @@ pub struct Expr {
     pub body: Vec<Instr>,
 }
 
+#[derive(Copy, Clone)]
+pub enum Sx {
+    U,
+    S,
+}
+
 /// Helper types to encode instructions more concise
 mod helper {
     use super::*;
@@ -136,6 +142,46 @@ mod helper {
             }
         }
     }
+
+    #[derive(Copy, Clone)]
+    pub enum Relop {
+        IRelop(Ixx, IRelop),
+        FRelop(Fxx, FRelop),
+    }
+    impl Relop {
+        pub fn ty(&self) -> ValType {
+            match *self {
+                Relop::IRelop(x, _) => x.ty(),
+                Relop::FRelop(x, _) => x.ty(),
+            }
+        }
+    }
+
+    #[derive(Copy, Clone)]
+    pub enum TReinterpret {
+        I32F32,
+        I64F64,
+        F32I32,
+        F64I64,
+    }
+    impl TReinterpret {
+        pub fn ty(&self) -> ValType {
+            match *self {
+                TReinterpret::I32F32 => ValType::I32,
+                TReinterpret::I64F64 => ValType::I64,
+                TReinterpret::F32I32 => ValType::F32,
+                TReinterpret::F64I64 => ValType::F64,
+            }
+        }
+        pub fn from_ty(&self) -> ValType {
+            match *self {
+                TReinterpret::I32F32 => ValType::F32,
+                TReinterpret::I64F64 => ValType::F64,
+                TReinterpret::F32I32 => ValType::I32,
+                TReinterpret::F64I64 => ValType::I64,
+            }
+        }
+    }
 }
 pub use self::helper::*;
 
@@ -144,20 +190,18 @@ pub enum Instr {
     TConst(TConst),
     TUnop(Unop),
     TBinop(Binop),
-    I32Testop(ITestop), I64Testop(ITestop),
-    I32Relop(IRelop),   I64Relop(IRelop), F32Relop(FRelop), F64Relop(FRelop),
+    IxxTestop(Ixx, ITestop),
+    TRelop(Relop),
 
-    I32WrapI64, I64ExtendUI32, I64ExtendSI32,
+    I32WrapI64, I64ExtendI32(Sx),
 
-    I32TruncUF32, I64TruncUF32, I32TruncSF32, I64TruncSF32,
-    I32TruncUF64, I64TruncUF64, I32TruncSF64, I64TruncSF64,
+    IxxTruncFxx(Ixx, Sx, Fxx),
 
     F32DemoteF64, F64PromoteF32,
 
-    F32ConvertUI32, F64ConvertUi32, F32ConvertSI32, F64ConvertSI32,
-    F32ConvertUI64, F64ConvertUI64, F32ConvertSI64, F64ConvertSI64,
+    FxxConvertUxx(Fxx, Sx, Ixx),
 
-    I32ReinterpretF32, I64ReinterpretF64, F32ReinterpretI32, F64ReinterpretI64,
+    TReinterpret(TReinterpret),
 
     // parametric instructions
     Drop,
@@ -171,15 +215,15 @@ pub enum Instr {
     SetGlobal(GlobalIdx),
 
     // memory instructions
-    I32Load(Memarg), I64Load(Memarg), F32Load(Memarg), F64Load(Memarg),
-    I32Store(Memarg), I64Store(Memarg), F32Store(Memarg), F64Store(Memarg),
+    TLoad(ValType, Memarg),
+    TStore(ValType, Memarg),
 
-    I32Load8U(Memarg), I64Load8U(Memarg), I32Load8S(Memarg), I64Load8S(Memarg),
-    I32Load16U(Memarg), I64Load16U(Memarg), I32Load16S(Memarg), I64Load16S(Memarg),
-    I64Load32U(Memarg), I64Load32S(Memarg),
+    IxxLoad8(Ixx, Sx, Memarg),
+    IxxLoad16(Ixx, Sx, Memarg),
+    I64Load32(Sx, Memarg),
 
-    I32Store8(Memarg), I64Store8(Memarg),
-    I32Store16(Memarg), I64Store16(Memarg),
+    IxxStore8(Ixx, Memarg),
+    IxxStore16(Ixx, Memarg),
     I64Store32(Memarg),
 
     CurrentMemory,

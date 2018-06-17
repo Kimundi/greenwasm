@@ -40,6 +40,7 @@ pub type F64 = f64;
 pub type Name = String;
 pub type Codepoint = char;
 
+#[derive(Copy, Clone)]
 pub enum ValType {
     I32,
     I64,
@@ -57,29 +58,35 @@ pub struct FuncType {
     pub results: Wec<ValType>,
 }
 
+#[derive(Copy, Clone)]
 pub struct Limits {
     pub min: U32,
     pub max: Option<U32>,
 }
 
+#[derive(Copy, Clone)]
 pub struct MemType {
     pub limits: Limits,
 }
 
+#[derive(Copy, Clone)]
 pub struct TableType {
     pub limits: Limits,
     pub elemtype: ElemType,
 }
 
+#[derive(Copy, Clone)]
 pub enum ElemType {
     AnyFunc,
 }
 
+#[derive(Copy, Clone)]
 pub struct GlobalType {
     pub mutability: Mut,
     pub valtype: ValType,
 }
 
+#[derive(Copy, Clone)]
 pub enum Mut {
     Const,
     Var,

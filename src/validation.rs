@@ -43,6 +43,15 @@ pub enum ValidationErrorEnum {
     FunctionTypeResultArityGreaterOne,
 }
 
+impl Ctx {
+    fn local_defined(&self, x: u32) -> VResult {
+        unimplemented!()
+    }
+    fn local_type(&self, x: u32) -> ValType {
+        unimplemented!()
+    }
+}
+
 macro_rules! valid {
     ($self:ident, $name:ident: $type:ty, $b:block) => (
         pub fn $name(&$self, $name: &$type) -> VResult {
@@ -80,17 +89,73 @@ impl Ctx {
         use self::Instr::*;
         use self::ValType::*;
 
+        enum AnyValType {
+            I32,
+            I64,
+            F32,
+            F64,
+            Any(char),
+        }
+        impl From<ValType> for AnyValType {
+            fn from(other: ValType) -> Self {
+                match other {
+                    I32 => AnyValType::I32,
+                    I64 => AnyValType::I64,
+                    F32 => AnyValType::F32,
+                    F64 => AnyValType::F64,
+                }
+            }
+        }
+        let any = |t| AnyValType::Any(t);
+
+        struct AnyFuncType {
+            args: Vec<AnyValType>,
+            results: Vec<AnyValType>,
+        }
+
         macro_rules! fty{
-            ($($a:expr),*;$($r:expr),*) => (FuncType {
-                args: vec![$($a),*],
-                results: vec![$($r),*],
+            ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
+                args: vec![$($a.into()),*],
+                results: vec![$($r.into()),*],
             })
         }
 
         let ty = match *instruction {
-            TConst(v) => fty![; v.ty()],
-            TUnop(v) => fty![v.ty(); v.ty()],
-            TBinop(v) => fty![v.ty(), v.ty(); v.ty()],
+            // numeric instructions
+            TConst(x)       => fty![               ; x.ty()],
+            TUnop(x)        => fty![x.ty()         ; x.ty()],
+            TBinop(x)       => fty![x.ty(), x.ty() ; x.ty()],
+            IxxTestop(x, _) => fty![x.ty()         ; I32   ],
+            TRelop(x)       => fty![x.ty(), x.ty() ; x.ty()],
+            // cvtops
+            TReinterpret(t)          => fty![t.from_ty() ; t.ty() ],
+            IxxTruncFxx(t2, _, t1)   => fty![t1.ty()     ; t2.ty()],
+            I32WrapI64               => fty![I64         ; I32    ],
+            I64ExtendI32(_)          => fty![I32         ; I64    ],
+            FxxConvertUxx(t2, _, t1) => fty![t1.ty()     ; t2.ty()],
+            F32DemoteF64             => fty![F64         ; F32    ],
+            F64PromoteF32            => fty![F32         ; F64    ],
+
+            // parametric instructions
+            Drop   => fty![any('t')                ;         ],
+            Select => fty![any('t'), any('t'), I32 ; any('t')],
+
+            // variable instructions
+            GetLocal(x) => {
+                self.local_defined(x)?;
+                let t = self.local_type(x);
+                fty![ ; t]
+            }
+            SetLocal(x) => {
+                self.local_defined(x)?;
+                let t = self.local_type(x);
+                fty![t ; ]
+            }
+            TeeLocal(x) => {
+                self.local_defined(x)?;
+                let t = self.local_type(x);
+                fty![t ; t]
+            }
 
             _ => panic!(),
         };
