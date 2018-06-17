@@ -58,6 +58,9 @@ impl<'a> Ctx<'a> {
     fn mem(&self, x: u32) -> Result<MemType, ValidationError> {
         unimplemented!()
     }
+    fn label(&self, x: u32) -> Result<ResultType, ValidationError> {
+        unimplemented!()
+    }
     fn with_prepended_label(&'a self, resulttype: ResultType) -> Ctx<'a> {
         Ctx {
             prepended_to: Some(self),
@@ -83,6 +86,7 @@ enum AnyValType {
     F32,
     F64,
     Any(char),
+    AnySeq,
     None,
 }
 
@@ -113,29 +117,19 @@ fn any(t: char) -> AnyValType {
     AnyValType::Any(t)
 }
 
-enum AnySeq {
-    Seq(Vec<AnyValType>),
-    Any,
-}
-impl From<Vec<AnyValType>> for AnySeq {
-    fn from(other: Vec<AnyValType>) -> Self {
-        AnySeq::Seq(other)
-    }
+fn any_seq() -> AnyValType {
+    AnyValType::AnySeq
 }
 
 pub struct AnyFuncType {
-    args: AnySeq,
-    results: AnySeq,
+    args: Vec<AnyValType>,
+    results: Vec<AnyValType>,
 }
 
 macro_rules! ty {
-    (any;any) => (AnyFuncType {
-        args: AnySeq::Any,
-        results: AnySeq::Any,
-    });
     ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
-        args: filter(vec![$($a.into()),*]).into(),
-        results: filter(vec![$($r.into()),*]).into(),
+        args: filter(vec![$($a.into()),*]),
+        results: filter(vec![$($r.into()),*]),
     })
 }
 
@@ -272,7 +266,7 @@ impl<'a> Ctx<'a> {
 
             // control instructions
             Nop => ty![ ; ],
-            Unreachable => ty![any ; any],
+            Unreachable => ty![any_seq() ; any_seq()],
             Block(resulttype, ref block) => {
                 let C = self.with_prepended_label(resulttype);
 
@@ -295,7 +289,11 @@ impl<'a> Ctx<'a> {
                 C.instruction_sequence(if_block, &ty)?;
                 C.instruction_sequence(else_block, &ty)?;
 
-                panic!()
+                ty![I32 ; resulttype]
+            }
+            Br(labelidx) => {
+                let resulttype = self.label(labelidx)?;
+                unimplemented!()
             }
 
 
