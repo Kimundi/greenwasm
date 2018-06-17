@@ -109,5 +109,3 @@ pub enum Instr {
     Call(FuncIdx),
     CallIndirect(TypeIdx),
 }
-
-

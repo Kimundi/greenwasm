@@ -89,17 +89,3 @@ pub enum ExternType {
     Mem(MemType),
     Global(GlobalType),
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
