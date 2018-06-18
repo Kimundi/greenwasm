@@ -5,9 +5,12 @@ use super::structure::types::GlobalType;
 use super::structure::types::ValType;
 use super::structure::types::ResultType;
 use super::structure::types::Limits;
+use super::structure::types::Mut;
+use super::structure::types::ElemType;
 
 use super::structure::instructions::Instr;
 use super::structure::instructions::Expr;
+use super::structure::instructions::Memarg;
 
 #[derive(Default)]
 pub struct Ctx<'a> {
@@ -35,6 +38,8 @@ pub enum ValidationErrorEnum {
     InstrStoreOveraligned,
     InstrBrTableNotSameLabelType,
     InstrCallIndirectElemTypeNotAnyFunc,
+    ConstExprGetGlobalNotConst,
+    ConstExprIlligalInstruction,
 }
 use self::ValidationErrorEnum::*;
 
@@ -254,7 +259,6 @@ impl<'a> Ctx<'a> {
             SetGlobal(x) => {
                 let mut_t = self.global(x)?;
                 let t = mut_t.valtype;
-                use super::structure::types::Mut;
                 if mut_t.mutability != Mut::Var  {
                     self.error(InstrSetGlobalNotVar)?;
                 }
@@ -270,8 +274,6 @@ impl<'a> Ctx<'a> {
             ref load_store_instr @ IxxStore8(..) |
             ref load_store_instr @ IxxStore16(..) |
             ref load_store_instr @ I64Store32(..) => {
-                use super::structure::instructions::Memarg;
-
                 let validate = |t: ValType, memarg: Memarg, bit_width, e, r| {
                     self.mem(0)?;
                     let align = 1u32 << memarg.align;
@@ -358,7 +360,6 @@ impl<'a> Ctx<'a> {
                     limits,
                     elemtype,
                 } = self.table(0)?;
-                use super::structure::types::ElemType;
                 if elemtype != ElemType::AnyFunc {
                     self.error(InstrCallIndirectElemTypeNotAnyFunc)?;
                 }
@@ -393,5 +394,22 @@ impl<'a> Ctx<'a> {
         let instrs_ty = self.instruction_sequence(&expr.body)?;
         self.is_valid_with(&instrs_ty, &ty![ ; any_opt('t')])?;
         self.any_vec_to_option(instrs_ty.results)
+    });
+
+    valid_with!((self, const_expr: Expr) -> () {
+        for instr in &const_expr.body {
+            use self::Instr::*;
+            match *instr {
+                TConst(_) => (),
+                GetGlobal(x) => {
+                    if self.global(x)?.mutability != Mut::Const {
+                        self.error(ConstExprGetGlobalNotConst)?;
+                    }
+                }
+                _ => {
+                    self.error(ConstExprIlligalInstruction)?;
+                }
+            }
+        }
     });
 }
