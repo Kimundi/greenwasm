@@ -24,6 +24,7 @@ use super::structure::modules::Export;
 use super::structure::modules::ExportDesc;
 use super::structure::modules::Import;
 use super::structure::modules::ImportDesc;
+use super::structure::modules::Module;
 
 pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
@@ -279,6 +280,8 @@ macro_rules! valid_with {
         }
     )
 }
+
+pub struct ImportExportMapping;
 
 pub mod validate {
     use super::*;
@@ -650,5 +653,9 @@ pub mod validate {
                 ExternType::Global(globaltype)
             }
         }
+    });
+
+    valid_with!((c, module: Module) -> ImportExportMapping {
+
     });
 }
