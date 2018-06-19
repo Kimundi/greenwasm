@@ -16,6 +16,7 @@ use super::structure::modules::Func;
 use super::structure::modules::Table;
 use super::structure::modules::Mem;
 use super::structure::modules::Global;
+use super::structure::modules::Elem;
 
 pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
@@ -31,6 +32,7 @@ pub enum ValidationErrorEnum {
     InstrCallIndirectElemTypeNotAnyFunc,
     ConstExprGetGlobalNotConst,
     ConstExprIlligalInstruction,
+    ElemElemTypeNotAnyFunc,
 }
 use self::ValidationErrorEnum::*;
 
@@ -522,5 +524,28 @@ pub mod validate {
         validate::const_expr(c, &expr)?;
 
         *type_
+    });
+
+    valid_with!((c, elem: Elem) -> () {
+        let Elem {
+            table: x,
+            offset: expr,
+            init: y
+        } = elem;
+
+        let TableType {
+            limits: _,
+            elemtype
+        } = c.tables(*x)?;
+
+        if elemtype != ElemType::AnyFunc {
+            c.error(ElemElemTypeNotAnyFunc)?;
+        }
+
+        validate::expr(c, expr)?.must_by_valid_with(&Some(AnyValType::I32))?;
+        validate::const_expr(c, expr)?;
+        for yi in y {
+            c.funcs(*yi)?;
+        }
     });
 }
