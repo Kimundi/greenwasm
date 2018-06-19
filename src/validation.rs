@@ -282,33 +282,44 @@ macro_rules! valid_with {
 }
 
 pub struct ImportExportMapping;
+pub struct Valid;
 
 pub mod validate {
     use super::*;
 
-    valid_with!((c, limit: Limits) -> () {
+    valid_with!((c, limit: Limits) -> Valid {
         if limit.max.unwrap_or(0) < limit.min {
             c.error(LimitMaxSmallerMin)?
         }
+
+        Valid
     });
 
-    valid_with!((c, function_type: FuncType) -> () {
+    valid_with!((c, function_type: FuncType) -> Valid {
         if function_type.results.len() > 1 {
             c.error(FunctionTypeResultArityGreaterOne)?
         }
+
+        Valid
     });
 
-    valid_with!((c, table_type: TableType) -> () {
+    valid_with!((c, table_type: TableType) -> Valid {
         validate::limit(c, &table_type.limits)?;
+
+        Valid
     });
 
-    valid_with!((c, memory_type: MemType) -> () {
+    valid_with!((c, memory_type: MemType) -> Valid {
         validate::limit(c, &memory_type.limits)?;
+
+        Valid
     });
 
-    valid_with!((c, global_type: GlobalType) -> () {
+    valid_with!((c, global_type: GlobalType) -> Valid {
         let _ = c;
         let _ = global_type;
+
+        Valid
     });
 
     valid_with!((c, instruction: Instr) -> AnyFuncType {
@@ -493,7 +504,7 @@ pub mod validate {
         c.any_vec_to_option(instrs_ty.results)
     });
 
-    valid_with!((c, const_expr: Expr) -> () {
+    valid_with!((c, const_expr: Expr) -> Valid {
         for instr in &const_expr.body {
             use self::Instr::*;
             match *instr {
@@ -508,6 +519,8 @@ pub mod validate {
                 }
             }
         }
+
+        Valid
     });
 
     valid_with!((c, func: Func) -> FuncType {
@@ -552,7 +565,7 @@ pub mod validate {
         *type_
     });
 
-    valid_with!((c, elem: Elem) -> () {
+    valid_with!((c, elem: Elem) -> Valid {
         let Elem {
             table: x,
             offset: expr,
@@ -573,9 +586,11 @@ pub mod validate {
         for yi in y {
             c.funcs(*yi)?;
         }
+
+        Valid
     });
 
-    valid_with!((c, data: Data) -> () {
+    valid_with!((c, data: Data) -> Valid {
         let Data {
             data: x,
             offset: expr,
@@ -585,9 +600,11 @@ pub mod validate {
         c.mems(*x)?;
         validate::expr(c, expr)?.must_by_valid_with(&Some(AnyValType::I32))?;
         validate::const_expr(c, expr)?;
+
+        Valid
     });
 
-    valid_with!((c, start: Start) -> () {
+    valid_with!((c, start: Start) -> Valid {
         let Start {
             func: x
         } = start;
@@ -595,6 +612,8 @@ pub mod validate {
         let ty: AnyFuncType = c.funcs(*x)?.into();
 
         ty.must_by_valid_with(&ty![ ; ])?;
+
+        Valid
     });
 
     valid_with!((c, export: Export) -> ExternType {
