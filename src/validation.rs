@@ -14,18 +14,21 @@ use super::structure::instructions::Memarg;
 
 use super::structure::modules::Func;
 
-#[derive(Default)]
-pub struct Ctx<'a> {
-    prepended_to: Option<&'a Ctx<'a>>,
+enum CtxMember<'a, T: 'a> {
+    Set(T),
+    Prepended(T, &'a CtxMember<'a, T>),
+    Delegated(&'a CtxMember<'a, T>),
+}
 
-    types: Vec<FuncType>,
-    funcs: Vec<FuncType>,
-    tables: Vec<TableType>,
-    mems: Vec<MemType>,
-    globals: Vec<GlobalType>,
-    locals: Vec<ValType>,
-    labels: Vec<ResultType>,
-    return_: Option<ResultType>,
+pub struct Ctx<'a> {
+    types:   CtxMember<'a, Vec<FuncType>>,
+    funcs:   CtxMember<'a, Vec<FuncType>>,
+    tables:  CtxMember<'a, Vec<TableType>>,
+    mems:    CtxMember<'a, Vec<MemType>>,
+    globals: CtxMember<'a, Vec<GlobalType>>,
+    locals:  CtxMember<'a, Vec<ValType>>,
+    labels:  CtxMember<'a, Vec<ResultType>>,
+    return_: CtxMember<'a, Option<ResultType>>,
 }
 
 pub type VResult<T> = Result<T, ValidationError>;
@@ -76,12 +79,22 @@ impl<'a> Ctx<'a> {
     fn types(&self, _x: u32) -> VResult<FuncType> {
         unimplemented!()
     }
-    fn with_prepended_label(&'a self, resulttype: ResultType) -> Ctx<'a> {
+    fn delegate(&'a self) -> Ctx<'a> {
         Ctx {
-            prepended_to: Some(self),
-            labels: vec![resulttype],
-            ..Default::default()
+            types:   CtxMember::Delegated(&self.types),
+            funcs:   CtxMember::Delegated(&self.funcs),
+            tables:  CtxMember::Delegated(&self.tables),
+            mems:    CtxMember::Delegated(&self.mems),
+            globals: CtxMember::Delegated(&self.globals),
+            locals:  CtxMember::Delegated(&self.locals),
+            labels:  CtxMember::Delegated(&self.labels),
+            return_: CtxMember::Delegated(&self.return_),
         }
+    }
+    fn with_prepended_label(&'a self, resulttype: ResultType) -> Ctx<'a> {
+        let mut r = self.delegate();
+        r.labels = CtxMember::Prepended(vec![resulttype], &self.labels);
+        r
     }
     fn is_valid_with(&self, _ty: &AnyFuncType, _valid_type: &AnyFuncType) -> VResult<()> {
         unimplemented!()
