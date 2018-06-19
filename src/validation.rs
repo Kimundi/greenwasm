@@ -13,6 +13,7 @@ use super::structure::instructions::Expr;
 use super::structure::instructions::Memarg;
 
 use super::structure::modules::Func;
+use super::structure::modules::Table;
 
 pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
@@ -219,8 +220,6 @@ impl From<FuncType> for AnyFuncType {
 }
 
 pub type AnyResultType = Option<AnyValType>;
-
-pub struct AnyFuncTypeOne(AnyFuncType);
 
 macro_rules! ty {
     ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
@@ -481,7 +480,7 @@ pub mod validate {
         validate::expr(c, const_expr)?
     });
 
-    valid_with!((c, func: Func) -> AnyFuncTypeOne {
+    valid_with!((c, func: Func) -> FuncType {
         let Func { type_: x, locals: t, body: expr } = func;
         let ty = c.types(*x)?;
 
@@ -495,6 +494,11 @@ pub mod validate {
 
         validate::expr(&c_, expr)?.must_by_valid_with(&result.map(|x| x.into()))?;
 
-        AnyFuncTypeOne(ty.into())
+        ty
+    });
+
+    valid_with!((c, table: Table) -> TableType {
+        validate::table_type(c, &table.type_)?;
+        table.type_
     });
 }
