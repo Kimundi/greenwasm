@@ -189,10 +189,52 @@ impl<'a> Ctx<'a> {
     ctx_set!(set_globals(self, globals: Vec<GlobalType>));
 
     fn length_mems(&self) -> u32 {
-        unimplemented!()
+        use self::CtxMember::*;
+
+        let mut len = 0;
+        let mut cursor = &self.mems;
+        loop {
+            match cursor {
+                Delegated(next) => {
+                    cursor = next;
+                }
+                Prepended(v, next) => {
+                    len += v.len() as u32;
+                    cursor = next;
+                }
+                Set(v) => {
+                    len += v.len() as u32;
+                    return len;
+                }
+                Unset => {
+                    return len;
+                }
+            }
+        }
     }
     fn length_tables(&self) -> u32 {
-        unimplemented!()
+        use self::CtxMember::*;
+
+        let mut len = 0;
+        let mut cursor = &self.tables;
+        loop {
+            match cursor {
+                Delegated(next) => {
+                    cursor = next;
+                }
+                Prepended(v, next) => {
+                    len += v.len() as u32;
+                    cursor = next;
+                }
+                Set(v) => {
+                    len += v.len() as u32;
+                    return len;
+                }
+                Unset => {
+                    return len;
+                }
+            }
+        }
     }
 
     // TODO: move out or change
