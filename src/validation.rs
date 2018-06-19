@@ -316,22 +316,22 @@ impl<'a> Ctx<'a> {
             Nop => ty![ ; ],
             Unreachable => ty![any_seq('t') ; any_seq('u')],
             Block(resulttype, ref block) => {
-                let self_ = self.with_prepended_label(resulttype);
+                let c_ = self.with_prepended_label(resulttype);
                 let ty = ty![ ; resulttype];
-                self_.is_valid_with(&self_.instruction_sequence(block)?, &ty)?;
+                c_.is_valid_with(&c_.instruction_sequence(block)?, &ty)?;
                 ty
             }
             Loop(resulttype, ref block) => {
-                let self_ = self.with_prepended_label(None);
+                let c_ = self.with_prepended_label(None);
                 let ty = ty![ ; resulttype];
-                self_.is_valid_with(&self_.instruction_sequence(block)?, &ty)?;
+                c_.is_valid_with(&c_.instruction_sequence(block)?, &ty)?;
                 ty
             }
             IfElse(resulttype, ref if_block, ref else_block) => {
-                let self_ = self.with_prepended_label(resulttype);
+                let c_ = self.with_prepended_label(resulttype);
                 let ty = ty![ ; resulttype];
-                self_.is_valid_with(&self_.instruction_sequence(if_block)?, &ty)?;
-                self_.is_valid_with(&self_.instruction_sequence(else_block)?, &ty)?;
+                c_.is_valid_with(&c_.instruction_sequence(if_block)?, &ty)?;
+                c_.is_valid_with(&c_.instruction_sequence(else_block)?, &ty)?;
                 ty![I32 ; resulttype]
             }
             Br(labelidx) => {
@@ -422,7 +422,7 @@ impl<'a> Ctx<'a> {
         let ty = AnyFuncTypeOne(self.types(*x)?.into());
 
         /*
-        let C = Ctx {
+        let c_ = Ctx {
             locals:
         };
         */
