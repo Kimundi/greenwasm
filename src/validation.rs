@@ -14,6 +14,7 @@ use super::structure::instructions::Memarg;
 
 use super::structure::modules::Func;
 use super::structure::modules::Table;
+use super::structure::modules::Mem;
 
 pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
@@ -500,5 +501,10 @@ pub mod validate {
     valid_with!((c, table: Table) -> TableType {
         validate::table_type(c, &table.type_)?;
         table.type_
+    });
+
+    valid_with!((c, mem: Mem) -> MemType {
+        validate::memory_type(c, &mem.type_)?;
+        mem.type_
     });
 }
