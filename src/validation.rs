@@ -54,6 +54,7 @@ pub enum ValidationErrorEnum {
     CtxTablesIdxDoesNotExist,
     CtxTypesIdxDoesNotExist,
     CtxLabelsIdxDoesNotExist,
+    CtxReturnDoesNotExist,
 }
 use self::ValidationErrorEnum::*;
 
@@ -147,17 +148,15 @@ impl<'a> Ctx<'a> {
     fn _index_clone<T: Clone>(v: &[T], x: usize) -> T { v[x].clone() }
     fn _unwrap<T: Copy>(v: &T, _: usize) -> T { *v }
 
-    ctx_idx!(self, locals: ValType,     CtxLocalsIdxDoesNotExist, <[_]>::len, Self::_index);
+    ctx_idx!(self, locals: ValType,     CtxLocalsIdxDoesNotExist,  <[_]>::len, Self::_index);
     ctx_idx!(self, globals: GlobalType, CtxGlobalsIdxDoesNotExist, <[_]>::len, Self::_index);
-    ctx_idx!(self, mems: MemType,       CtxMemsIdxDoesNotExist, <[_]>::len, Self::_index);
-    ctx_idx!(self, funcs: FuncType,     CtxFuncsIdxDoesNotExist, <[_]>::len, Self::_index_clone);
-    ctx_idx!(self, tables: TableType,   CtxTablesIdxDoesNotExist, <[_]>::len, Self::_index);
-    ctx_idx!(self, types: FuncType,     CtxTypesIdxDoesNotExist, <[_]>::len, Self::_index_clone);
-    ctx_idx!(self, labels: ResultType,  CtxLabelsIdxDoesNotExist, |_| 1,      Self::_unwrap);
+    ctx_idx!(self, mems: MemType,       CtxMemsIdxDoesNotExist,    <[_]>::len, Self::_index);
+    ctx_idx!(self, funcs: FuncType,     CtxFuncsIdxDoesNotExist,   <[_]>::len, Self::_index_clone);
+    ctx_idx!(self, tables: TableType,   CtxTablesIdxDoesNotExist,  <[_]>::len, Self::_index);
+    ctx_idx!(self, types: FuncType,     CtxTypesIdxDoesNotExist,   <[_]>::len, Self::_index_clone);
+    ctx_idx!(self, labels: ResultType,  CtxLabelsIdxDoesNotExist,   |_| 1,     Self::_unwrap);
+    ctx_idx!(self, return_: ResultType, CtxReturnDoesNotExist,      |_| 1,     Self::_unwrap);
 
-    fn return_(&self) -> VResult<ResultType> {
-        unimplemented!()
-    }
     fn with(&'a self) -> Ctx<'a> {
         Ctx {
             types:   CtxMember::Delegated(&self.types),
@@ -505,7 +504,7 @@ pub mod validate {
                 ty![any_seq('t'), resulttype, I32 ; any_seq('u')]
             }
             Return => {
-                let resulttype = c.return_()?;
+                let resulttype = c.return_(0)?;
                 ty![any_seq('t'), resulttype ; any_seq('u')]
             }
             Call(x) => {
