@@ -18,6 +18,7 @@ use super::structure::modules::Mem;
 use super::structure::modules::Global;
 use super::structure::modules::Elem;
 use super::structure::modules::Data;
+use super::structure::modules::Start;
 
 pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
@@ -560,5 +561,15 @@ pub mod validate {
         c.mems(*x)?;
         validate::expr(c, expr)?.must_by_valid_with(&Some(AnyValType::I32))?;
         validate::const_expr(c, expr)?;
+    });
+
+    valid_with!((c, start: Start) -> () {
+        let Start {
+            func: x
+        } = start;
+
+        let ty: AnyFuncType = c.funcs(*x)?.into();
+
+        ty.must_by_valid_with(&ty![ ; ])?;
     });
 }
