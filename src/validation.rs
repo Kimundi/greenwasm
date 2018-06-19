@@ -237,9 +237,10 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    fn find_ty_prefix(&self, _t2: &[AnyValType], _t: &[AnyValType])
+    fn find_ty_prefix(&self, t2: &[AnyValType], t: &[AnyValType])
         -> VResult<Vec<AnyValType>>
     {
+        println!("find_ty_prefix of {:?} and {:?}", t2, t);
         unimplemented!()
     }
 }
@@ -272,6 +273,20 @@ fn any_seq(t: char) -> AnyValType {
 }
 fn any_opt(t: char) -> AnyValType {
     AnyValType::AnyOpt(t)
+}
+impl ::std::fmt::Debug for AnyValType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        use self::AnyValType::*;
+        match *self {
+            I32 => write!(f, "i32"),
+            I64 => write!(f, "i64"),
+            F32 => write!(f, "f32"),
+            F64 => write!(f, "f64"),
+            Any(t) => write!(f, "{}", t),
+            AnySeq(t) => write!(f, "{}*", t),
+            AnyOpt(t) => write!(f, "{}?", t),
+        }
+    }
 }
 
 impl From<ValType> for AnyValType {
@@ -332,6 +347,11 @@ impl From<FuncType> for AnyFuncType {
         }
     }
 }
+impl ::std::fmt::Debug for AnyFuncType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        write!(f, "{:?} -> {:?}", self.args, self.results)
+    }
+}
 
 pub type AnyResultType = Option<AnyValType>;
 
@@ -347,13 +367,15 @@ trait MustBeValidWith {
 }
 
 impl MustBeValidWith for AnyFuncType {
-    fn must_by_valid_with(&self, _expected: &Self) -> VResult<()> {
+    fn must_by_valid_with(&self, expected: &Self) -> VResult<()> {
+        println!("{:?} must be valid with {:?}", self, expected);
         unimplemented!()
     }
 }
 
 impl MustBeValidWith for AnyResultType {
-    fn must_by_valid_with(&self, _expected: &Self) -> VResult<()> {
+    fn must_by_valid_with(&self, expected: &Self) -> VResult<()> {
+        println!("{:?} must be valid with {:?}", self, expected);
         unimplemented!()
     }
 }
