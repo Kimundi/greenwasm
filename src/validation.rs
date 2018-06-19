@@ -43,6 +43,10 @@ pub enum ValidationErrorEnum {
     ElemElemTypeNotAnyFunc,
     ExportGlobalNotConst,
     ImportGlobalNotConst,
+    ModulePrepassImportFuncTypeIdxDoesNotExist,
+    ModuleTablesLengthNotOne,
+    ModuleMemsLengthNotOne,
+    ModuleExportDuplicateName,
 }
 use self::ValidationErrorEnum::*;
 
@@ -153,6 +157,13 @@ impl<'a> Ctx<'a> {
     ctx_set!(set_tables(self, tables: Vec<TableType>));
     ctx_set!(set_mems(self, mems: Vec<MemType>));
     ctx_set!(set_globals(self, globals: Vec<GlobalType>));
+
+    fn length_mems(&self) -> u32 {
+        unimplemented!()
+    }
+    fn length_tables(&self) -> u32 {
+        unimplemented!()
+    }
 
     // TODO: move out or change
     fn find_ty_prefix(&self, _t2: &[AnyValType], _t: &[AnyValType])
@@ -283,7 +294,11 @@ macro_rules! valid_with {
     )
 }
 
-pub struct ImportExportMapping;
+pub struct ImportExportMapping {
+    pub from: Vec<ExternType>,
+    pub to: Vec<ExternType>,
+}
+
 pub struct Valid;
 
 pub mod validate {
@@ -676,16 +691,180 @@ pub mod validate {
         }
     });
 
-    valid_with!((c, module: Module) -> ImportExportMapping {
-        let c = c.with()
-            .set_types(unimplemented!())
-            .set_funcs(unimplemented!())
-            .set_tables(unimplemented!())
-            .set_mems(unimplemented!())
-            .set_globals(unimplemented!());
+    valid_with!((empty_c, module_prepass: Module) -> () {
+        let types = &module_prepass.types;
+        let imports = &module_prepass.imports;
+        for import in imports {
+            if let ImportDesc::Func(x) = import.desc {
+                if types.get(x as usize).is_none() {
+                    empty_c.error(ModulePrepassImportFuncTypeIdxDoesNotExist)?;
+                }
+            }
+        }
+    });
 
+    fn import_filter_funcs<'a>(types: &'a [FuncType],
+                               imports: &'a [Import])
+        -> impl Iterator<Item=&'a FuncType> + 'a
+    {
+        imports.iter().filter_map(move |import| {
+            match import.desc {
+                ImportDesc::Func(x) => {
+                    types.get(x as usize)
+                }
+                _ => None,
+            }
+        })
+    }
 
-        //Ok(ImportExportMapping)
-        unimplemented!()
+    fn import_filter_tables<'a>(imports: &'a [Import])
+        -> impl Iterator<Item=&'a TableType> + 'a
+    {
+        imports.iter().filter_map(move |import| {
+            match import.desc {
+                ImportDesc::Table(ref x) => {
+                    Some(x)
+                }
+                _ => None,
+            }
+        })
+    }
+
+    fn import_filter_mems<'a>(imports: &'a [Import])
+        -> impl Iterator<Item=&'a MemType> + 'a
+    {
+        imports.iter().filter_map(move |import| {
+            match import.desc {
+                ImportDesc::Mem(ref x) => {
+                    Some(x)
+                }
+                _ => None,
+            }
+        })
+    }
+
+    fn import_filter_globals<'a>(imports: &'a [Import])
+        -> impl Iterator<Item=&'a GlobalType> + 'a
+    {
+        imports.iter().filter_map(move |import| {
+            match import.desc {
+                ImportDesc::Global(ref x) => {
+                    Some(x)
+                }
+                _ => None,
+            }
+        })
+    }
+
+    valid_with!((empty_c, module: Module) -> ImportExportMapping {
+        let Module {
+            types,
+            funcs,
+            tables,
+            mems,
+            globals,
+            elem,
+            data,
+            start,
+            imports,
+            exports,
+        } = module;
+
+        validate::module_prepass(empty_c, module)?;
+
+        let c = {
+            let functypes = types;
+
+            let import_funcs   = import_filter_funcs(&functypes, &imports);
+            let import_tables  = import_filter_tables(&imports);
+            let import_mems    = import_filter_mems(&imports);
+            let import_globals = import_filter_globals(&imports);
+
+            let conc_funcs   = import_funcs  .chain(functypes);
+            let conc_tables  = import_tables .chain(tables.iter() .map(|x| &x.type_));
+            let conc_mems    = import_mems   .chain(mems.iter()   .map(|x| &x.type_));
+            let conc_globals = import_globals.chain(globals.iter().map(|x| &x.type_));
+
+            &empty_c.with()
+            .set_types(types.clone())
+            .set_funcs(conc_funcs.cloned().collect())
+            .set_tables(conc_tables.cloned().collect())
+            .set_mems(conc_mems.cloned().collect())
+            .set_globals(conc_globals.cloned().collect())
+        };
+
+        let c_ = &empty_c.with()
+            .set_globals(import_filter_globals(&imports).cloned().collect());
+
+        for functypei in types {
+            let Valid = validate::function_type(c, functypei)?;
+        }
+
+        for funci in funcs {
+            let _fti = validate::func(c, funci)?;
+        }
+
+        for tablei in tables {
+            let _tabletypei = validate::table(c, tablei)?;
+        }
+
+        for memi in mems {
+            let _memtypei = validate::mem(c, memi)?;
+        }
+
+        for globali in globals {
+            let _globaltypei = validate::global(c_, globali)?;
+        }
+
+        for elemi in elem {
+            let Valid = validate::elem(c, elemi)?;
+        }
+
+        for datai in data {
+            let Valid = validate::data(c, datai)?;
+        }
+
+        if let Some(ref start) = start {
+            let Valid = validate::start(c, start)?;
+        }
+
+        let mut externtype = Vec::new();
+        for importi in imports {
+            let externtypei = validate::import(c, importi)?;
+            externtype.push(externtypei);
+        }
+
+        let mut externtype_ = Vec::new();
+        for exporti in exports {
+            let externtypei_ = validate::export(c, exporti)?;
+            externtype_.push(externtypei_);
+        }
+
+        if c.length_tables() > 1 {
+            c.error(ModuleTablesLengthNotOne)?;
+        }
+
+        if c.length_mems() > 1 {
+            c.error(ModuleMemsLengthNotOne)?;
+        }
+
+        {
+            let mut export_names: Vec<_>
+                = exports.iter().map(|x| &x.name[..]).collect();
+            export_names.sort();
+            for w in export_names.windows(2) {
+                if let [a, b] = w {
+                    if a == b {
+                        c.error(ModuleExportDuplicateName)?;
+                    }
+                }
+                unreachable!()
+            }
+        }
+
+        ImportExportMapping {
+            from: externtype,
+            to: externtype_,
+        }
     });
 }

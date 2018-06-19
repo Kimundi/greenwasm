@@ -53,6 +53,7 @@ pub enum ValType {
 
 pub type ResultType = Option<ValType>;
 
+#[derive(Clone)]
 pub struct FuncType {
     pub args: Wec<ValType>,
     pub results: Wec<ValType>,
@@ -92,6 +93,7 @@ pub enum Mut {
     Var,
 }
 
+#[derive(Clone)]
 pub enum ExternType {
     Func(FuncType),
     Table(TableType),

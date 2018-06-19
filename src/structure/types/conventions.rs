@@ -8,20 +8,3 @@ impl ValType {
         }
     }
 }
-
-/*
-impl [ExternType] {
-    fn funcs(&self) -> Vec<FuncType> {
-        panic!()
-    }
-    fn tables(&self) -> Vec<TableType> {
-        panic!()
-    }
-    fn mems(&self) -> Vec<MemType> {
-        panic!()
-    }
-    fn globals(&self) -> Vec<GlobalType> {
-        panic!()
-    }
-}
-*/
