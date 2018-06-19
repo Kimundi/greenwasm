@@ -14,23 +14,6 @@ use super::structure::instructions::Memarg;
 
 use super::structure::modules::Func;
 
-enum CtxMember<'a, T: 'a> {
-    Set(T),
-    Prepended(T, &'a CtxMember<'a, T>),
-    Delegated(&'a CtxMember<'a, T>),
-}
-
-pub struct Ctx<'a> {
-    types:   CtxMember<'a, Vec<FuncType>>,
-    funcs:   CtxMember<'a, Vec<FuncType>>,
-    tables:  CtxMember<'a, Vec<TableType>>,
-    mems:    CtxMember<'a, Vec<MemType>>,
-    globals: CtxMember<'a, Vec<GlobalType>>,
-    locals:  CtxMember<'a, Vec<ValType>>,
-    labels:  CtxMember<'a, Vec<ResultType>>,
-    return_: CtxMember<'a, Option<ResultType>>,
-}
-
 pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
     pub kind: ValidationErrorEnum,
@@ -47,6 +30,23 @@ pub enum ValidationErrorEnum {
     ConstExprIlligalInstruction,
 }
 use self::ValidationErrorEnum::*;
+
+enum CtxMember<'a, T: 'a> {
+    Set(T),
+    Prepended(T, &'a CtxMember<'a, T>),
+    Delegated(&'a CtxMember<'a, T>),
+}
+
+pub struct Ctx<'a> {
+    types:   CtxMember<'a, Vec<FuncType>>,
+    funcs:   CtxMember<'a, Vec<FuncType>>,
+    tables:  CtxMember<'a, Vec<TableType>>,
+    mems:    CtxMember<'a, Vec<MemType>>,
+    globals: CtxMember<'a, Vec<GlobalType>>,
+    locals:  CtxMember<'a, Vec<ValType>>,
+    labels:  CtxMember<'a, Vec<ResultType>>,
+    return_: CtxMember<'a, ResultType>,
+}
 
 impl<'a> Ctx<'a> {
     fn error(&self, error: ValidationErrorEnum) -> VResult<()> {
@@ -79,7 +79,7 @@ impl<'a> Ctx<'a> {
     fn types(&self, _x: u32) -> VResult<FuncType> {
         unimplemented!()
     }
-    fn delegate(&'a self) -> Ctx<'a> {
+    fn with(&'a self) -> Ctx<'a> {
         Ctx {
             types:   CtxMember::Delegated(&self.types),
             funcs:   CtxMember::Delegated(&self.funcs),
@@ -91,25 +91,59 @@ impl<'a> Ctx<'a> {
             return_: CtxMember::Delegated(&self.return_),
         }
     }
-    fn with_prepended_label(&'a self, resulttype: ResultType) -> Ctx<'a> {
-        let mut r = self.delegate();
-        r.labels = CtxMember::Prepended(vec![resulttype], &self.labels);
-        r
+    fn prepend_label(mut self, label: ResultType) -> Ctx<'a> {
+        if let CtxMember::Delegated(r) = self.labels {
+            self.labels = CtxMember::Prepended(vec![label], r);
+        } else {
+            panic!("can only overwrite Delegated()");
+        }
+        self
     }
+    fn set_locals(mut self, locals: Vec<ValType>) -> Ctx<'a> {
+        if let CtxMember::Delegated(r) = self.locals {
+            self.locals = CtxMember::Prepended(locals, r);
+        } else {
+            panic!("can only overwrite Delegated()");
+        }
+        self
+    }
+    fn set_label(mut self, label: ResultType) -> Ctx<'a> {
+        if let CtxMember::Delegated(r) = self.labels {
+            self.labels = CtxMember::Prepended(vec![label], r);
+        } else {
+            panic!("can only overwrite Delegated()");
+        }
+        self
+    }
+    fn set_return_(mut self, return_: ResultType) -> Ctx<'a> {
+        if let CtxMember::Delegated(r) = self.return_ {
+            self.return_ = CtxMember::Prepended(return_, r);
+        } else {
+            panic!("can only overwrite Delegated()");
+        }
+        self
+    }
+    // TODO: Move out or change
     fn is_valid_with(&self, _ty: &AnyFuncType, _valid_type: &AnyFuncType) -> VResult<()> {
         unimplemented!()
     }
+    // TODO: move out or change
     fn find_ty_prefix(&self, _t2: &[AnyValType], _t: &[AnyValType])
         -> VResult<Vec<AnyValType>>
     {
         unimplemented!()
     }
+    // TODO: move out or change
     fn any_vec_to_option(&self, vec: Vec<AnyValType>) -> Option<AnyValType> {
+        unimplemented!()
+    }
+    // TODO: move out or change
+    fn vec_to_option(&self, vec: Vec<ValType>) -> Option<ValType> {
         unimplemented!()
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Copy, Clone)]
 enum AnyValType {
     I32,
     I64,
@@ -151,7 +185,7 @@ impl AnyValTypeBuilder<ValType> for Vec<AnyValType> {
 }
 impl AnyValTypeBuilder<ResultType> for Vec<AnyValType> {
     fn append(mut self, e: ResultType) -> Self {
-        self.extend(e.map(|x| x.into()));
+        self.extend(e.map(|x| -> AnyValType { x.into() }));
         self
     }
 }
@@ -169,11 +203,12 @@ impl AnyValTypeBuilder<Vec<AnyValType>> for Vec<AnyValType> {
 }
 impl AnyValTypeBuilder<Vec<ValType>> for Vec<AnyValType> {
     fn append(mut self, e: Vec<ValType>) -> Self {
-        self.extend(e.into_iter().map(|x| x.into()));
+        self.extend(e.into_iter().map(|x| -> AnyValType { x.into() }));
         self
     }
 }
 
+#[derive(Eq, PartialEq, Clone)]
 pub struct AnyFuncType {
     args: Vec<AnyValType>,
     results: Vec<AnyValType>,
@@ -196,6 +231,22 @@ macro_rules! ty {
         args:    { let v = vec![]; $( let v = v.append($a); )* v },
         results: { let v = vec![]; $( let v = v.append($r); )* v },
     })
+}
+
+trait MustBeValidWith {
+    fn must_by_valid_with(&self, expected: &Self) -> VResult<()>;
+}
+
+impl MustBeValidWith for AnyFuncType {
+    fn must_by_valid_with(&self, expected: &Self) -> VResult<()> {
+        unimplemented!()
+    }
+}
+
+impl MustBeValidWith for AnyResultType {
+    fn must_by_valid_with(&self, expected: &Self) -> VResult<()> {
+        unimplemented!()
+    }
 }
 
 macro_rules! valid_with {
@@ -331,19 +382,19 @@ pub mod validate {
             Nop => ty![ ; ],
             Unreachable => ty![any_seq('t') ; any_seq('u')],
             Block(resulttype, ref block) => {
-                let c_ = c.with_prepended_label(resulttype);
+                let c_ = c.with().prepend_label(resulttype);
                 let ty = ty![ ; resulttype];
                 c_.is_valid_with(&validate::instruction_sequence(&c_, block)?, &ty)?;
                 ty
             }
             Loop(resulttype, ref block) => {
-                let c_ = c.with_prepended_label(None);
+                let c_ = c.with().prepend_label(None);
                 let ty = ty![ ; resulttype];
                 c_.is_valid_with(&validate::instruction_sequence(&c_, block)?, &ty)?;
                 ty
             }
             IfElse(resulttype, ref if_block, ref else_block) => {
-                let c_ = c.with_prepended_label(resulttype);
+                let c_ = c.with().prepend_label(resulttype);
                 let ty = ty![ ; resulttype];
                 c_.is_valid_with(&validate::instruction_sequence(&c_, if_block)?, &ty)?;
                 c_.is_valid_with(&validate::instruction_sequence(&c_, else_block)?, &ty)?;
@@ -415,7 +466,7 @@ pub mod validate {
         c.any_vec_to_option(instrs_ty.results)
     });
 
-    valid_with!((c, const_expr: Expr) -> () {
+    valid_with!((c, const_expr: Expr) -> AnyResultType {
         for instr in &const_expr.body {
             use self::Instr::*;
             match *instr {
@@ -430,18 +481,24 @@ pub mod validate {
                 }
             }
         }
+
+        validate::expr(c, const_expr)?
     });
 
     valid_with!((c, func: Func) -> AnyFuncTypeOne {
         let Func { type_: x, locals: t, body: expr } = func;
-        let ty = AnyFuncTypeOne(c.types(*x)?.into());
+        let ty = c.types(*x)?;
 
-        /*
-        let c_ = Ctx {
-            locals:
-        };
-        */
+        let locals = ty.args.iter().chain(t).cloned().collect();
+        let result = c.vec_to_option(ty.results.clone());
 
-        unimplemented!()
+        let c_ = c.with()
+            .set_locals(locals)
+            .set_label(result)
+            .set_return_(result);
+
+        validate::expr(&c_, expr)?.must_by_valid_with(&result.map(|x| x.into()))?;
+
+        AnyFuncTypeOne(ty.into())
     });
 }
