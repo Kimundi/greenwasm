@@ -17,6 +17,7 @@ use super::structure::modules::Table;
 use super::structure::modules::Mem;
 use super::structure::modules::Global;
 use super::structure::modules::Elem;
+use super::structure::modules::Data;
 
 pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
@@ -547,5 +548,17 @@ pub mod validate {
         for yi in y {
             c.funcs(*yi)?;
         }
+    });
+
+    valid_with!((c, data: Data) -> () {
+        let Data {
+            data: x,
+            offset: expr,
+            init: _,
+        } = data;
+
+        c.mems(*x)?;
+        validate::expr(c, expr)?.must_by_valid_with(&Some(AnyValType::I32))?;
+        validate::const_expr(c, expr)?;
     });
 }
