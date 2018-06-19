@@ -123,10 +123,6 @@ impl<'a> Ctx<'a> {
         }
         self
     }
-    // TODO: Move out or change
-    fn is_valid_with(&self, _ty: &AnyFuncType, _valid_type: &AnyFuncType) -> VResult<()> {
-        unimplemented!()
-    }
     // TODO: move out or change
     fn find_ty_prefix(&self, _t2: &[AnyValType], _t: &[AnyValType])
         -> VResult<Vec<AnyValType>>
@@ -384,20 +380,20 @@ pub mod validate {
             Block(resulttype, ref block) => {
                 let c_ = c.with().prepend_label(resulttype);
                 let ty = ty![ ; resulttype];
-                c_.is_valid_with(&validate::instruction_sequence(&c_, block)?, &ty)?;
+                validate::instruction_sequence(&c_, block)?.must_by_valid_with(&ty)?;
                 ty
             }
             Loop(resulttype, ref block) => {
                 let c_ = c.with().prepend_label(None);
                 let ty = ty![ ; resulttype];
-                c_.is_valid_with(&validate::instruction_sequence(&c_, block)?, &ty)?;
+                validate::instruction_sequence(&c_, block)?.must_by_valid_with(&ty)?;
                 ty
             }
             IfElse(resulttype, ref if_block, ref else_block) => {
                 let c_ = c.with().prepend_label(resulttype);
                 let ty = ty![ ; resulttype];
-                c_.is_valid_with(&validate::instruction_sequence(&c_, if_block)?, &ty)?;
-                c_.is_valid_with(&validate::instruction_sequence(&c_, else_block)?, &ty)?;
+                validate::instruction_sequence(&c_, if_block)?.must_by_valid_with(&ty)?;
+                validate::instruction_sequence(&c_, else_block)?.must_by_valid_with(&ty)?;
                 ty![I32 ; resulttype]
             }
             Br(labelidx) => {
@@ -462,7 +458,7 @@ pub mod validate {
 
     valid_with!((c, expr: Expr) -> AnyResultType {
         let instrs_ty = validate::instruction_sequence(&c, &expr.body)?;
-        c.is_valid_with(&instrs_ty, &ty![ ; any_opt('t')])?;
+        instrs_ty.must_by_valid_with(&ty![ ; any_opt('t')])?;
         c.any_vec_to_option(instrs_ty.results)
     });
 
