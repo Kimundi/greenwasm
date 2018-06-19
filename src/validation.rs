@@ -50,28 +50,28 @@ impl<'a> Ctx<'a> {
         })
     }
 
-    fn local(&self, _x: u32) -> VResult<ValType> {
+    fn locals(&self, _x: u32) -> VResult<ValType> {
         unimplemented!()
     }
-    fn global(&self, _x: u32) -> VResult<GlobalType> {
+    fn globals(&self, _x: u32) -> VResult<GlobalType> {
         unimplemented!()
     }
-    fn mem(&self, _x: u32) -> VResult<MemType> {
+    fn mems(&self, _x: u32) -> VResult<MemType> {
         unimplemented!()
     }
-    fn label(&self, _x: u32) -> VResult<ResultType> {
+    fn labels(&self, _x: u32) -> VResult<ResultType> {
         unimplemented!()
     }
     fn return_(&self) -> VResult<ResultType> {
         unimplemented!()
     }
-    fn func(&self, _x: u32) -> VResult<FuncType> {
+    fn funcs(&self, _x: u32) -> VResult<FuncType> {
         unimplemented!()
     }
-    fn table(&self, _x: u32) -> VResult<TableType> {
+    fn tables(&self, _x: u32) -> VResult<TableType> {
         unimplemented!()
     }
-    fn type_(&self, _x: u32) -> VResult<FuncType> {
+    fn types(&self, _x: u32) -> VResult<FuncType> {
         unimplemented!()
     }
     fn with_prepended_label(&'a self, resulttype: ResultType) -> Ctx<'a> {
@@ -240,24 +240,24 @@ impl<'a> Ctx<'a> {
 
             // variable instructions
             GetLocal(x) => {
-                let t = self.local(x)?;
+                let t = self.locals(x)?;
                 ty![ ; t]
             }
             SetLocal(x) => {
-                let t = self.local(x)?;
+                let t = self.locals(x)?;
                 ty![t ; ]
             }
             TeeLocal(x) => {
-                let t = self.local(x)?;
+                let t = self.locals(x)?;
                 ty![t ; t]
             }
             GetGlobal(x) => {
-                let mut_t = self.global(x)?;
+                let mut_t = self.globals(x)?;
                 let t = mut_t.valtype;
                 ty![ ; t]
             }
             SetGlobal(x) => {
-                let mut_t = self.global(x)?;
+                let mut_t = self.globals(x)?;
                 let t = mut_t.valtype;
                 if mut_t.mutability != Mut::Var  {
                     self.error(InstrSetGlobalNotVar)?;
@@ -275,7 +275,7 @@ impl<'a> Ctx<'a> {
             ref load_store_instr @ IxxStore16(..) |
             ref load_store_instr @ I64Store32(..) => {
                 let validate = |t: ValType, memarg: Memarg, bit_width, e, r| {
-                    self.mem(0)?;
+                    self.mems(0)?;
                     let align = 1u32 << memarg.align;
                     if align > (bit_width / 8) {
                         self.error(e)?;
@@ -305,8 +305,8 @@ impl<'a> Ctx<'a> {
                     _ => unreachable!(),
                 }
             }
-            CurrentMemory => { self.mem(0)?; ty![    ; I32] }
-            GrowMemory    => { self.mem(0)?; ty![I32 ; I32] }
+            CurrentMemory => { self.mems(0)?; ty![    ; I32] }
+            GrowMemory    => { self.mems(0)?; ty![I32 ; I32] }
 
             // control instructions
             Nop => ty![ ; ],
@@ -331,17 +331,17 @@ impl<'a> Ctx<'a> {
                 ty![I32 ; resulttype]
             }
             Br(labelidx) => {
-                let resulttype = self.label(labelidx)?;
+                let resulttype = self.labels(labelidx)?;
                 ty![any_seq('t'), resulttype ; any_seq('u')]
             }
             BrIf(labelidx) => {
-                let resulttype = self.label(labelidx)?;
+                let resulttype = self.labels(labelidx)?;
                 ty![resulttype, I32; resulttype]
             }
             BrTable(ref labelindices, labelidx_n) => {
-                let resulttype = self.label(labelidx_n)?;
+                let resulttype = self.labels(labelidx_n)?;
                 for &li in labelindices {
-                    let resulttype_i = self.label(li)?;
+                    let resulttype_i = self.labels(li)?;
                     if resulttype_i != resulttype {
                         self.error(InstrBrTableNotSameLabelType)?;
                     }
@@ -353,17 +353,17 @@ impl<'a> Ctx<'a> {
                 ty![any_seq('t'), resulttype ; any_seq('u')]
             }
             Call(x) => {
-                self.func(x)?.into()
+                self.funcs(x)?.into()
             }
             CallIndirect(x) => {
                 let TableType {
                     limits,
                     elemtype,
-                } = self.table(0)?;
+                } = self.tables(0)?;
                 if elemtype != ElemType::AnyFunc {
                     self.error(InstrCallIndirectElemTypeNotAnyFunc)?;
                 }
-                let ty = self.type_(x)?;
+                let ty = self.types(x)?;
                 ty![ty.args, I32 ; ty.results]
             }
         };
@@ -402,7 +402,7 @@ impl<'a> Ctx<'a> {
             match *instr {
                 TConst(_) => (),
                 GetGlobal(x) => {
-                    if self.global(x)?.mutability != Mut::Const {
+                    if self.globals(x)?.mutability != Mut::Const {
                         self.error(ConstExprGetGlobalNotConst)?;
                     }
                 }
