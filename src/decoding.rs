@@ -1,7 +1,8 @@
-pub fn from_binary_format(_b: &[u8]) {
+use super::structure::modules::Module;
 
-}
+pub mod text_format;
 
-pub fn from_text_format(_b: &[u8]) {
-
+pub struct BinaryFormatParserError;
+pub fn from_binary_format(_b: &[u8]) -> Result<Module, BinaryFormatParserError> {
+    unimplemented!()
 }
