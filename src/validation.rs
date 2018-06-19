@@ -12,6 +12,8 @@ use super::structure::instructions::Instr;
 use super::structure::instructions::Expr;
 use super::structure::instructions::Memarg;
 
+use super::structure::modules::Func;
+
 #[derive(Default)]
 pub struct Ctx<'a> {
     prepended_to: Option<&'a Ctx<'a>>,
@@ -173,6 +175,8 @@ impl From<FuncType> for AnyFuncType {
 }
 
 pub type AnyResultType = Option<AnyValType>;
+
+pub struct AnyFuncTypeOne(AnyFuncType);
 
 macro_rules! ty {
     ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
@@ -411,5 +415,18 @@ impl<'a> Ctx<'a> {
                 }
             }
         }
+    });
+
+    valid_with!((self, func: Func) -> AnyFuncTypeOne {
+        let Func { type_: x, locals: t, body: expr } = func;
+        let ty = AnyFuncTypeOne(self.types(*x)?.into());
+
+        /*
+        let C = Ctx {
+            locals:
+        };
+        */
+
+        unimplemented!()
     });
 }
