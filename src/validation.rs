@@ -64,6 +64,21 @@ pub struct Ctx<'a> {
     return_: CtxMember<'a, ResultType>,
 }
 
+macro_rules! ctx_set {
+    ($fn_name:ident($self:ident, $var_name:ident: $var_type:ty)) => (
+        ctx_set!($fn_name($self, $var_name: $var_type) -> $var_name);
+    );
+    ($fn_name:ident($self:ident, $var_name:ident: $var_type:ty) -> $mapped:expr) => (
+        fn $fn_name(mut $self, $var_name: $var_type) -> Self {
+            if let CtxMember::Delegated(_) = $self.$var_name {
+                $self.$var_name = CtxMember::Set($mapped);
+            } else {
+                panic!("can only overwrite Delegated()");
+            }
+            $self
+        }
+    )
+}
 impl<'a> Ctx<'a> {
     pub fn new() -> Self {
         Ctx {
@@ -128,30 +143,17 @@ impl<'a> Ctx<'a> {
         }
         self
     }
-    fn set_locals(mut self, locals: Vec<ValType>) -> Ctx<'a> {
-        if let CtxMember::Delegated(_) = self.locals {
-            self.locals = CtxMember::Set(locals);
-        } else {
-            panic!("can only overwrite Delegated()");
-        }
-        self
-    }
-    fn set_label(mut self, label: ResultType) -> Ctx<'a> {
-        if let CtxMember::Delegated(_) = self.labels {
-            self.labels = CtxMember::Set(vec![label]);
-        } else {
-            panic!("can only overwrite Delegated()");
-        }
-        self
-    }
-    fn set_return_(mut self, return_: ResultType) -> Ctx<'a> {
-        if let CtxMember::Delegated(_) = self.return_ {
-            self.return_ = CtxMember::Set(return_);
-        } else {
-            panic!("can only overwrite Delegated()");
-        }
-        self
-    }
+
+    ctx_set!(set_locals(self, locals: Vec<ValType>));
+    ctx_set!(set_label(self, labels: ResultType) -> vec![labels]);
+    ctx_set!(set_return_(self, return_: ResultType));
+
+    ctx_set!(set_types(self, types: Vec<FuncType>));
+    ctx_set!(set_funcs(self, funcs: Vec<FuncType>));
+    ctx_set!(set_tables(self, tables: Vec<TableType>));
+    ctx_set!(set_mems(self, mems: Vec<MemType>));
+    ctx_set!(set_globals(self, globals: Vec<GlobalType>));
+
     // TODO: move out or change
     fn find_ty_prefix(&self, _t2: &[AnyValType], _t: &[AnyValType])
         -> VResult<Vec<AnyValType>>
@@ -675,6 +677,15 @@ pub mod validate {
     });
 
     valid_with!((c, module: Module) -> ImportExportMapping {
+        let c = c.with()
+            .set_types(unimplemented!())
+            .set_funcs(unimplemented!())
+            .set_tables(unimplemented!())
+            .set_mems(unimplemented!())
+            .set_globals(unimplemented!());
 
+
+        //Ok(ImportExportMapping)
+        unimplemented!()
     });
 }
