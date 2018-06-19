@@ -46,6 +46,7 @@ pub enum ValidationErrorEnum {
 use self::ValidationErrorEnum::*;
 
 enum CtxMember<'a, T: 'a> {
+    Unset,
     Set(T),
     Prepended(T, &'a CtxMember<'a, T>),
     Delegated(&'a CtxMember<'a, T>),
@@ -63,6 +64,19 @@ pub struct Ctx<'a> {
 }
 
 impl<'a> Ctx<'a> {
+    pub fn new() -> Self {
+        Ctx {
+            types:   CtxMember::Unset,
+            funcs:   CtxMember::Unset,
+            tables:  CtxMember::Unset,
+            mems:    CtxMember::Unset,
+            globals: CtxMember::Unset,
+            locals:  CtxMember::Unset,
+            labels:  CtxMember::Unset,
+            return_: CtxMember::Unset,
+        }
+    }
+
     fn error(&self, error: ValidationErrorEnum) -> VResult<()> {
         Err(ValidationError {
             kind: error
@@ -114,24 +128,24 @@ impl<'a> Ctx<'a> {
         self
     }
     fn set_locals(mut self, locals: Vec<ValType>) -> Ctx<'a> {
-        if let CtxMember::Delegated(r) = self.locals {
-            self.locals = CtxMember::Prepended(locals, r);
+        if let CtxMember::Delegated(_) = self.locals {
+            self.locals = CtxMember::Set(locals);
         } else {
             panic!("can only overwrite Delegated()");
         }
         self
     }
     fn set_label(mut self, label: ResultType) -> Ctx<'a> {
-        if let CtxMember::Delegated(r) = self.labels {
-            self.labels = CtxMember::Prepended(vec![label], r);
+        if let CtxMember::Delegated(_) = self.labels {
+            self.labels = CtxMember::Set(vec![label]);
         } else {
             panic!("can only overwrite Delegated()");
         }
         self
     }
     fn set_return_(mut self, return_: ResultType) -> Ctx<'a> {
-        if let CtxMember::Delegated(r) = self.return_ {
-            self.return_ = CtxMember::Prepended(return_, r);
+        if let CtxMember::Delegated(_) = self.return_ {
+            self.return_ = CtxMember::Set(return_);
         } else {
             panic!("can only overwrite Delegated()");
         }
