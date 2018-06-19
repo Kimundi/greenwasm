@@ -7,6 +7,7 @@ use super::structure::types::ResultType;
 use super::structure::types::Limits;
 use super::structure::types::Mut;
 use super::structure::types::ElemType;
+use super::structure::types::ExternType;
 
 use super::structure::instructions::Instr;
 use super::structure::instructions::Expr;
@@ -19,6 +20,10 @@ use super::structure::modules::Global;
 use super::structure::modules::Elem;
 use super::structure::modules::Data;
 use super::structure::modules::Start;
+use super::structure::modules::Export;
+use super::structure::modules::ExportDesc;
+use super::structure::modules::Import;
+use super::structure::modules::ImportDesc;
 
 pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
@@ -35,6 +40,8 @@ pub enum ValidationErrorEnum {
     ConstExprGetGlobalNotConst,
     ConstExprIlligalInstruction,
     ElemElemTypeNotAnyFunc,
+    ExportGlobalNotConst,
+    ImportGlobalNotConst,
 }
 use self::ValidationErrorEnum::*;
 
@@ -571,5 +578,63 @@ pub mod validate {
         let ty: AnyFuncType = c.funcs(*x)?.into();
 
         ty.must_by_valid_with(&ty![ ; ])?;
+    });
+
+    valid_with!((c, export: Export) -> ExternType {
+        match export.desc {
+            ExportDesc::Func(x) => {
+                let func = c.funcs(x)?;
+
+                ExternType::Func(func)
+            }
+            ExportDesc::Table(x) => {
+                let table = c.tables(x)?;
+
+                ExternType::Table(table)
+            }
+            ExportDesc::Mem(x) => {
+                let mem = c.mems(x)?;
+
+                ExternType::Mem(mem)
+            }
+            ExportDesc::Global(x) => {
+                let global = c.globals(x)?;
+
+                if global.mutability != Mut::Const {
+                    c.error(ExportGlobalNotConst)?;
+                }
+
+                ExternType::Global(global)
+            }
+        }
+    });
+
+    valid_with!((c, import: Import) -> ExternType {
+        match import.desc {
+            ImportDesc::Func(x) => {
+                let func_type = c.types(x)?;
+
+                ExternType::Func(func_type)
+            }
+            ImportDesc::Table(tabletype) => {
+                validate::table_type(c, &tabletype)?;
+
+                ExternType::Table(tabletype)
+            }
+            ImportDesc::Mem(memtype) => {
+                validate::memory_type(c, &memtype)?;
+
+                ExternType::Mem(memtype)
+            }
+            ImportDesc::Global(globaltype) => {
+                validate::global_type(c, &globaltype)?;
+
+                if globaltype.mutability != Mut::Const {
+                    c.error(ImportGlobalNotConst)?;
+                }
+
+                ExternType::Global(globaltype)
+            }
+        }
     });
 }

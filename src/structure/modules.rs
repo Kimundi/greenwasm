@@ -85,8 +85,8 @@ pub struct Import {
 }
 
 pub enum ImportDesc {
-    Func(FuncIdx),
-    Table(TableIdx),
-    Mem(MemIdx),
-    Global(GlobalIdx),
+    Func(TypeIdx),
+    Table(TableType),
+    Mem(MemType),
+    Global(GlobalType),
 }
