@@ -15,6 +15,7 @@ use super::structure::instructions::Memarg;
 use super::structure::modules::Func;
 use super::structure::modules::Table;
 use super::structure::modules::Mem;
+use super::structure::modules::Global;
 
 pub type VResult<T> = Result<T, ValidationError>;
 pub struct ValidationError {
@@ -277,7 +278,7 @@ pub mod validate {
         validate::limit(c, &memory_type.limits)?;
     });
 
-    valid_with!((c, _global_types: GlobalType) -> () {
+    valid_with!((c, global_type: GlobalType) -> () {
     });
 
     valid_with!((c, instruction: Instr) -> AnyFuncType {
@@ -462,7 +463,7 @@ pub mod validate {
         c.any_vec_to_option(instrs_ty.results)
     });
 
-    valid_with!((c, const_expr: Expr) -> AnyResultType {
+    valid_with!((c, const_expr: Expr) -> () {
         for instr in &const_expr.body {
             use self::Instr::*;
             match *instr {
@@ -477,8 +478,6 @@ pub mod validate {
                 }
             }
         }
-
-        validate::expr(c, const_expr)?
     });
 
     valid_with!((c, func: Func) -> FuncType {
@@ -506,5 +505,20 @@ pub mod validate {
     valid_with!((c, mem: Mem) -> MemType {
         validate::memory_type(c, &mem.type_)?;
         mem.type_
+    });
+
+    valid_with!((c, global: Global) -> GlobalType {
+        let Global {
+            type_,
+            init: expr
+        } = global;
+
+        let t = type_.valtype;
+
+        validate::global_type(c, &type_)?;
+        validate::expr(c, &expr)?.must_by_valid_with(&Some(t.into()))?;
+        validate::const_expr(c, &expr)?;
+
+        type_.clone()
     });
 }
