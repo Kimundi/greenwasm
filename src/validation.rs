@@ -47,6 +47,13 @@ pub enum ValidationErrorEnum {
     ModuleTablesLengthNotOne,
     ModuleMemsLengthNotOne,
     ModuleExportDuplicateName,
+    CtxLocalsIdxDoesNotExist,
+    CtxGlobalsIdxDoesNotExist,
+    CtxMemsIdxDoesNotExist,
+    CtxFuncsIdxDoesNotExist,
+    CtxTablesIdxDoesNotExist,
+    CtxTypesIdxDoesNotExist,
+    CtxLabelsIdxDoesNotExist,
 }
 use self::ValidationErrorEnum::*;
 
@@ -83,6 +90,39 @@ macro_rules! ctx_set {
         }
     )
 }
+
+macro_rules! ctx_idx {
+    ($self:ident, $name:ident: $type:ty, $err:ident, $f:expr, $g:expr) => (
+        fn $name(&$self, mut x: u32) -> VResult<$type> {
+            use self::CtxMember::*;
+
+            let len = $f;
+            let get = $g;
+
+            let mut cursor = &$self.$name;
+
+            loop {
+                match cursor {
+                    Delegated(next) => {
+                        cursor = next;
+                    }
+                    Set(v) if (x as usize) < len(v) => {
+                        return Ok(get(v, x as usize));
+                    }
+                    Prepended(v, _) if (x as usize) < len(v) => {
+                        return Ok(get(v, x as usize));
+                    }
+                    Prepended(v, next) if (x as usize) >= len(v) => {
+                        x -= len(v) as u32;
+                        cursor = next;
+                    }
+                    _ => $self.error($err)?,
+                }
+            }
+        }
+    )
+}
+
 impl<'a> Ctx<'a> {
     pub fn new() -> Self {
         Ctx {
@@ -103,28 +143,19 @@ impl<'a> Ctx<'a> {
         })
     }
 
-    fn locals(&self, _x: u32) -> VResult<ValType> {
-        unimplemented!()
-    }
-    fn globals(&self, _x: u32) -> VResult<GlobalType> {
-        unimplemented!()
-    }
-    fn mems(&self, _x: u32) -> VResult<MemType> {
-        unimplemented!()
-    }
-    fn labels(&self, _x: u32) -> VResult<ResultType> {
-        unimplemented!()
-    }
+    fn _index<T: Copy>(v: &[T], x: usize) -> T { v[x] }
+    fn _index_clone<T: Clone>(v: &[T], x: usize) -> T { v[x].clone() }
+    fn _unwrap<T: Copy>(v: &T, _: usize) -> T { *v }
+
+    ctx_idx!(self, locals: ValType,     CtxLocalsIdxDoesNotExist, <[_]>::len, Self::_index);
+    ctx_idx!(self, globals: GlobalType, CtxGlobalsIdxDoesNotExist, <[_]>::len, Self::_index);
+    ctx_idx!(self, mems: MemType,       CtxMemsIdxDoesNotExist, <[_]>::len, Self::_index);
+    ctx_idx!(self, funcs: FuncType,     CtxFuncsIdxDoesNotExist, <[_]>::len, Self::_index_clone);
+    ctx_idx!(self, tables: TableType,   CtxTablesIdxDoesNotExist, <[_]>::len, Self::_index);
+    ctx_idx!(self, types: FuncType,     CtxTypesIdxDoesNotExist, <[_]>::len, Self::_index_clone);
+    ctx_idx!(self, labels: ResultType,  CtxLabelsIdxDoesNotExist, |_| 1,      Self::_unwrap);
+
     fn return_(&self) -> VResult<ResultType> {
-        unimplemented!()
-    }
-    fn funcs(&self, _x: u32) -> VResult<FuncType> {
-        unimplemented!()
-    }
-    fn tables(&self, _x: u32) -> VResult<TableType> {
-        unimplemented!()
-    }
-    fn types(&self, _x: u32) -> VResult<FuncType> {
         unimplemented!()
     }
     fn with(&'a self) -> Ctx<'a> {
