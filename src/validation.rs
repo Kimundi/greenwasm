@@ -186,39 +186,41 @@ macro_rules! ty {
 }
 
 macro_rules! valid_with {
-    (($self:ident, $name:ident: $type:ty) -> $rt:ty $b:block) => (
-        pub fn $name(&$self, $name: &$type) -> VResult<$rt> {
+    (($ctx:ident, $name:ident: $type:ty) -> $rt:ty $b:block) => (
+        pub fn $name($ctx: &Ctx, $name: &$type) -> VResult<$rt> {
             let ty = $b;
             Ok(ty)
         }
     )
 }
 
-impl<'a> Ctx<'a> {
-    valid_with!((self, limit: Limits) -> () {
+pub mod validate {
+    use super::*;
+
+    valid_with!((c, limit: Limits) -> () {
         if limit.max.unwrap_or(0) < limit.min {
-            self.error(LimitMaxSmallerMin)?
+            c.error(LimitMaxSmallerMin)?
         }
     });
 
-    valid_with!((self, function_type: FuncType) -> () {
+    valid_with!((c, function_type: FuncType) -> () {
         if function_type.results.len() > 1 {
-            self.error(FunctionTypeResultArityGreaterOne)?
+            c.error(FunctionTypeResultArityGreaterOne)?
         }
     });
 
-    valid_with!((self, table_type: TableType) -> () {
-        self.limit(&table_type.limits)?;
+    valid_with!((c, table_type: TableType) -> () {
+        validate::limit(c, &table_type.limits)?;
     });
 
-    valid_with!((self, memory_type: MemType) -> () {
-        self.limit(&memory_type.limits)?;
+    valid_with!((c, memory_type: MemType) -> () {
+        validate::limit(c, &memory_type.limits)?;
     });
 
-    valid_with!((self, _global_types: GlobalType) -> () {
+    valid_with!((c, _global_types: GlobalType) -> () {
     });
 
-    valid_with!((self, instruction: Instr) -> AnyFuncType {
+    valid_with!((c, instruction: Instr) -> AnyFuncType {
         use self::Instr::*;
         use self::ValType::*;
 
@@ -244,27 +246,27 @@ impl<'a> Ctx<'a> {
 
             // variable instructions
             GetLocal(x) => {
-                let t = self.locals(x)?;
+                let t = c.locals(x)?;
                 ty![ ; t]
             }
             SetLocal(x) => {
-                let t = self.locals(x)?;
+                let t = c.locals(x)?;
                 ty![t ; ]
             }
             TeeLocal(x) => {
-                let t = self.locals(x)?;
+                let t = c.locals(x)?;
                 ty![t ; t]
             }
             GetGlobal(x) => {
-                let mut_t = self.globals(x)?;
+                let mut_t = c.globals(x)?;
                 let t = mut_t.valtype;
                 ty![ ; t]
             }
             SetGlobal(x) => {
-                let mut_t = self.globals(x)?;
+                let mut_t = c.globals(x)?;
                 let t = mut_t.valtype;
                 if mut_t.mutability != Mut::Var  {
-                    self.error(InstrSetGlobalNotVar)?;
+                    c.error(InstrSetGlobalNotVar)?;
                 }
                 ty![t ; ]
             }
@@ -279,10 +281,10 @@ impl<'a> Ctx<'a> {
             ref load_store_instr @ IxxStore16(..) |
             ref load_store_instr @ I64Store32(..) => {
                 let validate = |t: ValType, memarg: Memarg, bit_width, e, r| {
-                    self.mems(0)?;
+                    c.mems(0)?;
                     let align = 1u32 << memarg.align;
                     if align > (bit_width / 8) {
-                        self.error(e)?;
+                        c.error(e)?;
                     }
                     Ok(r)
                 };
@@ -309,65 +311,65 @@ impl<'a> Ctx<'a> {
                     _ => unreachable!(),
                 }
             }
-            CurrentMemory => { self.mems(0)?; ty![    ; I32] }
-            GrowMemory    => { self.mems(0)?; ty![I32 ; I32] }
+            CurrentMemory => { c.mems(0)?; ty![    ; I32] }
+            GrowMemory    => { c.mems(0)?; ty![I32 ; I32] }
 
             // control instructions
             Nop => ty![ ; ],
             Unreachable => ty![any_seq('t') ; any_seq('u')],
             Block(resulttype, ref block) => {
-                let c_ = self.with_prepended_label(resulttype);
+                let c_ = c.with_prepended_label(resulttype);
                 let ty = ty![ ; resulttype];
-                c_.is_valid_with(&c_.instruction_sequence(block)?, &ty)?;
+                c_.is_valid_with(&validate::instruction_sequence(&c_, block)?, &ty)?;
                 ty
             }
             Loop(resulttype, ref block) => {
-                let c_ = self.with_prepended_label(None);
+                let c_ = c.with_prepended_label(None);
                 let ty = ty![ ; resulttype];
-                c_.is_valid_with(&c_.instruction_sequence(block)?, &ty)?;
+                c_.is_valid_with(&validate::instruction_sequence(&c_, block)?, &ty)?;
                 ty
             }
             IfElse(resulttype, ref if_block, ref else_block) => {
-                let c_ = self.with_prepended_label(resulttype);
+                let c_ = c.with_prepended_label(resulttype);
                 let ty = ty![ ; resulttype];
-                c_.is_valid_with(&c_.instruction_sequence(if_block)?, &ty)?;
-                c_.is_valid_with(&c_.instruction_sequence(else_block)?, &ty)?;
+                c_.is_valid_with(&validate::instruction_sequence(&c_, if_block)?, &ty)?;
+                c_.is_valid_with(&validate::instruction_sequence(&c_, else_block)?, &ty)?;
                 ty![I32 ; resulttype]
             }
             Br(labelidx) => {
-                let resulttype = self.labels(labelidx)?;
+                let resulttype = c.labels(labelidx)?;
                 ty![any_seq('t'), resulttype ; any_seq('u')]
             }
             BrIf(labelidx) => {
-                let resulttype = self.labels(labelidx)?;
+                let resulttype = c.labels(labelidx)?;
                 ty![resulttype, I32; resulttype]
             }
             BrTable(ref labelindices, labelidx_n) => {
-                let resulttype = self.labels(labelidx_n)?;
+                let resulttype = c.labels(labelidx_n)?;
                 for &li in labelindices {
-                    let resulttype_i = self.labels(li)?;
+                    let resulttype_i = c.labels(li)?;
                     if resulttype_i != resulttype {
-                        self.error(InstrBrTableNotSameLabelType)?;
+                        c.error(InstrBrTableNotSameLabelType)?;
                     }
                 }
                 ty![any_seq('t'), resulttype, I32 ; any_seq('u')]
             }
             Return => {
-                let resulttype = self.return_()?;
+                let resulttype = c.return_()?;
                 ty![any_seq('t'), resulttype ; any_seq('u')]
             }
             Call(x) => {
-                self.funcs(x)?.into()
+                c.funcs(x)?.into()
             }
             CallIndirect(x) => {
                 let TableType {
                     limits,
                     elemtype,
-                } = self.tables(0)?;
+                } = c.tables(0)?;
                 if elemtype != ElemType::AnyFunc {
-                    self.error(InstrCallIndirectElemTypeNotAnyFunc)?;
+                    c.error(InstrCallIndirectElemTypeNotAnyFunc)?;
                 }
-                let ty = self.types(x)?;
+                let ty = c.types(x)?;
                 ty![ty.args, I32 ; ty.results]
             }
         };
@@ -375,7 +377,7 @@ impl<'a> Ctx<'a> {
         ty
     });
 
-    valid_with!((self, instruction_sequence: [Instr]) -> AnyFuncType {
+    valid_with!((c, instruction_sequence: [Instr]) -> AnyFuncType {
         let mut instrs_ty = ty![any_seq('t') ; any_seq('t')];
 
         for instr_n in instruction_sequence {
@@ -386,40 +388,40 @@ impl<'a> Ctx<'a> {
             let AnyFuncType {
                 args:    t,
                 results: t3,
-            } = self.instruction(instr_n)?;
-            let t0 = self.find_ty_prefix(&t2, &t)?;
+            } = validate::instruction(&c, instr_n)?;
+            let t0 = c.find_ty_prefix(&t2, &t)?;
             instrs_ty = ty![t1 ; t0, t3];
         }
 
         instrs_ty
     });
 
-    valid_with!((self, expr: Expr) -> AnyResultType {
-        let instrs_ty = self.instruction_sequence(&expr.body)?;
-        self.is_valid_with(&instrs_ty, &ty![ ; any_opt('t')])?;
-        self.any_vec_to_option(instrs_ty.results)
+    valid_with!((c, expr: Expr) -> AnyResultType {
+        let instrs_ty = validate::instruction_sequence(&c, &expr.body)?;
+        c.is_valid_with(&instrs_ty, &ty![ ; any_opt('t')])?;
+        c.any_vec_to_option(instrs_ty.results)
     });
 
-    valid_with!((self, const_expr: Expr) -> () {
+    valid_with!((c, const_expr: Expr) -> () {
         for instr in &const_expr.body {
             use self::Instr::*;
             match *instr {
                 TConst(_) => (),
                 GetGlobal(x) => {
-                    if self.globals(x)?.mutability != Mut::Const {
-                        self.error(ConstExprGetGlobalNotConst)?;
+                    if c.globals(x)?.mutability != Mut::Const {
+                        c.error(ConstExprGetGlobalNotConst)?;
                     }
                 }
                 _ => {
-                    self.error(ConstExprIlligalInstruction)?;
+                    c.error(ConstExprIlligalInstruction)?;
                 }
             }
         }
     });
 
-    valid_with!((self, func: Func) -> AnyFuncTypeOne {
+    valid_with!((c, func: Func) -> AnyFuncTypeOne {
         let Func { type_: x, locals: t, body: expr } = func;
-        let ty = AnyFuncTypeOne(self.types(*x)?.into());
+        let ty = AnyFuncTypeOne(c.types(*x)?.into());
 
         /*
         let c_ = Ctx {
