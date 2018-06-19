@@ -237,20 +237,21 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    // TODO: move out or change
     fn find_ty_prefix(&self, _t2: &[AnyValType], _t: &[AnyValType])
         -> VResult<Vec<AnyValType>>
     {
         unimplemented!()
     }
-    // TODO: move out or change
-    fn any_vec_to_option(&self, _vec: Vec<AnyValType>) -> Option<AnyValType> {
-        unimplemented!()
-    }
-    // TODO: move out or change
-    fn vec_to_option(&self, _vec: Vec<ValType>) -> Option<ValType> {
-        unimplemented!()
-    }
+}
+
+fn any_vec_to_option(vec: &[AnyValType]) -> Option<AnyValType> {
+    assert!(vec.len() <= 1);
+    vec.get(0).cloned()
+}
+
+fn vec_to_option(vec: &[ValType]) -> Option<ValType> {
+    assert!(vec.len() <= 1);
+    vec.get(0).cloned()
 }
 
 #[derive(Eq, PartialEq, Copy, Clone)]
@@ -590,7 +591,7 @@ pub mod validate {
     valid_with!((c, expr: Expr) -> AnyResultType {
         let instrs_ty = validate::instruction_sequence(&c, &expr.body)?;
         instrs_ty.must_by_valid_with(&ty![ ; any_opt('t')])?;
-        c.any_vec_to_option(instrs_ty.results)
+        any_vec_to_option(&instrs_ty.results)
     });
 
     valid_with!((c, const_expr: Expr) -> Valid {
@@ -617,7 +618,7 @@ pub mod validate {
         let ty = c.types(*x)?;
 
         let locals = ty.args.iter().chain(t).cloned().collect();
-        let result = c.vec_to_option(ty.results.clone());
+        let result = vec_to_option(&ty.results);
 
         let c_ = c.with()
             .set_locals(locals)
