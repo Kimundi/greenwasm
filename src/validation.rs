@@ -64,7 +64,7 @@ pub struct Ctx<'a> {
     mems:    CtxMember<'a, Vec<MemType>>,
     globals: CtxMember<'a, Vec<GlobalType>>,
     locals:  CtxMember<'a, Vec<ValType>>,
-    labels:  CtxMember<'a, Vec<ResultType>>,
+    labels:  CtxMember<'a, ResultType>,
     return_: CtxMember<'a, ResultType>,
 }
 
@@ -141,7 +141,7 @@ impl<'a> Ctx<'a> {
     }
     fn prepend_label(mut self, label: ResultType) -> Ctx<'a> {
         if let CtxMember::Delegated(r) = self.labels {
-            self.labels = CtxMember::Prepended(vec![label], r);
+            self.labels = CtxMember::Prepended(label, r);
         } else {
             panic!("can only overwrite Delegated()");
         }
@@ -149,7 +149,7 @@ impl<'a> Ctx<'a> {
     }
 
     ctx_set!(set_locals(self, locals: Vec<ValType>));
-    ctx_set!(set_label(self, labels: ResultType) -> vec![labels]);
+    ctx_set!(set_label(self, labels: ResultType));
     ctx_set!(set_return_(self, return_: ResultType));
 
     ctx_set!(set_types(self, types: Vec<FuncType>));
