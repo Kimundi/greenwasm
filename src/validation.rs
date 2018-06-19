@@ -133,17 +133,17 @@ impl<'a> Ctx<'a> {
         unimplemented!()
     }
     // TODO: move out or change
-    fn any_vec_to_option(&self, vec: Vec<AnyValType>) -> Option<AnyValType> {
+    fn any_vec_to_option(&self, _vec: Vec<AnyValType>) -> Option<AnyValType> {
         unimplemented!()
     }
     // TODO: move out or change
-    fn vec_to_option(&self, vec: Vec<ValType>) -> Option<ValType> {
+    fn vec_to_option(&self, _vec: Vec<ValType>) -> Option<ValType> {
         unimplemented!()
     }
 }
 
 #[derive(Eq, PartialEq, Copy, Clone)]
-enum AnyValType {
+pub enum AnyValType {
     I32,
     I64,
     F32,
@@ -235,13 +235,13 @@ trait MustBeValidWith {
 }
 
 impl MustBeValidWith for AnyFuncType {
-    fn must_by_valid_with(&self, expected: &Self) -> VResult<()> {
+    fn must_by_valid_with(&self, _expected: &Self) -> VResult<()> {
         unimplemented!()
     }
 }
 
 impl MustBeValidWith for AnyResultType {
-    fn must_by_valid_with(&self, expected: &Self) -> VResult<()> {
+    fn must_by_valid_with(&self, _expected: &Self) -> VResult<()> {
         unimplemented!()
     }
 }
@@ -279,6 +279,8 @@ pub mod validate {
     });
 
     valid_with!((c, global_type: GlobalType) -> () {
+        let _ = c;
+        let _ = global_type;
     });
 
     valid_with!((c, instruction: Instr) -> AnyFuncType {
@@ -341,7 +343,7 @@ pub mod validate {
             ref load_store_instr @ IxxStore8(..) |
             ref load_store_instr @ IxxStore16(..) |
             ref load_store_instr @ I64Store32(..) => {
-                let validate = |t: ValType, memarg: Memarg, bit_width, e, r| {
+                let validate = |memarg: Memarg, bit_width, e, r| {
                     c.mems(0)?;
                     let align = 1u32 << memarg.align;
                     if align > (bit_width / 8) {
@@ -350,11 +352,11 @@ pub mod validate {
                     Ok(r)
                 };
                 let load = |t: ValType, memarg: Memarg, bit_width| {
-                    validate(t, memarg, bit_width,
+                    validate(memarg, bit_width,
                              InstrLoadOveraligned, ty![I32 ; t])
                 };
                 let store = |t: ValType, memarg: Memarg, bit_width| {
-                    validate(t, memarg, bit_width,
+                    validate(memarg, bit_width,
                              InstrStoreOveraligned, ty![I32, t ; ])
                 };
 
@@ -424,7 +426,7 @@ pub mod validate {
             }
             CallIndirect(x) => {
                 let TableType {
-                    limits,
+                    limits: _,
                     elemtype,
                 } = c.tables(0)?;
                 if elemtype != ElemType::AnyFunc {
@@ -519,6 +521,6 @@ pub mod validate {
         validate::expr(c, &expr)?.must_by_valid_with(&Some(t.into()))?;
         validate::const_expr(c, &expr)?;
 
-        type_.clone()
+        *type_
     });
 }
