@@ -1,5 +1,5 @@
 [package]
-name = "greenwasm"
+name = "green-wasm"
 version = "0.1.0"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 
