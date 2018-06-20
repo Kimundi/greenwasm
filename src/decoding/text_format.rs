@@ -86,34 +86,36 @@ impl<'a> Tokenizer<'a> {
         'outer: loop {
             let up = self.unparsed().as_bytes();
 
-            if let Some(c) = up.get(0) {
-                match *c {
-                    b' ' | b'\x09' | b'\x0a' | b'\x0d' => {
-                        self.cursor += 1;
-                        continue 'outer;
-                    },
-                    b';' if up.get(1) == Some(&b';') => {
-                        self.cursor += 2;
-                        loop {
-                            match self.unparsed().as_bytes().get(0) {
-                                Some(&b'\x0a') => {
-                                    self.cursor += 1;
-                                    continue 'outer;
-                                }
-                                None => {
-                                    break 'outer;
-                                }
-                                _ => {
-                                    self.cursor += 1;
-                                }
+            match up {
+                  [b' ',    ..]
+                | [b'\x09', ..]
+                | [b'\x0a', ..]
+                | [b'\x0d', ..]
+                => {
+                    self.cursor += 1;
+                    continue 'outer;
+                },
+                [b';', b';', ..] => {
+                    self.cursor += 2;
+                    loop {
+                        match self.unparsed().as_bytes().get(0) {
+                            Some(&b'\x0a') => {
+                                self.cursor += 1;
+                                continue 'outer;
+                            }
+                            None => {
+                                break 'outer;
+                            }
+                            _ => {
+                                self.cursor += 1;
                             }
                         }
                     }
-                    b'(' if up.get(1) == Some(&b';') => {
-                        self.skip_block_comment();
-                    }
-                    _ => break 'outer,
                 }
+                [b'(', b';', ..] => {
+                    self.skip_block_comment();
+                }
+                _ => break 'outer,
             }
         }
 
