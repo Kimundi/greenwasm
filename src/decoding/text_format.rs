@@ -1,3 +1,7 @@
+use std::borrow::Cow;
+use std::fmt;
+use std::iter;
+
 #[derive(Debug)]
 pub enum ParserErrorEnum {
     UnbalancedBlockComment,
@@ -45,8 +49,34 @@ impl<'a> Parser<'a> {
     fn unparsed(&self) -> &'a str { &self.input[self.position..] }
     fn unparsedb(&self) -> &'a [u8] { self.input[self.position..].as_bytes() }
 
-    fn unparsed_one(&self) -> Option<char> { self.input[self.position..].chars().next() }
-    fn unparsedb_one(&self) -> Option<u8> { self.input[self.position..].as_bytes().get(0).cloned() }
+    fn unparsed_one(&self) -> Result<char, ParserError> {
+        if let Some(r) = self.input[self.position..].chars().next() {
+            Ok(r)
+        } else {
+            self.error(UnexpectedEof)
+        }
+    }
+    fn unparsedb_one(&self) -> Result<u8, ParserError> {
+        if let Some(r) = self.input[self.position..].as_bytes().get(0).cloned() {
+             Ok(r)
+        } else {
+            self.error(UnexpectedEof)
+        }
+    }
+    fn expect(&mut self, c: char) -> Result<char, ParserError> {
+        let d = self.unparsed_one()?;
+        if d != c {
+            self.error(Estr("UnexpectedSymbol"))
+        } else {
+            self.step(c.len_utf8());
+            Ok(c)
+        }
+    }
+    fn expect_any(&mut self) -> Result<char, ParserError> {
+        let c = self.unparsed_one()?;
+        self.step(c.len_utf8());
+        Ok(c)
+    }
 
     fn step(&mut self, n: usize) {
         self.position += n;
@@ -64,6 +94,8 @@ impl<'a> Parser<'a> {
         }
     }
 }
+
+const MAX_VEC_LEN: usize = (1 << 32) - 1;
 
 pub enum Keyword {}
 trait ParseFloat: Copy + From<u8> + From<u16> {
@@ -250,7 +282,7 @@ impl<'a> Parser<'a> {
     });
     */
     parse_fun!(:raw raw_digit(self) -> u8 {
-        let r = if let Some(c) = self.unparsedb_one() {
+        let r = if let Ok(c) = self.unparsedb_one() {
             if c >= b'0' && c <= b'9' {
                 c - b'0'
             } else {
@@ -263,7 +295,7 @@ impl<'a> Parser<'a> {
         Ok(r)
     });
     parse_fun!(:raw raw_hexdigit(self) -> u8 {
-        let r = if let Some(c) = self.unparsedb_one() {
+        let r = if let Ok(c) = self.unparsedb_one() {
             if c >= b'0' && c <= b'9' {
                 c - b'0'
             } else if c >= b'a' && c <= b'f' {
@@ -292,7 +324,7 @@ impl<'a> Parser<'a> {
                 if g(self) {
                     break;
                 }
-                if let Some('_') = self.unparsed_one() {
+                if let Ok('_') = self.unparsed_one() {
                     self.step(1);
                 }
             }
@@ -305,7 +337,7 @@ impl<'a> Parser<'a> {
                 if g(self) {
                     break;
                 }
-                if let Some('_') = self.unparsed_one() {
+                if let Ok('_') = self.unparsed_one() {
                     self.step(1);
                 }
             }
@@ -389,7 +421,7 @@ impl<'a> Parser<'a> {
 
         {
             let is_token_end = |p: &Parser| {
-                p.is_token_end() || check_exp(p) || p.unparsed_one() == Some('.')
+                p.is_token_end() || check_exp(p) || p.unparsed_one().ok() == Some('.')
             };
             self.raw_digits_loop(hex, is_token_end, |d, radix, self_| {
                 n = n.mul(T::from(radix));
@@ -521,11 +553,55 @@ impl<'a> Parser<'a> {
             self.error(Estr("UnssupportedFloatWidth"))?
         })
     });
-    parse_fun!(parse_string(self) -> &'a str {
+    parse_fun!(parse_string(self) -> Vec<u8> {
+        let c = self.expect('\"')?;
+        let len = self.unparsed().find('"')
+            .ok_or(()).or_else(|_| self.error(Estr("UnterminatedStringLiteral")))?;
+        let mut s = String::with_capacity(len);
+        let push = |s: &mut String, c: char| {
+            s.push(c);
+        };
+
+        loop {
+            match self.expect_any()? {
+                '"' => {
+                    if s.len() <= MAX_VEC_LEN {
+                        return Ok(s.into());
+                    } else {
+                        return self.error(Estr("StringTooLong"));
+                    }
+                }
+                '\\' => {
+                    match self.expect_any()? {
+                        't' => { push(&mut s, '\t'); }
+                        'n' => { push(&mut s, '\n'); }
+                        'r' => { push(&mut s, '\r'); }
+                        '\"' => { push(&mut s, '\"'); }
+                        '\'' => { push(&mut s, '\''); }
+                        '\\' => { push(&mut s, '\\'); }
+                        'u' => {
+                            self.expect('{')?;
+
+                            unimplemented!();
+
+                            self.expect('}')?;
+                        }
+                        c => {
+                            // TODO: hex escape sequences, arbitrary bytes
+                            unimplemented!()
+                        }
+                    }
+                }
+                c if c >= '\u{20}' && c != '\u{7f}' => {
+                    push(&mut s, c);
+                }
+                _ => break,
+            }
+        }
 
         self.error(Estr("StringNotRecognized"))
     });
-    parse_fun!(parse_id(self) -> &'a str {
+    parse_fun!(parse_id(self) -> String {
 
         self.error(Estr("IdNotRecognized"))
     });
@@ -533,7 +609,7 @@ impl<'a> Parser<'a> {
 
         self.error(Estr("ParensNotRecognized"))
     });
-    parse_fun!(parse_reserved(self) -> &'a str {
+    parse_fun!(parse_reserved(self) -> String {
 
         self.error(Estr("Reserved"))
     });
@@ -556,7 +632,7 @@ mod tests {
     }
 
     fn check_case<T, F, P>(s: &str, f: &F, pred: &P, end_offset: usize)
-        where T: ::std::fmt::Debug,
+        where T: fmt::Debug,
               F: Fn(&mut Parser) -> Result<T, ParserError>,
               P: Fn(&Result<T, ParserError>) -> bool,
     {
@@ -573,7 +649,7 @@ mod tests {
         let validation = pred(&r);
         if !validation {
             if let Err(r) = r {
-                let indent = ::std::iter::repeat(' ').take(r.position);
+                let indent = iter::repeat(' ').take(r.position);
                 let c: String = indent.chain(Some('^')).collect();
                 panic!("Token stream:\n`{}`\n {}\n\nError: {:?}", s, c, r.error);
             } else {
@@ -583,7 +659,7 @@ mod tests {
     }
 
     fn check<T, F, P>(s: &str, f: F, pred: P)
-        where T: ::std::fmt::Debug,
+        where T: fmt::Debug,
               F: Fn(&mut Parser) -> Result<T, ParserError>,
               P: Fn(&Result<T, ParserError>) -> bool,
     {
@@ -879,6 +955,16 @@ mod tests {
             f32::from_bits(0b1_11111111_00000000000000011111111),
             f64::from_bits(0b1_11111111111_0000000000000000000000000000000000000000000011111111),
         ));
+    }
+
+    #[test]
+    fn parse_string() {
+        let parse_string = |p: &mut Parser| p.parse_string();
+        let ok = |s: &str| is_ok_with(s.into());
+
+        check(r#""hello""#, parse_string, ok("hello"));
+        check(r#""hel\nlo""#, parse_string, ok("hel\nlo"));
+        check(r#""hel\u{abc}lo""#, parse_string, ok("hel\u{abc}lo"));
     }
 
 }
