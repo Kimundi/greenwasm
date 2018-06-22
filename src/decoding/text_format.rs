@@ -100,7 +100,42 @@ impl<'a> Parser<'a> {
 
 const MAX_VEC_LEN: usize = (1 << 32) - 1;
 
-pub enum Keyword {}
+/*
+macro_rules! token_enum {
+    ($name:ident { $( $e:ident $(( $($et:ty),* ))? : $s:expr ),* $(,)? }) => (
+        pub enum $name {
+            $(
+                $e $(( $($et),* ))?
+            ),*
+        }
+        impl $name {
+            fn str(&self) -> &'static str {
+                match *self {
+                    $(
+                        $name::$e => $s,
+                    )*
+                }
+            }
+        }
+    )
+}
+
+token_enum!(Keyword {
+    I32    : "i32",
+    I64    : "i64",
+    F32    : "f32",
+    F64    : "f64",
+    Func   : "func",
+    Param  : "param",
+    Result : "result",
+});
+
+pub enum Token {
+    Keyword(Keyword),
+
+}
+*/
+
 trait ParseFloat: Copy + From<u8> + From<u16> {
     fn zero() -> Self;
     fn infinite() -> Self;
@@ -217,73 +252,6 @@ impl<'a> Parser<'a> {
         Ok(())
     });
 
-    /*
-    parse_fun!(skip_peek(self) -> &'a str {
-        self.skip()?;
-        let start = self.cursor;
-        'outer: loop {
-            let up = self.unparsed().as_bytes();
-            match up {
-                  [b' ',       ..]
-                | [b'\x09',    ..]
-                | [b'\x0a',    ..]
-                | [b'\x0d',    ..]
-                | [b';', b';', ..]
-                | [b'(', b';', ..]
-                => {
-                    break 'outer;
-                }
-                [] => {
-                    self.error(UnexpectedEof)?;
-                }
-                _ => {
-                }
-            }
-            self.cursor += 1;
-        }
-        let end = self.cursor;
-        Ok(&self.input[start..end])
-    });
-    */
-
-    /*
-    parse_fun!(parse_token(self) -> Token<'a> {
-        Err(())
-        .or_else(|_| self.parse_keyword())
-        .or_else(|_| self.parse_un_sn_fn())
-        .or_else(|_| self.parse_string())
-        .or_else(|_| self.parse_id())
-        .or_else(|_| self.parse_parens())
-        .or_else(|_| self.parse_reserved())
-    });
-    */
-
-    /*
-    parse_fun!(parse_keyword(self) -> Keyword {
-        Ok(match self.skip_peek()? {
-            _ => Err(self.error_(Estr("KeywordNotRecognized")))?,
-        })
-    });
-    */
-
-    /*
-    parse_fun!(parse_un_sn_fn(self) -> Token<'a> {
-        Ok(match self.skip_peek()? {
-            "u8" => Token::U(N::N8),
-            "u16" => Token::U(N::N16),
-            "u32" => Token::U(N::N32),
-            "u64" => Token::U(N::N64),
-            "s8" => Token::S(N::N8),
-            "s16" => Token::S(N::N16),
-            "s32" => Token::S(N::N32),
-            "s64" => Token::S(N::N64),
-            "f32" => Token::F(N::N32),
-            "f64" => Token::F(N::N64),
-
-            _ => Err(self.error_(Estr("NumberNotRecognized")))?,
-        })
-    });
-    */
     parse_fun!(:raw raw_digit(self) -> u8 {
         let r = if let Ok(c) = self.unparsedb_one() {
             if c >= b'0' && c <= b'9' {
@@ -670,403 +638,23 @@ impl<'a> Parser<'a> {
     });
 }
 
+pub struct WasmBuilder;
+pub struct StringBuilder(Vec<u8>);
+impl StringBuilder {
+    pub fn push(&mut self, c: char) {
+        let mut buf = [0; 4];
+        self.0.extend(c.encode_utf8(&mut buf).bytes());
+    }
+    pub fn pushb(&mut self, c: u8) {
+        self.0.push(c);
+    }
+}
+
 use structure::modules::Module;
 pub fn from_text_format(_b: &str) -> Result<Module, ParserError> {
     unimplemented!()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn parser(s: &str) -> Parser {
-        Parser {
-            input: s,
-            position: 0,
-        }
-    }
-
-    fn check_case<T, F, P>(s: &str, f: &F, pred: &P, end_offset: usize)
-        where T: fmt::Debug,
-              F: Fn(&mut Parser) -> Result<T, ParserError>,
-              P: Fn(&Result<T, ParserError>) -> bool,
-    {
-        let mut p = parser(s);
-        let r = f(&mut p);
-        let r = r.and_then(|x| {
-            let end_pos = s.len() - end_offset;
-            if p.position != end_pos {
-                p.error(Estr("DidNotParseToTheEnd"))
-            } else {
-                Ok(x)
-            }
-        });
-        let validation = pred(&r);
-        if !validation {
-            if let Err(r) = r {
-                let indent = iter::repeat(' ').take(r.position);
-                let c: String = indent.chain(Some('^')).collect();
-                panic!("Token stream:\n`{}`\n {}\n\nError: {:?}", s, c, r.error);
-            } else {
-                panic!("Token stream:\n`{}`\nResult: {:?}", s, r);
-            }
-        }
-    }
-
-    fn check<T, F, P>(s: &str, f: F, pred: P)
-        where T: fmt::Debug,
-              F: Fn(&mut Parser) -> Result<T, ParserError>,
-              P: Fn(&Result<T, ParserError>) -> bool,
-    {
-        check_case(s, &f, &pred, 0);
-        check_case(&format!(" {}", s), &f, &pred, 0);
-        check_case(&format!(" {} ", s), &f, &pred, 1);
-        check_case(&format!("\n{}", s), &f, &pred, 0);
-        check_case(&format!("\n{}\n", s), &f, &pred, 1);
-        check_case(&format!("(;;){}", s), &f, &pred, 0);
-        check_case(&format!("(;;){}(;;)", s), &f, &pred, 4);
-        check_case(&format!("{};;", s), &f, &pred, 2);
-    }
-
-    fn is_ok_with<T: PartialEq>(v: T) -> impl Fn(&Result<T, ParserError>) -> bool {
-        move |r: &Result<T, ParserError>| {
-            if let Ok(q) = r {
-                q == &v
-            } else {
-                false
-            }
-        }
-    }
-
-    #[test]
-    fn parse_u8() {
-        parse_un(8);
-    }
-    #[test]
-    fn parse_u16() {
-        parse_un(16);
-    }
-    #[test]
-    fn parse_u32() {
-        parse_un(32);
-    }
-    #[test]
-    fn parse_u64() {
-        parse_un(64);
-    }
-
-    fn parse_un(n: u32) {
-        let parse_un = |p: &mut Parser| Parser::parse_un(p, n);
-
-        check("", parse_un, Result::is_err);
-        check("_", parse_un, Result::is_err);
-
-        check("_", parse_un, Result::is_err);
-
-        check("0", parse_un, is_ok_with(0));
-        check("1", parse_un, is_ok_with(1));
-        check("1_", parse_un, Result::is_err);
-
-        check("02", parse_un, is_ok_with(2));
-        check("12", parse_un, is_ok_with(12));
-        check("1_2", parse_un, is_ok_with(12));
-        check("1__2", parse_un, Result::is_err);
-
-        check("0x", parse_un, Result::is_err);
-        check("0x_", parse_un, Result::is_err);
-
-        check("0x0", parse_un, is_ok_with(0));
-        check("0x1", parse_un, is_ok_with(1));
-        check("0x1_", parse_un, Result::is_err);
-
-        check("0xa", parse_un, is_ok_with(10));
-        check("0xa_", parse_un, Result::is_err);
-
-        check("0xf", parse_un, is_ok_with(15));
-        check("0xf_", parse_un, Result::is_err);
-
-        check("0xA", parse_un, is_ok_with(10));
-        check("0xA_", parse_un, Result::is_err);
-
-        check("0xF", parse_un, is_ok_with(15));
-        check("0xF_", parse_un, Result::is_err);
-
-        check("0x02", parse_un, is_ok_with(2));
-        check("0x12", parse_un, is_ok_with(18));
-        check("0x1_2", parse_un, is_ok_with(18));
-        check("0x1__2", parse_un, Result::is_err);
-
-        let one_beyond = 1u128 << n;
-        let max = one_beyond - 1;
-
-        let one_beyond_ds = format!("{}", one_beyond);
-        let max_ds = format!("{}", max);
-
-        let one_beyond_hs = format!("0x{:x}", one_beyond);
-        let max_hs = format!("0x{:x}", max);
-
-        check(&one_beyond_ds, parse_un, Result::is_err);
-        check(&max_ds, parse_un, is_ok_with(max as u64));
-
-        check(&one_beyond_hs, parse_un, Result::is_err);
-        check(&max_hs, parse_un, is_ok_with(max as u64));
-
-
-    }
-
-    #[test]
-    fn parse_s8() {
-        parse_sn(8);
-    }
-    #[test]
-    fn parse_s16() {
-        parse_sn(16);
-    }
-    #[test]
-    fn parse_s32() {
-        parse_sn(32);
-    }
-    #[test]
-    fn parse_s64() {
-        parse_sn(64);
-    }
-
-    fn parse_sn(n: u32) {
-        let parse_sn = |p: &mut Parser| Parser::parse_sn(p, n);
-
-        check("0", parse_sn, is_ok_with(0));
-        check("-0", parse_sn, is_ok_with(0));
-        check("+0", parse_sn, is_ok_with(0));
-
-        check("- 0", parse_sn, Result::is_err);
-        check("+ 0", parse_sn, Result::is_err);
-
-        check("1", parse_sn, is_ok_with(1));
-        check("-1", parse_sn, is_ok_with(-1));
-        check("+1", parse_sn, is_ok_with(1));
-    }
-
-    #[test]
-    fn parse_i8() {
-        parse_in(8);
-    }
-    #[test]
-    fn parse_i16() {
-        parse_in(16);
-    }
-    #[test]
-    fn parse_i32() {
-        parse_in(32);
-    }
-    #[test]
-    fn parse_i64() {
-        parse_in(64);
-    }
-
-    fn parse_in(n: u32) {
-        let parse_in = |p: &mut Parser| Parser::parse_in(p, n);
-
-        check("1", parse_in, is_ok_with(1u64));
-        check("+1", parse_in, is_ok_with(1u64));
-        check("-1", parse_in, is_ok_with(-1i64 as u64));
-    }
-
-    #[test]
-    fn parse_f32() {
-        parse_fn(32);
-    }
-    #[test]
-    fn parse_f64() {
-        parse_fn(64);
-    }
-
-    fn parse_fn(n: u32) {
-        let parse_fn = |p: &mut Parser| Parser::parse_fn(p, n);
-        let ok = |v32: f32, v64: f64| {
-            if n == 32 {
-                is_ok_with(v32.to_bits() as u64)
-            } else {
-                is_ok_with(v64.to_bits())
-            }
-        };
-        macro_rules! ok {
-            ($e:expr) => (ok($e, $e))
-        }
-
-        check("1", parse_fn, ok!(1.0));
-        check("+1", parse_fn, ok!(1.0));
-        check("-1", parse_fn, ok!(-1.0));
-        check("0x1", parse_fn, ok!(1.0));
-        check("+0x1", parse_fn, ok!(1.0));
-        check("-0x1", parse_fn, ok!(-1.0));
-
-        check("10", parse_fn, ok!(10.0));
-        check("+10", parse_fn, ok!(10.0));
-        check("-10", parse_fn, ok!(-10.0));
-        check("0x10", parse_fn, ok!(16.0));
-        check("+0x10", parse_fn, ok!(16.0));
-        check("-0x10", parse_fn, ok!(-16.0));
-
-        check("10.", parse_fn, ok!(10.0));
-        check("+10.", parse_fn, ok!(10.0));
-        check("-10.", parse_fn, ok!(-10.0));
-        check("0x10.", parse_fn, ok!(16.0));
-        check("+0x10.", parse_fn, ok!(16.0));
-        check("-0x10.", parse_fn, ok!(-16.0));
-
-        check("10.5", parse_fn, ok!(10.5));
-        check("+10.5", parse_fn, ok!(10.5));
-        check("-10.5", parse_fn, ok!(-10.5));
-        check("0x10.1", parse_fn, ok!(16.0625));
-        check("+0x10.1", parse_fn, ok!(16.0625));
-        check("-0x10.1", parse_fn, ok!(-16.0625));
-
-        check("10e0", parse_fn, ok!(10.0));
-        check("+10e0", parse_fn, ok!(10.0));
-        check("-10e0", parse_fn, ok!(-10.0));
-        check("0x10p0", parse_fn, ok!(16.0));
-        check("+0x10p0", parse_fn, ok!(16.0));
-        check("-0x10p0", parse_fn, ok!(-16.0));
-
-        check("10e-0", parse_fn, ok!(10.0));
-        check("+10e-0", parse_fn, ok!(10.0));
-        check("-10e-0", parse_fn, ok!(-10.0));
-        check("0x10p-0", parse_fn, ok!(16.0));
-        check("+0x10p-0", parse_fn, ok!(16.0));
-        check("-0x10p-0", parse_fn, ok!(-16.0));
-
-        check("10e+0", parse_fn, ok!(10.0));
-        check("+10e+0", parse_fn, ok!(10.0));
-        check("-10e+0", parse_fn, ok!(-10.0));
-        check("0x10p+0", parse_fn, ok!(16.0));
-        check("+0x10p+0", parse_fn, ok!(16.0));
-        check("-0x10p+0", parse_fn, ok!(-16.0));
-
-        check("10.e0", parse_fn, ok!(10.0));
-        check("+10.e0", parse_fn, ok!(10.0));
-        check("-10.e0", parse_fn, ok!(-10.0));
-        check("0x10.p0", parse_fn, ok!(16.0));
-        check("+0x10.p0", parse_fn, ok!(16.0));
-        check("-0x10.p0", parse_fn, ok!(-16.0));
-
-        check("10.e-0", parse_fn, ok!(10.0));
-        check("+10.e-0", parse_fn, ok!(10.0));
-        check("-10.e-0", parse_fn, ok!(-10.0));
-        check("0x10.p-0", parse_fn, ok!(16.0));
-        check("+0x10.p-0", parse_fn, ok!(16.0));
-        check("-0x10.p-0", parse_fn, ok!(-16.0));
-
-        check("10.e+0", parse_fn, ok!(10.0));
-        check("+10.e+0", parse_fn, ok!(10.0));
-        check("-10.e+0", parse_fn, ok!(-10.0));
-        check("0x10.p+0", parse_fn, ok!(16.0));
-        check("+0x10.p+0", parse_fn, ok!(16.0));
-        check("-0x10.p+0", parse_fn, ok!(-16.0));
-
-        check("10.5", parse_fn, ok!(10.5));
-        check("+10.5", parse_fn, ok!(10.5));
-        check("-10.5", parse_fn, ok!(-10.5));
-        check("0x10.1", parse_fn, ok!(16.0625));
-        check("+0x10.1", parse_fn, ok!(16.0625));
-        check("-0x10.1", parse_fn, ok!(-16.0625));
-
-        check("10.e1", parse_fn, ok!(100.0));
-        check("+10.e1", parse_fn, ok!(100.0));
-        check("-10.e1", parse_fn, ok!(-100.0));
-        check("0x10.p1", parse_fn, ok!(32.0));
-        check("+0x10.p1", parse_fn, ok!(32.0));
-        check("-0x10.p1", parse_fn, ok!(-32.0));
-
-        check("10.e-1", parse_fn, ok!(1.0));
-        check("+10.e-1", parse_fn, ok!(1.0));
-        check("-10.e-1", parse_fn, ok!(-1.0));
-        check("0x10.p-1", parse_fn, ok!(8.0));
-        check("+0x10.p-1", parse_fn, ok!(8.0));
-        check("-0x10.p-1", parse_fn, ok!(-8.0));
-
-        check("10.e+1", parse_fn, ok!(100.0));
-        check("+10.e+1", parse_fn, ok!(100.0));
-        check("-10.e+1", parse_fn, ok!(-100.0));
-        check("0x10.p+1", parse_fn, ok!(32.0));
-        check("+0x10.p+1", parse_fn, ok!(32.0));
-        check("-0x10.p+1", parse_fn, ok!(-32.0));
-
-        check("+inf", parse_fn, ok!(1.0 / 0.0));
-        check("-inf", parse_fn, ok!(-1.0 / 0.0));
-
-        check("+nan", parse_fn, ok(
-            f32::from_bits(0b0_11111111_10000000000000000000000),
-            f64::from_bits(0b0_11111111111_1000000000000000000000000000000000000000000000000000),
-        ));
-        check("-nan", parse_fn, ok(
-            f32::from_bits(0b1_11111111_10000000000000000000000),
-            f64::from_bits(0b1_11111111111_1000000000000000000000000000000000000000000000000000),
-        ));
-        check("+nan:0xff", parse_fn, ok(
-            f32::from_bits(0b0_11111111_00000000000000011111111),
-            f64::from_bits(0b0_11111111111_0000000000000000000000000000000000000000000011111111),
-        ));
-        check("-nan:0xff", parse_fn, ok(
-            f32::from_bits(0b1_11111111_00000000000000011111111),
-            f64::from_bits(0b1_11111111111_0000000000000000000000000000000000000000000011111111),
-        ));
-    }
-
-    #[test]
-    fn parse_string() {
-        let parse_string = |p: &mut Parser| p.parse_string();
-        let ok = |s: &str| is_ok_with(s.into());
-        let okb = |s: &[u8]| is_ok_with(s.into());
-
-        check(r#""hello""#, parse_string, ok("hello"));
-        check(r#""hel\nlo""#, parse_string, ok("hel\nlo"));
-        check(r#""hel\"lo""#, parse_string, ok("hel\"lo"));
-        check(r#""hel\\lo""#, parse_string, ok("hel\\lo"));
-        check(r#""hel\u{abc}lo""#, parse_string, ok("hel\u{abc}lo"));
-        check(r#""\fe""#, parse_string, okb(b"\xfe"));
-        check(r#""hel\felo""#, parse_string, okb(b"hel\xfelo"));
-
-        check("\"0hel\x00lo\"", parse_string, Result::is_err);
-        check(r#""hel\mlo""#, parse_string, Result::is_err);
-        check(r#""hel\u{g}lo""#, parse_string, Result::is_err);
-        check(r#""hel\u{g}lo"#, parse_string, Result::is_err);
-        check(r#""hel\u{g"#, parse_string, Result::is_err);
-        check(r#""\f""#, parse_string, Result::is_err);
-        check(r#""\fg""#, parse_string, Result::is_err);
-        check(r#""\gg""#, parse_string, Result::is_err);
-    }
-
-    #[test]
-    fn parse_name() {
-        let parse_name = |p: &mut Parser| p.parse_name();
-
-        check(r#""äöü""#, parse_name, Result::is_ok);
-        check(r#""\ff""#, parse_name, Result::is_err);
-    }
-
-    #[test]
-    fn parse_id() {
-        let parse_id = |p: &mut Parser| p.parse_id();
-
-        check("$", parse_id, Result::is_err);
-        check("$ ", parse_id, Result::is_err);
-        check("$\"", parse_id, Result::is_err);
-        check("$,", parse_id, Result::is_err);
-        check("$;", parse_id, Result::is_err);
-        check("$(", parse_id, Result::is_err);
-        check("$)", parse_id, Result::is_err);
-        check("${", parse_id, Result::is_err);
-        check("$}", parse_id, Result::is_err);
-        check("$[", parse_id, Result::is_err);
-        check("$]", parse_id, Result::is_err);
-
-        check("$0123456789", parse_id, is_ok_with("$0123456789".into()));
-        check("$abcdefghijklmnopqrstuvwxyz", parse_id,
-            is_ok_with("$abcdefghijklmnopqrstuvwxyz".into()));
-        check("$ABCDEFGHIJKLMNOPQRSTUVWXYZ", parse_id,
-            is_ok_with("$ABCDEFGHIJKLMNOPQRSTUVWXYZ".into()));
-        check("$!#$%&'*+-./:<=>?@\\^_`|~", parse_id,
-            is_ok_with("$!#$%&'*+-./:<=>?@\\^_`|~".into()));
-    }
-
-}
+#[path="tests_text_format.rs"]
+mod tests;
