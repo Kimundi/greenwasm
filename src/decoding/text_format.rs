@@ -50,14 +50,14 @@ impl<'a> Parser<'a> {
     fn unparsedb(&self) -> &'a [u8] { self.input[self.position..].as_bytes() }
 
     fn unparsed_one(&self) -> Result<char, ParserError> {
-        if let Some(r) = self.input[self.position..].chars().next() {
+        if let Some(r) = self.input.get(self.position..).and_then(|x| x.chars().next()) {
             Ok(r)
         } else {
             self.error(UnexpectedEof)
         }
     }
     fn unparsedb_one(&self) -> Result<u8, ParserError> {
-        if let Some(r) = self.input[self.position..].as_bytes().get(0).cloned() {
+        if let Some(r) = self.input.get(self.position..).and_then(|x| x.as_bytes().get(0).cloned()) {
              Ok(r)
         } else {
             self.error(UnexpectedEof)
@@ -80,6 +80,9 @@ impl<'a> Parser<'a> {
 
     fn step(&mut self, n: usize) {
         self.position += n;
+    }
+    fn unstep(&mut self, n: usize) {
+        self.position -= n;
     }
     fn is_token_end(&self) -> bool {
         match self.unparsedb() {
@@ -557,13 +560,14 @@ impl<'a> Parser<'a> {
         let c = self.expect('\"')?;
         let len = self.unparsed().find('"')
             .ok_or(()).or_else(|_| self.error(Estr("UnterminatedStringLiteral")))?;
-        let mut s = String::with_capacity(len);
-        let push = |s: &mut String, c: char| {
-            s.push(c);
+        let mut s = Vec::with_capacity(len);
+        let push = |s: &mut Vec<u8>, c: char| {
+            let mut buf = [0; 4];
+            s.extend(c.encode_utf8(&mut buf).bytes());
         };
 
-        loop {
-            match self.expect_any()? {
+        while let Ok(c) = self.expect_any() {
+            match c {
                 '"' => {
                     if s.len() <= MAX_VEC_LEN {
                         return Ok(s.into());
@@ -582,13 +586,33 @@ impl<'a> Parser<'a> {
                         'u' => {
                             self.expect('{')?;
 
-                            unimplemented!();
+                            let mut n: u32 = 0;
+
+                            let is_token_end = |p: &Parser| {
+                                p.is_token_end() || p.unparsed_one().ok() == Some('}')
+                            };
+                            self.raw_digits_loop(true, is_token_end, |d, radix, self_| {
+                                n *= radix as u32;
+                                n += d as u32;
+                                if n >= (0x110000) {
+                                    self_.error(Estr("UnicodeCharOutOfBounds"))?;
+                                }
+                                Ok(())
+                            })?;
+
+                            if !(n < 0xd800 || (0xe000 <= n && n < 0x110000)) {
+                                self.error(Estr("UnicodeCharOutOfBounds"))?;
+                            }
+
+                            push(&mut s, ::std::char::from_u32(n).unwrap());
 
                             self.expect('}')?;
                         }
-                        c => {
-                            // TODO: hex escape sequences, arbitrary bytes
-                            unimplemented!()
+                        _ => {
+                            self.unstep(1);
+                            let n = self.raw_hexdigit()?;
+                            let m = self.raw_hexdigit()?;
+                            s.push(16 * n + m);
                         }
                     }
                 }
@@ -961,10 +985,15 @@ mod tests {
     fn parse_string() {
         let parse_string = |p: &mut Parser| p.parse_string();
         let ok = |s: &str| is_ok_with(s.into());
+        let okb = |s: &[u8]| is_ok_with(s.into());
 
         check(r#""hello""#, parse_string, ok("hello"));
         check(r#""hel\nlo""#, parse_string, ok("hel\nlo"));
+        check(r#""hel\"lo""#, parse_string, ok("hel\"lo"));
+        check(r#""hel\\lo""#, parse_string, ok("hel\\lo"));
         check(r#""hel\u{abc}lo""#, parse_string, ok("hel\u{abc}lo"));
+        check(r#""\fe""#, parse_string, okb(b"\xfe"));
+        check(r#""hel\felo""#, parse_string, okb(b"hel\xfelo"));
     }
 
 }
