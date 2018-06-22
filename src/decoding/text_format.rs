@@ -236,14 +236,14 @@ impl<'a> Parser<'a> {
                     self.error(Estr("NotADecDigit"))?;
                 }
                 self.step(1);
+                if n >= (1u128 << bits) {
+                    self.error(Estr("IntegerOutOfBounds"))?;
+                }
                 if self.is_token_end() {
                     break;
                 }
                 if let Some('_') = self.unparsed_one() {
                     self.step(1);
-                }
-                if n >= (1u128 << bits) {
-                    self.error(Estr("IntegerOutOfBounds"))?;
                 }
             }
         } else {
@@ -265,14 +265,14 @@ impl<'a> Parser<'a> {
                     self.error(Estr("NotAHexDigit"))?;
                 }
                 self.step(1);
+                if n >= (1u128 << bits) {
+                    self.error(Estr("IntegerOutOfBounds"))?;
+                }
                 if self.is_token_end() {
                     break;
                 }
                 if let Some('_') = self.unparsed_one() {
                     self.step(1);
-                }
-                if n >= (1u128 << bits) {
-                    self.error(Estr("IntegerOutOfBounds"))?;
                 }
             }
         }
@@ -456,6 +456,23 @@ mod tests {
         check("0x12", parse_un, is_ok_with(18));
         check("0x1_2", parse_un, is_ok_with(18));
         check("0x1__2", parse_un, Result::is_err);
+
+        let one_beyond = 1u128 << n;
+        let max = one_beyond - 1;
+
+        let one_beyond_ds = format!("{}", one_beyond);
+        let max_ds = format!("{}", max);
+
+        let one_beyond_hs = format!("0x{:x}", one_beyond);
+        let max_hs = format!("0x{:x}", max);
+
+        check(&one_beyond_ds, parse_un, Result::is_err);
+        check(&max_ds, parse_un, is_ok_with(max as u64));
+
+        check(&one_beyond_hs, parse_un, Result::is_err);
+        check(&max_hs, parse_un, is_ok_with(max as u64));
+
+
     }
 
     #[test]
