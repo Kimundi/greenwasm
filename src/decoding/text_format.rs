@@ -625,6 +625,14 @@ impl<'a> Parser<'a> {
 
         self.error(Estr("StringNotRecognized"))
     });
+    parse_fun!(parse_name(self) -> String {
+        let s = self.parse_string()?;
+        if let Ok(s) = String::from_utf8(s) {
+            Ok(s)
+        } else {
+            self.error(Estr("NameIsNotUtf8"))
+        }
+    });
     parse_fun!(parse_id(self) -> String {
 
         self.error(Estr("IdNotRecognized"))
@@ -994,6 +1002,23 @@ mod tests {
         check(r#""hel\u{abc}lo""#, parse_string, ok("hel\u{abc}lo"));
         check(r#""\fe""#, parse_string, okb(b"\xfe"));
         check(r#""hel\felo""#, parse_string, okb(b"hel\xfelo"));
+
+        check("\"0hel\x00lo\"", parse_string, Result::is_err);
+        check(r#""hel\mlo""#, parse_string, Result::is_err);
+        check(r#""hel\u{g}lo""#, parse_string, Result::is_err);
+        check(r#""hel\u{g}lo"#, parse_string, Result::is_err);
+        check(r#""hel\u{g"#, parse_string, Result::is_err);
+        check(r#""\f""#, parse_string, Result::is_err);
+        check(r#""\fg""#, parse_string, Result::is_err);
+        check(r#""\gg""#, parse_string, Result::is_err);
+    }
+
+    #[test]
+    fn parse_name() {
+        let parse_name = |p: &mut Parser| p.parse_name();
+
+        check(r#""äöü""#, parse_name, Result::is_ok);
+        check(r#""\ff""#, parse_name, Result::is_err);
     }
 
 }
