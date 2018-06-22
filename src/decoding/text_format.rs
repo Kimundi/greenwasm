@@ -14,7 +14,6 @@ pub struct ParserError {
 pub struct Parser<'a> {
     input: &'a str,
     position: usize,
-    commited_position: usize,
 }
 macro_rules! parse_fun {
     (:raw $name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
@@ -39,7 +38,7 @@ macro_rules! parse_fun {
 impl<'a> Parser<'a> {
     fn error<T>(&self, err: ParserErrorEnum) -> Result<T, ParserError> {
         Err(ParserError {
-            position: self.commited_position,
+            position: self.position,
             error: err,
         })
     }
@@ -553,7 +552,6 @@ mod tests {
         Parser {
             input: s,
             position: 0,
-            commited_position: 0,
         }
     }
 
