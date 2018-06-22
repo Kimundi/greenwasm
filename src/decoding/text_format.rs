@@ -19,16 +19,24 @@ pub struct Parser<'a> {
 macro_rules! parse_fun {
     (:raw $name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
         pub fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
-            let r = (|| $b)();
-            $self.reset_position();
+            let r = (|| -> Result<$t, ParserError> {$b})();
+            if r.is_ok() {
+                $self.commit();
+            } else {
+                $self.reset_position();
+            }
             r
         }
     );
     ($name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
         pub fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
             $self.skip()?;
-            let r = (|| $b)();
-            $self.reset_position();
+            let r = (|| -> Result<$t, ParserError> {$b})();
+            if r.is_ok() {
+                $self.commit();
+            } else {
+                $self.reset_position();
+            }
             r
         }
     )
@@ -45,7 +53,7 @@ impl<'a> Parser<'a> {
     fn unparsedb(&self) -> &'a [u8] { self.input[self.position..].as_bytes() }
 
     fn unparsed_one(&self) -> Option<char> { self.input[self.position..].chars().next() }
-    //fn unparsedb_one(&self) -> Option<u8> { self.input[self.position..].as_bytes().get(0).cloned() }
+    fn unparsedb_one(&self) -> Option<u8> { self.input[self.position..].as_bytes().get(0).cloned() }
 
     fn commit(&mut self) {
         self.commited_position = self.position;
@@ -71,6 +79,30 @@ impl<'a> Parser<'a> {
 }
 
 pub enum Keyword {}
+trait ParseFloat {
+    fn zero() -> Self;
+    fn mul(self, v: Self) -> Self;
+    fn add(self, v: Self) -> Self;
+    fn div(self, v: Self) -> Self;
+    fn pow(self, v: Self) -> Self;
+    fn neg(self) -> Self;
+}
+impl ParseFloat for f32 {
+    fn zero() -> Self { 0.0 }
+    fn mul(self, v: Self) -> Self { self * v }
+    fn add(self, v: Self) -> Self { self + v }
+    fn div(self, v: Self) -> Self { self / v }
+    fn pow(self, v: Self) -> Self { self.powf(v) }
+    fn neg(self) -> Self { -self }
+}
+impl ParseFloat for f64 {
+    fn zero() -> Self { 0.0 }
+    fn mul(self, v: Self) -> Self { self * v }
+    fn add(self, v: Self) -> Self { self + v }
+    fn div(self, v: Self) -> Self { self / v }
+    fn pow(self, v: Self) -> Self { self.powf(v) }
+    fn neg(self) -> Self { -self }
+}
 
 impl<'a> Parser<'a> {
     parse_fun!(:raw skip_block_comment(self) -> () {
@@ -88,7 +120,6 @@ impl<'a> Parser<'a> {
                     self.step(2);
                     nesting -= 1;
                     if nesting == 0 {
-                        self.commit();
                         return Ok(());
                     }
                 }
@@ -139,7 +170,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.commit();
         Ok(())
     });
 
@@ -210,30 +240,45 @@ impl<'a> Parser<'a> {
         })
     });
     */
-    parse_fun!(:raw raw_parse_un(self, bits: u32) -> u64 {
-        let hex = self.unparsed().starts_with("0x");
-        if hex {
-            self.step(2);
-        }
-
-        let mut n: u128 = 0;
-
+    parse_fun!(:raw raw_digit(self) -> u8 {
+        let r = if let Some(c) = self.unparsedb_one() {
+            if c >= b'0' && c <= b'9' {
+                c - b'0'
+            } else {
+                self.error(Estr("NotADecDigit"))?
+            }
+        } else {
+            self.error(Estr("NotADecDigit"))?
+        };
+        self.step(1);
+        Ok(r)
+    });
+    parse_fun!(:raw raw_hexdigit(self) -> u8 {
+        let r = if let Some(c) = self.unparsedb_one() {
+            if c >= b'0' && c <= b'9' {
+                c - b'0'
+            } else if c >= b'a' && c <= b'f' {
+                c - b'a' + 10
+            } else if c >= b'A' && c <= b'F' {
+                c - b'A' + 10
+            } else {
+                self.error(Estr("NotAHexDigit"))?
+            }
+        } else {
+            self.error(Estr("NotAHexDigit"))?
+        };
+        self.step(1);
+        Ok(r)
+    });
+    fn raw_digits_loop<F>(&mut self, hex: bool, mut f: F) -> Result<(), ParserError>
+        where F: FnMut(u8, u8, &mut Parser) -> Result<(), ParserError>
+    {
         if !hex {
             loop {
                 if self.is_token_end() {
                     self.error(Estr("NotADecDigit"))?;
                 }
-                let c = self.unparsed_one().unwrap();
-                if c >= '0' && c <= '9' {
-                    n *= 10;
-                    n += (c as u128) - ('0' as u128);
-                } else {
-                    self.error(Estr("NotADecDigit"))?;
-                }
-                self.step(1);
-                if n >= (1u128 << bits) {
-                    self.error(Estr("IntegerOutOfBounds"))?;
-                }
+                f(self.raw_digit()?, 10, self)?;
                 if self.is_token_end() {
                     break;
                 }
@@ -246,23 +291,7 @@ impl<'a> Parser<'a> {
                 if self.is_token_end() {
                     self.error(Estr("NotAHexDigit"))?;
                 }
-                let c = self.unparsed_one().unwrap();
-                if c >= '0' && c <= '9' {
-                    n *= 16;
-                    n += (c as u128) - ('0' as u128);
-                } else if c >= 'a' && c <= 'f' {
-                    n *= 16;
-                    n += (c as u128) - ('a' as u128) + 10;
-                } else if c >= 'A' && c <= 'F' {
-                    n *= 16;
-                    n += (c as u128) - ('A' as u128) + 10;
-                } else {
-                    self.error(Estr("NotAHexDigit"))?;
-                }
-                self.step(1);
-                if n >= (1u128 << bits) {
-                    self.error(Estr("IntegerOutOfBounds"))?;
-                }
+                f(self.raw_hexdigit()?, 16, self)?;
                 if self.is_token_end() {
                     break;
                 }
@@ -271,6 +300,24 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+        Ok(())
+    }
+    parse_fun!(:raw raw_parse_un(self, bits: u32) -> u64 {
+        let hex = self.unparsed().starts_with("0x");
+        if hex {
+            self.step(2);
+        }
+
+        let mut n: u128 = 0;
+
+        self.raw_digits_loop(hex, |d, radix, self_| {
+            n *= radix as u128;
+            n += d as u128;
+            if n >= (1u128 << bits) {
+                self_.error(Estr("IntegerOutOfBounds"))?;
+            }
+            Ok(())
+        })?;
 
         Ok(n as u64)
     });
@@ -315,13 +362,7 @@ impl<'a> Parser<'a> {
         .or_else(|_| self.parse_un(bits))
         .or_else(|_| self.parse_sn(bits).map(|x| x as u64))
     });
-    parse_fun!(:raw raw_parse_f64(self, hex: bool) -> f64 {
-        Ok(0.0)
-    });
-    parse_fun!(:raw raw_parse_f32(self, hex: bool) -> f32 {
-        Ok(0.0)
-    });
-    parse_fun!(parse_fn(self, bits: u32) -> u64 {
+    fn raw_parse_f<T: ParseFloat>(&mut self) -> Result<T, ParserError> {
         let positive = {
             let s = self.unparsed();
             if s.starts_with('+') {
@@ -338,10 +379,27 @@ impl<'a> Parser<'a> {
         if hex {
             self.step(2);
         }
+
+        let n = T::zero();
+
+        if !hex {
+
+
+        } else {
+
+        }
+
+        Ok(if positive {
+            n
+        } else {
+            n.neg()
+        })
+    }
+    parse_fun!(parse_fn(self, bits: u32) -> u64 {
         Ok(if bits == 32 {
-            self.raw_parse_f32(hex)?.to_bits() as u64
+            self.raw_parse_f::<f32>()?.to_bits() as u64
         } else if bits == 64 {
-            self.raw_parse_f64(hex)?.to_bits()
+            self.raw_parse_f::<f64>()?.to_bits()
         } else {
             self.error(Estr("UnssupportedFloatWidth"))?
         })
