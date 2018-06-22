@@ -20,11 +20,6 @@ macro_rules! parse_fun {
     (:raw $name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
         pub fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
             let r = (|| -> Result<$t, ParserError> {$b})();
-            if r.is_ok() {
-                $self.commit();
-            } else {
-                $self.reset_position();
-            }
             r
         }
     );
@@ -79,13 +74,14 @@ impl<'a> Parser<'a> {
 }
 
 pub enum Keyword {}
-trait ParseFloat {
+trait ParseFloat: Copy + From<u8> + From<u16> {
     fn zero() -> Self;
     fn mul(self, v: Self) -> Self;
     fn add(self, v: Self) -> Self;
     fn div(self, v: Self) -> Self;
     fn pow(self, v: Self) -> Self;
     fn neg(self) -> Self;
+    fn is_inf(self) -> bool;
 }
 impl ParseFloat for f32 {
     fn zero() -> Self { 0.0 }
@@ -94,6 +90,7 @@ impl ParseFloat for f32 {
     fn div(self, v: Self) -> Self { self / v }
     fn pow(self, v: Self) -> Self { self.powf(v) }
     fn neg(self) -> Self { -self }
+    fn is_inf(self) -> bool { self.is_infinite() }
 }
 impl ParseFloat for f64 {
     fn zero() -> Self { 0.0 }
@@ -102,6 +99,7 @@ impl ParseFloat for f64 {
     fn div(self, v: Self) -> Self { self / v }
     fn pow(self, v: Self) -> Self { self.powf(v) }
     fn neg(self) -> Self { -self }
+    fn is_inf(self) -> bool { self.is_infinite() }
 }
 
 impl<'a> Parser<'a> {
@@ -270,16 +268,17 @@ impl<'a> Parser<'a> {
         self.step(1);
         Ok(r)
     });
-    fn raw_digits_loop<F>(&mut self, hex: bool, mut f: F) -> Result<(), ParserError>
-        where F: FnMut(u8, u8, &mut Parser) -> Result<(), ParserError>
+    fn raw_digits_loop<F, G>(&mut self, hex: bool, mut g: G, mut f: F) -> Result<(), ParserError>
+        where F: FnMut(u8, u8, &mut Parser) -> Result<(), ParserError>,
+              G: FnMut(&Parser) -> bool,
     {
         if !hex {
             loop {
-                if self.is_token_end() {
+                if g(self) {
                     self.error(Estr("NotADecDigit"))?;
                 }
                 f(self.raw_digit()?, 10, self)?;
-                if self.is_token_end() {
+                if g(self) {
                     break;
                 }
                 if let Some('_') = self.unparsed_one() {
@@ -288,11 +287,11 @@ impl<'a> Parser<'a> {
             }
         } else {
             loop {
-                if self.is_token_end() {
+                if g(self) {
                     self.error(Estr("NotAHexDigit"))?;
                 }
                 f(self.raw_hexdigit()?, 16, self)?;
-                if self.is_token_end() {
+                if g(self) {
                     break;
                 }
                 if let Some('_') = self.unparsed_one() {
@@ -310,7 +309,8 @@ impl<'a> Parser<'a> {
 
         let mut n: u128 = 0;
 
-        self.raw_digits_loop(hex, |d, radix, self_| {
+        let is_token_end = |p: &Parser| p.is_token_end();
+        self.raw_digits_loop(hex, is_token_end, |d, radix, self_| {
             n *= radix as u128;
             n += d as u128;
             if n >= (1u128 << bits) {
@@ -380,13 +380,82 @@ impl<'a> Parser<'a> {
             self.step(2);
         }
 
-        let n = T::zero();
+        let mut n = T::zero();
 
-        if !hex {
+        let check_exp = |s: &Parser| {
+            let r = (!hex && s.unparsed().starts_with(&['E', 'e'][..]))
+                  || (hex && s.unparsed().starts_with(&['P', 'p'][..]));
+            r
+        };
 
+        {
+            let is_token_end = |p: &Parser| {
+                p.is_token_end() || check_exp(p) || p.unparsed_one() == Some('.')
+            };
+            self.raw_digits_loop(hex, is_token_end, |d, radix, self_| {
+                n = n.mul(T::from(radix));
+                n = n.add(T::from(d));
+                if n.is_inf() {
+                    self_.error(Estr("FloatOutOfBounds"))?;
+                }
+                Ok(())
+            })?;
+        }
 
-        } else {
+        if self.unparsed().starts_with(".") {
+            self.step(1);
 
+            if !self.is_token_end() && !check_exp(self) {
+                let mut frac_mult = T::from(1u8);
+                let is_token_end = |p: &Parser| {
+                    p.is_token_end() || check_exp(p)
+                };
+                self.raw_digits_loop(hex, is_token_end, |d, radix, _| {
+                    frac_mult = frac_mult.div(T::from(radix));
+                    n = n.add(frac_mult.mul(T::from(d)));
+                    Ok(())
+                })?;
+            }
+        }
+
+        if check_exp(self) {
+            self.step(1);
+            let exp_positive = {
+                let s = self.unparsed();
+                if s.starts_with('+') {
+                    self.step(1);
+                    true
+                } else if s.starts_with('-') {
+                    self.step(1);
+                    false
+                } else {
+                    true
+                }
+            };
+            let mut exp_n: u32 = 0;
+
+            let is_token_end = |p: &Parser| p.is_token_end();
+            self.raw_digits_loop(false, is_token_end, |d, radix, self_| {
+                exp_n *= radix as u32;
+                exp_n += d as u32;
+                if exp_n >= (1u32 << 16) {
+                    self_.error(Estr("FloatExpOutOfBounds"))?;
+                }
+                Ok(())
+            })?;
+
+            let exp_n = T::from(exp_n as u16);
+            let exp_n = if exp_positive { exp_n } else { exp_n.neg() };
+
+            let base = if hex {
+                T::from(2u8)
+            } else {
+                T::from(10u8)
+            };
+            n = n.mul(base.pow(exp_n));
+            if n.is_inf() {
+                self.error(Estr("FloatOutOfBounds"))?;
+            }
         }
 
         Ok(if positive {
@@ -614,6 +683,129 @@ mod tests {
         check("1", parse_in, is_ok_with(1u64));
         check("+1", parse_in, is_ok_with(1u64));
         check("-1", parse_in, is_ok_with(-1i64 as u64));
+    }
+
+    #[test]
+    fn parse_f32() {
+        parse_fn(32);
+    }
+    #[test]
+    fn parse_f64() {
+        parse_fn(64);
+    }
+
+    fn parse_fn(n: u32) {
+        let parse_fn = |p: &mut Parser| Parser::parse_fn(p, n);
+        let ok = |v32: f32, v64: f64| {
+            if n == 32 {
+                is_ok_with(v32.to_bits() as u64)
+            } else {
+                is_ok_with(v64.to_bits())
+            }
+        };
+        macro_rules! ok {
+            ($e:expr) => (ok($e, $e))
+        }
+
+        check("1", parse_fn, ok!(1.0));
+        check("+1", parse_fn, ok!(1.0));
+        check("-1", parse_fn, ok!(-1.0));
+        check("0x1", parse_fn, ok!(1.0));
+        check("+0x1", parse_fn, ok!(1.0));
+        check("-0x1", parse_fn, ok!(-1.0));
+
+        check("10", parse_fn, ok!(10.0));
+        check("+10", parse_fn, ok!(10.0));
+        check("-10", parse_fn, ok!(-10.0));
+        check("0x10", parse_fn, ok!(16.0));
+        check("+0x10", parse_fn, ok!(16.0));
+        check("-0x10", parse_fn, ok!(-16.0));
+
+        check("10.", parse_fn, ok!(10.0));
+        check("+10.", parse_fn, ok!(10.0));
+        check("-10.", parse_fn, ok!(-10.0));
+        check("0x10.", parse_fn, ok!(16.0));
+        check("+0x10.", parse_fn, ok!(16.0));
+        check("-0x10.", parse_fn, ok!(-16.0));
+
+        check("10.5", parse_fn, ok!(10.5));
+        check("+10.5", parse_fn, ok!(10.5));
+        check("-10.5", parse_fn, ok!(-10.5));
+        check("0x10.1", parse_fn, ok!(16.0625));
+        check("+0x10.1", parse_fn, ok!(16.0625));
+        check("-0x10.1", parse_fn, ok!(-16.0625));
+
+        check("10e0", parse_fn, ok!(10.0));
+        check("+10e0", parse_fn, ok!(10.0));
+        check("-10e0", parse_fn, ok!(-10.0));
+        check("0x10p0", parse_fn, ok!(16.0));
+        check("+0x10p0", parse_fn, ok!(16.0));
+        check("-0x10p0", parse_fn, ok!(-16.0));
+
+        check("10e-0", parse_fn, ok!(10.0));
+        check("+10e-0", parse_fn, ok!(10.0));
+        check("-10e-0", parse_fn, ok!(-10.0));
+        check("0x10p-0", parse_fn, ok!(16.0));
+        check("+0x10p-0", parse_fn, ok!(16.0));
+        check("-0x10p-0", parse_fn, ok!(-16.0));
+
+        check("10e+0", parse_fn, ok!(10.0));
+        check("+10e+0", parse_fn, ok!(10.0));
+        check("-10e+0", parse_fn, ok!(-10.0));
+        check("0x10p+0", parse_fn, ok!(16.0));
+        check("+0x10p+0", parse_fn, ok!(16.0));
+        check("-0x10p+0", parse_fn, ok!(-16.0));
+
+        check("10.e0", parse_fn, ok!(10.0));
+        check("+10.e0", parse_fn, ok!(10.0));
+        check("-10.e0", parse_fn, ok!(-10.0));
+        check("0x10.p0", parse_fn, ok!(16.0));
+        check("+0x10.p0", parse_fn, ok!(16.0));
+        check("-0x10.p0", parse_fn, ok!(-16.0));
+
+        check("10.e-0", parse_fn, ok!(10.0));
+        check("+10.e-0", parse_fn, ok!(10.0));
+        check("-10.e-0", parse_fn, ok!(-10.0));
+        check("0x10.p-0", parse_fn, ok!(16.0));
+        check("+0x10.p-0", parse_fn, ok!(16.0));
+        check("-0x10.p-0", parse_fn, ok!(-16.0));
+
+        check("10.e+0", parse_fn, ok!(10.0));
+        check("+10.e+0", parse_fn, ok!(10.0));
+        check("-10.e+0", parse_fn, ok!(-10.0));
+        check("0x10.p+0", parse_fn, ok!(16.0));
+        check("+0x10.p+0", parse_fn, ok!(16.0));
+        check("-0x10.p+0", parse_fn, ok!(-16.0));
+
+        check("10.5", parse_fn, ok!(10.5));
+        check("+10.5", parse_fn, ok!(10.5));
+        check("-10.5", parse_fn, ok!(-10.5));
+        check("0x10.1", parse_fn, ok!(16.0625));
+        check("+0x10.1", parse_fn, ok!(16.0625));
+        check("-0x10.1", parse_fn, ok!(-16.0625));
+
+        check("10.e1", parse_fn, ok!(100.0));
+        check("+10.e1", parse_fn, ok!(100.0));
+        check("-10.e1", parse_fn, ok!(-100.0));
+        check("0x10.p1", parse_fn, ok!(32.0));
+        check("+0x10.p1", parse_fn, ok!(32.0));
+        check("-0x10.p1", parse_fn, ok!(-32.0));
+
+        check("10.e-1", parse_fn, ok!(1.0));
+        check("+10.e-1", parse_fn, ok!(1.0));
+        check("-10.e-1", parse_fn, ok!(-1.0));
+        check("0x10.p-1", parse_fn, ok!(8.0));
+        check("+0x10.p-1", parse_fn, ok!(8.0));
+        check("-0x10.p-1", parse_fn, ok!(-8.0));
+
+        check("10.e+1", parse_fn, ok!(100.0));
+        check("+10.e+1", parse_fn, ok!(100.0));
+        check("-10.e+1", parse_fn, ok!(-100.0));
+        check("0x10.p+1", parse_fn, ok!(32.0));
+        check("+0x10.p+1", parse_fn, ok!(32.0));
+        check("-0x10.p+1", parse_fn, ok!(-32.0));
+
+
     }
 
 }
