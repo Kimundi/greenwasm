@@ -1,5 +1,5 @@
 #[derive(Debug)]
-enum ParserErrorEnum {
+pub enum ParserErrorEnum {
     UnbalancedBlockComment,
     UnexpectedEof,
     Unrecognized,
@@ -11,25 +11,23 @@ pub struct ParserError {
     position: usize,
     error: ParserErrorEnum,
 }
-struct Parser<'a> {
+pub struct Parser<'a> {
     input: &'a str,
     position: usize,
     commited_position: usize,
 }
-struct SkipWhitespace;
-struct NoScipWhitespace;
 macro_rules! parse_fun {
     (:raw $name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
-        fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
-            let r = $b;
+        pub fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
+            let r = (|| $b)();
             $self.reset_position();
             r
         }
     );
     ($name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
-        fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
-            $self.skip();
-            let r = $b;
+        pub fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
+            $self.skip()?;
+            let r = (|| $b)();
             $self.reset_position();
             r
         }
@@ -37,20 +35,17 @@ macro_rules! parse_fun {
 }
 
 impl<'a> Parser<'a> {
-    fn error_(&self, err: ParserErrorEnum) -> ParserError {
-        ParserError {
+    fn error<T>(&self, err: ParserErrorEnum) -> Result<T, ParserError> {
+        Err(ParserError {
             position: self.commited_position,
             error: err,
-        }
-    }
-    fn error(&self, err: ParserErrorEnum) -> Result<(), ParserError> {
-        Err(self.error_(err))
+        })
     }
     fn unparsed(&self) -> &'a str { &self.input[self.position..] }
     fn unparsedb(&self) -> &'a [u8] { self.input[self.position..].as_bytes() }
 
     fn unparsed_one(&self) -> Option<char> { self.input[self.position..].chars().next() }
-    fn unparsedb_one(&self) -> Option<u8> { self.input[self.position..].as_bytes().get(0).cloned() }
+    //fn unparsedb_one(&self) -> Option<u8> { self.input[self.position..].as_bytes().get(0).cloned() }
 
     fn commit(&mut self) {
         self.commited_position = self.position;
@@ -74,8 +69,8 @@ impl<'a> Parser<'a> {
         }
     }
 }
-enum Keyword {
-}
+
+pub enum Keyword {}
 
 impl<'a> Parser<'a> {
     parse_fun!(:raw skip_block_comment(self) -> () {
@@ -138,7 +133,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 [b'(', b';', ..] => {
-                    self.skip_block_comment();
+                    self.skip_block_comment()?;
                 }
                 _ => break 'outer,
             }
@@ -320,21 +315,52 @@ impl<'a> Parser<'a> {
         .or_else(|_| self.parse_un(bits))
         .or_else(|_| self.parse_sn(bits).map(|x| x as u64))
     });
+    parse_fun!(:raw raw_parse_f64(self, hex: bool) -> f64 {
+        Ok(0.0)
+    });
+    parse_fun!(:raw raw_parse_f32(self, hex: bool) -> f32 {
+        Ok(0.0)
+    });
+    parse_fun!(parse_fn(self, bits: u32) -> u64 {
+        let positive = {
+            let s = self.unparsed();
+            if s.starts_with('+') {
+                self.step(1);
+                true
+            } else if s.starts_with('-') {
+                self.step(1);
+                false
+            } else {
+                true
+            }
+        };
+        let hex = self.unparsed().starts_with("0x");
+        if hex {
+            self.step(2);
+        }
+        Ok(if bits == 32 {
+            self.raw_parse_f32(hex)?.to_bits() as u64
+        } else if bits == 64 {
+            self.raw_parse_f64(hex)?.to_bits()
+        } else {
+            self.error(Estr("UnssupportedFloatWidth"))?
+        })
+    });
     parse_fun!(parse_string(self) -> &'a str {
 
-        Err(self.error_(Estr("StringNotRecognized")))
+        self.error(Estr("StringNotRecognized"))
     });
     parse_fun!(parse_id(self) -> &'a str {
 
-        Err(self.error_(Estr("IdNotRecognized")))
+        self.error(Estr("IdNotRecognized"))
     });
     parse_fun!(parse_parens(self) -> () {
 
-        Err(self.error_(Estr("ParensNotRecognized")))
+        self.error(Estr("ParensNotRecognized"))
     });
     parse_fun!(parse_reserved(self) -> &'a str {
 
-        Err(self.error_(Estr("Reserved")))
+        self.error(Estr("Reserved"))
     });
 }
 
