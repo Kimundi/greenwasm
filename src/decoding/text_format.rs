@@ -26,11 +26,10 @@ macro_rules! parse_fun {
     ($name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
         pub fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
             $self.skip()?;
+            let prev_positon = $self.position;
             let r = (|| -> Result<$t, ParserError> {$b})();
-            if r.is_ok() {
-                $self.commit();
-            } else {
-                $self.reset_position();
+            if r.is_err() {
+                $self.position = prev_positon;
             }
             r
         }
@@ -50,12 +49,6 @@ impl<'a> Parser<'a> {
     fn unparsed_one(&self) -> Option<char> { self.input[self.position..].chars().next() }
     fn unparsedb_one(&self) -> Option<u8> { self.input[self.position..].as_bytes().get(0).cloned() }
 
-    fn commit(&mut self) {
-        self.commited_position = self.position;
-    }
-    fn reset_position(&mut self) {
-        self.position = self.commited_position;
-    }
     fn step(&mut self, n: usize) {
         self.position += n;
     }
@@ -76,6 +69,9 @@ impl<'a> Parser<'a> {
 pub enum Keyword {}
 trait ParseFloat: Copy + From<u8> + From<u16> {
     fn zero() -> Self;
+    fn infinite() -> Self;
+    fn signif() -> u32;
+    fn nan(payload: u64) -> Self;
     fn mul(self, v: Self) -> Self;
     fn add(self, v: Self) -> Self;
     fn div(self, v: Self) -> Self;
@@ -85,6 +81,14 @@ trait ParseFloat: Copy + From<u8> + From<u16> {
 }
 impl ParseFloat for f32 {
     fn zero() -> Self { 0.0 }
+    fn infinite() -> Self { 1.0 / 0.0 }
+    fn signif() -> u32 { 23 }
+    fn nan(payload: u64) -> Self {
+        let bits: u32 = Self::infinite().to_bits();
+        let mask: u32 = (1u32 << Self::signif()) - 1;
+        let bits = bits | (mask & (payload as u32));
+        Self::from_bits(bits)
+    }
     fn mul(self, v: Self) -> Self { self * v }
     fn add(self, v: Self) -> Self { self + v }
     fn div(self, v: Self) -> Self { self / v }
@@ -94,6 +98,14 @@ impl ParseFloat for f32 {
 }
 impl ParseFloat for f64 {
     fn zero() -> Self { 0.0 }
+    fn infinite() -> Self { 1.0 / 0.0 }
+    fn signif() -> u32 { 52 }
+    fn nan(payload: u64) -> Self {
+        let bits: u64 = Self::infinite().to_bits();
+        let mask: u64 = (1u64 << Self::signif()) - 1;
+        let bits = bits | (mask & payload);
+        Self::from_bits(bits)
+    }
     fn mul(self, v: Self) -> Self { self * v }
     fn add(self, v: Self) -> Self { self + v }
     fn div(self, v: Self) -> Self { self / v }
@@ -362,19 +374,7 @@ impl<'a> Parser<'a> {
         .or_else(|_| self.parse_un(bits))
         .or_else(|_| self.parse_sn(bits).map(|x| x as u64))
     });
-    fn raw_parse_f<T: ParseFloat>(&mut self) -> Result<T, ParserError> {
-        let positive = {
-            let s = self.unparsed();
-            if s.starts_with('+') {
-                self.step(1);
-                true
-            } else if s.starts_with('-') {
-                self.step(1);
-                false
-            } else {
-                true
-            }
-        };
+    fn raw_parse_f_num<T: ParseFloat>(&mut self) -> Result<T, ParserError> {
         let hex = self.unparsed().starts_with("0x");
         if hex {
             self.step(2);
@@ -457,6 +457,55 @@ impl<'a> Parser<'a> {
                 self.error(Estr("FloatOutOfBounds"))?;
             }
         }
+
+        Ok(n)
+    }
+    fn raw_parse_f<T: ParseFloat>(&mut self) -> Result<T, ParserError> {
+        let positive = {
+            let s = self.unparsed();
+            if s.starts_with('+') {
+                self.step(1);
+                true
+            } else if s.starts_with('-') {
+                self.step(1);
+                false
+            } else {
+                true
+            }
+        };
+
+        let n = if self.unparsed().starts_with("inf") {
+            self.step(3);
+            T::infinite()
+        } else if self.unparsed().starts_with("nan") {
+            self.step(3);
+
+            let payload = if self.unparsed().starts_with(":0x") {
+                self.step(3);
+                let mut payload = 0;
+                let is_token_end = |p: &Parser| p.is_token_end();
+                self.raw_digits_loop(true, is_token_end, |d, radix, self_| {
+                    payload *= radix as u64;
+                    payload += d as u64;
+                    if payload >= (1u64 << T::signif()) {
+                        self_.error(Estr("FloatNanPayloadOutOfBounds"))?;
+                    }
+                    Ok(())
+                })?;
+
+                if !(1 <= payload && payload < (1 << T::signif())) {
+                    self.error(Estr("FloatNanPayloadOutOfBounds"))?;
+                }
+
+                payload
+            } else {
+                1u64 << (T::signif() - 1)
+            };
+
+            T::nan(payload)
+        } else {
+            self.raw_parse_f_num::<T>()?
+        };
 
         Ok(if positive {
             n
@@ -805,7 +854,25 @@ mod tests {
         check("+0x10.p+1", parse_fn, ok!(32.0));
         check("-0x10.p+1", parse_fn, ok!(-32.0));
 
+        check("+inf", parse_fn, ok!(1.0 / 0.0));
+        check("-inf", parse_fn, ok!(-1.0 / 0.0));
 
+        check("+nan", parse_fn, ok(
+            f32::from_bits(0b0_11111111_10000000000000000000000),
+            f64::from_bits(0b0_11111111111_1000000000000000000000000000000000000000000000000000),
+        ));
+        check("-nan", parse_fn, ok(
+            f32::from_bits(0b1_11111111_10000000000000000000000),
+            f64::from_bits(0b1_11111111111_1000000000000000000000000000000000000000000000000000),
+        ));
+        check("+nan:0xff", parse_fn, ok(
+            f32::from_bits(0b0_11111111_00000000000000011111111),
+            f64::from_bits(0b0_11111111111_0000000000000000000000000000000000000000000011111111),
+        ));
+        check("-nan:0xff", parse_fn, ok(
+            f32::from_bits(0b1_11111111_00000000000000011111111),
+            f64::from_bits(0b1_11111111111_0000000000000000000000000000000000000000000011111111),
+        ));
     }
 
 }
