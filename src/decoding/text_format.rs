@@ -19,11 +19,16 @@ struct Parser<'a> {
 struct SkipWhitespace;
 struct NoScipWhitespace;
 macro_rules! parse_fun {
-    ($(:$raw:ident)? $name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
+    (:raw $name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
         fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
-            $(
-                $self.$raw();
-            )?
+            let r = $b;
+            $self.reset_position();
+            r
+        }
+    );
+    ($name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
+        fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
+            $self.skip();
             let r = $b;
             $self.reset_position();
             r
@@ -44,6 +49,9 @@ impl<'a> Parser<'a> {
     fn unparsed(&self) -> &'a str { &self.input[self.position..] }
     fn unparsedb(&self) -> &'a [u8] { self.input[self.position..].as_bytes() }
 
+    fn unparsed_one(&self) -> Option<char> { self.input[self.position..].chars().next() }
+    fn unparsedb_one(&self) -> Option<u8> { self.input[self.position..].as_bytes().get(0).cloned() }
+
     fn commit(&mut self) {
         self.commited_position = self.position;
     }
@@ -53,12 +61,24 @@ impl<'a> Parser<'a> {
     fn step(&mut self, n: usize) {
         self.position += n;
     }
+    fn is_token_end(&self) -> bool {
+        match self.unparsedb() {
+            | []
+            | [b' ',    ..]
+            | [b'\x09', ..]
+            | [b'\x0a', ..]
+            | [b'\x0d', ..]
+            | [b';', b';', ..]
+            | [b'(', b';', ..] => true,
+            _ => false,
+        }
+    }
 }
 enum Keyword {
 }
 
 impl<'a> Parser<'a> {
-    parse_fun!(skip_block_comment(self) -> () {
+    parse_fun!(:raw skip_block_comment(self) -> () {
         self.step(2);
         let mut nesting: usize = 1;
 
@@ -87,7 +107,7 @@ impl<'a> Parser<'a> {
         }
     });
 
-    parse_fun!(skip(self) -> () {
+    parse_fun!(:raw skip(self) -> () {
         'outer: loop {
             let up = self.unparsedb();
 
@@ -195,61 +215,69 @@ impl<'a> Parser<'a> {
         })
     });
     */
-    parse_fun!(:skip raw_parse_un(self, bits: u32) -> u64 {
-        let mut s = self.unparsed();
-
-        let hex = s.starts_with("0x");
+    parse_fun!(:raw raw_parse_un(self, bits: u32) -> u64 {
+        let hex = self.unparsed().starts_with("0x");
         if hex {
             self.step(2);
-            s = self.unparsed();
         }
 
-        let mut n: u64 = 0;
-        let mut allow_underscore = false;
+        let mut n: u128 = 0;
 
         if !hex {
-            while let Some(c) = s.chars().next() {
+            loop {
+                if self.is_token_end() {
+                    self.error(Estr("NotADecDigit"))?;
+                }
+                let c = self.unparsed_one().unwrap();
                 if c >= '0' && c <= '9' {
-                    n = n.checked_mul(10).ok_or(self.error_(Estr("IntegerOutOfBounds")))?;
-                    n = n.checked_add((c as u64) - ('0' as u64)).ok_or(self.error_(Estr("IntegerOutOfBounds")))?;
-                    allow_underscore = true;
-                } else if allow_underscore && c == '_' {
-                    allow_underscore = false;
+                    n *= 10;
+                    n += (c as u128) - ('0' as u128);
                 } else {
                     self.error(Estr("NotADecDigit"))?;
                 }
                 self.step(1);
-                s = &s[1..];
+                if self.is_token_end() {
+                    break;
+                }
+                if let Some('_') = self.unparsed_one() {
+                    self.step(1);
+                }
+                if n >= (1u128 << bits) {
+                    self.error(Estr("IntegerOutOfBounds"))?;
+                }
             }
         } else {
-            while let Some(c) = s.chars().next() {
+            loop {
+                if self.is_token_end() {
+                    self.error(Estr("NotAHexDigit"))?;
+                }
+                let c = self.unparsed_one().unwrap();
                 if c >= '0' && c <= '9' {
-                    n = n.checked_mul(16).ok_or(self.error_(Estr("IntegerOutOfBounds")))?;
-                    n = n.checked_add((c as u64) - ('0' as u64)).ok_or(self.error_(Estr("IntegerOutOfBounds")))?;
-                    allow_underscore = true;
+                    n *= 16;
+                    n += (c as u128) - ('0' as u128);
                 } else if c >= 'a' && c <= 'f' {
-                    n = n.checked_mul(16).ok_or(self.error_(Estr("IntegerOutOfBounds")))?;
-                    n = n.checked_add((c as u64) - ('a' as u64) + 10).ok_or(self.error_(Estr("IntegerOutOfBounds")))?;
-                    allow_underscore = true;
+                    n *= 16;
+                    n += (c as u128) - ('a' as u128) + 10;
                 } else if c >= 'A' && c <= 'F' {
-                    n = n.checked_mul(16).ok_or(self.error_(Estr("IntegerOutOfBounds")))?;
-                    n = n.checked_add((c as u64) - ('A' as u64) + 10).ok_or(self.error_(Estr("IntegerOutOfBounds")))?;
-                    allow_underscore = true;
-                } else if allow_underscore && c == '_' {
-                    allow_underscore = false;
+                    n *= 16;
+                    n += (c as u128) - ('A' as u128) + 10;
                 } else {
                     self.error(Estr("NotAHexDigit"))?;
                 }
                 self.step(1);
-                s = &s[1..];
+                if self.is_token_end() {
+                    break;
+                }
+                if let Some('_') = self.unparsed_one() {
+                    self.step(1);
+                }
+                if n >= (1u128 << bits) {
+                    self.error(Estr("IntegerOutOfBounds"))?;
+                }
             }
         }
 
-        if (n as u128) >= (1u128 << bits) {
-            self.error(Estr("IntegerOutOfBounds"))?;
-        }
-
-        Ok(n)
+        Ok(n as u64)
     });
 
     parse_fun!(parse_un(self, bits: u32) -> u64 {
@@ -266,7 +294,7 @@ impl<'a> Parser<'a> {
                 self.step(1);
                 false
             } else {
-                return Err(self.error_(Estr("IntegerNotRecognized")));
+                true
             }
         };
 
@@ -289,8 +317,8 @@ impl<'a> Parser<'a> {
     });
     parse_fun!(parse_in(self, bits: u32) -> u64 {
         Err(())
-        .or_else(|_| self.parse_sn(bits).map(|x| x as u64))
         .or_else(|_| self.parse_un(bits))
+        .or_else(|_| self.parse_sn(bits).map(|x| x as u64))
     });
     parse_fun!(parse_string(self) -> &'a str {
 
@@ -327,9 +355,6 @@ mod tests {
         }
     }
 
-    struct Check {
-
-    }
     fn check_case<T, F, P>(s: &str, f: &F, pred: &P)
         where T: ::std::fmt::Debug,
               F: Fn(&mut Parser) -> Result<T, ParserError>,
@@ -339,7 +364,13 @@ mod tests {
         let r = f(&mut p);
         let validation = pred(&r);
         if !validation {
-            panic!("Token stream: `{}`, Result: {:?}", s, r);
+            if let Err(r) = r {
+                let indent = ::std::iter::repeat(' ').take(r.position);
+                let c: String = indent.chain(Some('^')).collect();
+                panic!("Token stream:\n`{}`\n {}\n\nError: {:?}", s, c, r.error);
+            } else {
+                panic!("Token stream:\n`{}`\nResult: {:?}", s, r);
+            }
         }
     }
 
@@ -353,6 +384,9 @@ mod tests {
         check_case(&format!(" {} ", s), &f, &pred);
         check_case(&format!("\n{}", s), &f, &pred);
         check_case(&format!("\n{}\n", s), &f, &pred);
+        check_case(&format!("(;;){}", s), &f, &pred);
+        check_case(&format!("(;;){}(;;)", s), &f, &pred);
+        check_case(&format!("{};;", s), &f, &pred);
     }
 
     fn is_ok_with<T: PartialEq>(v: T) -> impl Fn(&Result<T, ParserError>) -> bool {
@@ -366,15 +400,119 @@ mod tests {
     }
 
     #[test]
-    fn parse_un() {
-        let parse_un8 = |x: &mut Parser| Parser::parse_un(x, 8);
-        let parse_un16 = |x: &mut Parser| Parser::parse_un(x, 16);
-        let parse_un32 = |x: &mut Parser| Parser::parse_un(x, 32);
-        let parse_un64 = |x: &mut Parser| Parser::parse_un(x, 64);
-
-        check("0", parse_un8, is_ok_with(0));
-        check("0", parse_un16, is_ok_with(0));
-        check("0", parse_un32, is_ok_with(0));
-        check("0", parse_un64, is_ok_with(0));
+    fn parse_u8() {
+        parse_un(8);
     }
+    #[test]
+    fn parse_u16() {
+        parse_un(16);
+    }
+    #[test]
+    fn parse_u32() {
+        parse_un(32);
+    }
+    #[test]
+    fn parse_u64() {
+        parse_un(64);
+    }
+
+    fn parse_un(n: u32) {
+        let parse_un = |p: &mut Parser| Parser::parse_un(p, n);
+
+        check("", parse_un, Result::is_err);
+        check("_", parse_un, Result::is_err);
+
+        check("_", parse_un, Result::is_err);
+
+        check("0", parse_un, is_ok_with(0));
+        check("1", parse_un, is_ok_with(1));
+        check("1_", parse_un, Result::is_err);
+
+        check("02", parse_un, is_ok_with(2));
+        check("12", parse_un, is_ok_with(12));
+        check("1_2", parse_un, is_ok_with(12));
+        check("1__2", parse_un, Result::is_err);
+
+        check("0x", parse_un, Result::is_err);
+        check("0x_", parse_un, Result::is_err);
+
+        check("0x0", parse_un, is_ok_with(0));
+        check("0x1", parse_un, is_ok_with(1));
+        check("0x1_", parse_un, Result::is_err);
+
+        check("0xa", parse_un, is_ok_with(10));
+        check("0xa_", parse_un, Result::is_err);
+
+        check("0xf", parse_un, is_ok_with(15));
+        check("0xf_", parse_un, Result::is_err);
+
+        check("0xA", parse_un, is_ok_with(10));
+        check("0xA_", parse_un, Result::is_err);
+
+        check("0xF", parse_un, is_ok_with(15));
+        check("0xF_", parse_un, Result::is_err);
+
+        check("0x02", parse_un, is_ok_with(2));
+        check("0x12", parse_un, is_ok_with(18));
+        check("0x1_2", parse_un, is_ok_with(18));
+        check("0x1__2", parse_un, Result::is_err);
+    }
+
+    #[test]
+    fn parse_s8() {
+        parse_sn(8);
+    }
+    #[test]
+    fn parse_s16() {
+        parse_sn(16);
+    }
+    #[test]
+    fn parse_s32() {
+        parse_sn(32);
+    }
+    #[test]
+    fn parse_s64() {
+        parse_sn(64);
+    }
+
+    fn parse_sn(n: u32) {
+        let parse_sn = |p: &mut Parser| Parser::parse_sn(p, n);
+
+        check("0", parse_sn, is_ok_with(0));
+        check("-0", parse_sn, is_ok_with(0));
+        check("+0", parse_sn, is_ok_with(0));
+
+        check("- 0", parse_sn, Result::is_err);
+        check("+ 0", parse_sn, Result::is_err);
+
+        check("1", parse_sn, is_ok_with(1));
+        check("-1", parse_sn, is_ok_with(-1));
+        check("+1", parse_sn, is_ok_with(1));
+    }
+
+    #[test]
+    fn parse_i8() {
+        parse_in(8);
+    }
+    #[test]
+    fn parse_i16() {
+        parse_in(16);
+    }
+    #[test]
+    fn parse_i32() {
+        parse_in(32);
+    }
+    #[test]
+    fn parse_i64() {
+        parse_in(64);
+    }
+
+    fn parse_in(n: u32) {
+        let parse_in = |p: &mut Parser| Parser::parse_in(p, n);
+
+        check("1", parse_in, is_ok_with(1u64));
+        check("+1", parse_in, is_ok_with(1u64));
+        check("-1", parse_in, is_ok_with(-1i64 as u64));
+    }
+
 }
