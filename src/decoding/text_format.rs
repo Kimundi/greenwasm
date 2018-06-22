@@ -557,7 +557,7 @@ impl<'a> Parser<'a> {
         })
     });
     parse_fun!(parse_string(self) -> Vec<u8> {
-        let c = self.expect('\"')?;
+        self.expect('\"')?;
         let len = self.unparsed().find('"')
             .ok_or(()).or_else(|_| self.error(Estr("UnterminatedStringLiteral")))?;
         let mut s = Vec::with_capacity(len);
@@ -634,8 +634,31 @@ impl<'a> Parser<'a> {
         }
     });
     parse_fun!(parse_id(self) -> String {
+        self.expect('$')?;
+        let mut s = String::with_capacity(2);
+        s.push('$');
 
-        self.error(Estr("IdNotRecognized"))
+        loop {
+            let c = self.expect_any()?;
+            match c {
+                | '0' ..= '9'
+                | 'A' ..= 'Z'
+                | 'a' ..= 'z'
+                | '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '+' | '-' | '.' | '/'
+                | ':' | '<' | '=' | '>' | '?' | '@' | '\\' | '^' | '_' | '`' | '|' | '~'
+                => {
+                    s.push(c);
+                }
+                _ => {
+                    self.error(Estr("InvalidSymbolInId"))?;
+                }
+            }
+            if self.is_token_end() {
+                break;
+            }
+        }
+
+        Ok(s)
     });
     parse_fun!(parse_parens(self) -> () {
 
@@ -1019,6 +1042,31 @@ mod tests {
 
         check(r#""äöü""#, parse_name, Result::is_ok);
         check(r#""\ff""#, parse_name, Result::is_err);
+    }
+
+    #[test]
+    fn parse_id() {
+        let parse_id = |p: &mut Parser| p.parse_id();
+
+        check("$", parse_id, Result::is_err);
+        check("$ ", parse_id, Result::is_err);
+        check("$\"", parse_id, Result::is_err);
+        check("$,", parse_id, Result::is_err);
+        check("$;", parse_id, Result::is_err);
+        check("$(", parse_id, Result::is_err);
+        check("$)", parse_id, Result::is_err);
+        check("${", parse_id, Result::is_err);
+        check("$}", parse_id, Result::is_err);
+        check("$[", parse_id, Result::is_err);
+        check("$]", parse_id, Result::is_err);
+
+        check("$0123456789", parse_id, is_ok_with("$0123456789".into()));
+        check("$abcdefghijklmnopqrstuvwxyz", parse_id,
+            is_ok_with("$abcdefghijklmnopqrstuvwxyz".into()));
+        check("$ABCDEFGHIJKLMNOPQRSTUVWXYZ", parse_id,
+            is_ok_with("$ABCDEFGHIJKLMNOPQRSTUVWXYZ".into()));
+        check("$!#$%&'*+-./:<=>?@\\^_`|~", parse_id,
+            is_ok_with("$!#$%&'*+-./:<=>?@\\^_`|~".into()));
     }
 
 }
