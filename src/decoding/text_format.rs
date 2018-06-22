@@ -557,13 +557,21 @@ mod tests {
         }
     }
 
-    fn check_case<T, F, P>(s: &str, f: &F, pred: &P)
+    fn check_case<T, F, P>(s: &str, f: &F, pred: &P, end_offset: usize)
         where T: ::std::fmt::Debug,
               F: Fn(&mut Parser) -> Result<T, ParserError>,
               P: Fn(&Result<T, ParserError>) -> bool,
     {
         let mut p = parser(s);
         let r = f(&mut p);
+        let r = r.and_then(|x| {
+            let end_pos = s.len() - end_offset;
+            if p.position != end_pos {
+                p.error(Estr("DidNotParseToTheEnd"))
+            } else {
+                Ok(x)
+            }
+        });
         let validation = pred(&r);
         if !validation {
             if let Err(r) = r {
@@ -581,14 +589,14 @@ mod tests {
               F: Fn(&mut Parser) -> Result<T, ParserError>,
               P: Fn(&Result<T, ParserError>) -> bool,
     {
-        check_case(s, &f, &pred);
-        check_case(&format!(" {}", s), &f, &pred);
-        check_case(&format!(" {} ", s), &f, &pred);
-        check_case(&format!("\n{}", s), &f, &pred);
-        check_case(&format!("\n{}\n", s), &f, &pred);
-        check_case(&format!("(;;){}", s), &f, &pred);
-        check_case(&format!("(;;){}(;;)", s), &f, &pred);
-        check_case(&format!("{};;", s), &f, &pred);
+        check_case(s, &f, &pred, 0);
+        check_case(&format!(" {}", s), &f, &pred, 0);
+        check_case(&format!(" {} ", s), &f, &pred, 1);
+        check_case(&format!("\n{}", s), &f, &pred, 0);
+        check_case(&format!("\n{}\n", s), &f, &pred, 1);
+        check_case(&format!("(;;){}", s), &f, &pred, 0);
+        check_case(&format!("(;;){}(;;)", s), &f, &pred, 4);
+        check_case(&format!("{};;", s), &f, &pred, 2);
     }
 
     fn is_ok_with<T: PartialEq>(v: T) -> impl Fn(&Result<T, ParserError>) -> bool {
