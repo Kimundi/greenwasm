@@ -13,69 +13,72 @@ pub struct ParserError {
 }
 struct Parser<'a> {
     input: &'a str,
-    cursor: usize,
+    position: usize,
+    commited_position: usize,
 }
-macro_rules! token_parse {
-    ($name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
-        fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> $b
+struct SkipWhitespace;
+struct NoScipWhitespace;
+macro_rules! parse_fun {
+    ($(:$raw:ident)? $name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
+        fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
+            $(
+                $self.$raw();
+            )?
+            let r = $b;
+            $self.reset_position();
+            r
+        }
     )
 }
+
 impl<'a> Parser<'a> {
     fn error_(&self, err: ParserErrorEnum) -> ParserError {
         ParserError {
-            position: self.cursor,
+            position: self.commited_position,
             error: err,
         }
     }
     fn error(&self, err: ParserErrorEnum) -> Result<(), ParserError> {
         Err(self.error_(err))
     }
-    fn unparsed(&self) -> &'a str { &self.input[self.cursor..] }
+    fn unparsed(&self) -> &'a str { &self.input[self.position..] }
+    fn unparsedb(&self) -> &'a [u8] { self.input[self.position..].as_bytes() }
+
+    fn commit(&mut self) {
+        self.commited_position = self.position;
+    }
+    fn reset_position(&mut self) {
+        self.position = self.commited_position;
+    }
+    fn step(&mut self, n: usize) {
+        self.position += n;
+    }
 }
 enum Keyword {
 }
-enum N {
-    N8,
-    N16,
-    N32,
-    N64
-}
-enum Token<'a> {
-    Keyword(Keyword),
-    U(N),
-    S(N),
-    F(N),
-    String(&'a str),
-    Id(&'a str),
-    POpen,
-    PClose,
-    Reserved(&'a str),
-
-    Eof,
-}
-use self::Token::*;
 
 impl<'a> Parser<'a> {
-    token_parse!(skip_block_comment(self) -> () {
-        self.cursor += 2;
+    parse_fun!(skip_block_comment(self) -> () {
+        self.step(2);
         let mut nesting: usize = 1;
 
         loop {
             let up = self.unparsed().as_bytes().get(..2);
             match up {
                 Some(b"(;") => {
-                    self.cursor += 2;
+                    self.step(2);
                     nesting += 1;
                 }
                 Some(b";)") => {
-                    self.cursor += 2;
+                    self.step(2);
                     nesting -= 1;
                     if nesting == 0 {
+                        self.commit();
                         return Ok(());
                     }
                 }
                 Some(_) => {
-                    self.cursor += 1;
+                    self.step(1);
                 }
                 None => {
                     return self.error(UnbalancedBlockComment);
@@ -84,9 +87,9 @@ impl<'a> Parser<'a> {
         }
     });
 
-    token_parse!(skip(self) -> () {
+    parse_fun!(skip(self) -> () {
         'outer: loop {
-            let up = self.unparsed().as_bytes();
+            let up = self.unparsedb();
 
             match up {
                   [b' ',    ..]
@@ -94,22 +97,22 @@ impl<'a> Parser<'a> {
                 | [b'\x0a', ..]
                 | [b'\x0d', ..]
                 => {
-                    self.cursor += 1;
+                    self.step(1);
                     continue 'outer;
                 },
                 [b';', b';', ..] => {
-                    self.cursor += 2;
+                    self.step(2);
                     loop {
-                        match self.unparsed().as_bytes().get(0) {
+                        match self.unparsedb().get(0) {
                             Some(&b'\x0a') => {
-                                self.cursor += 1;
+                                self.step(1);
                                 continue 'outer;
                             }
                             None => {
                                 break 'outer;
                             }
                             _ => {
-                                self.cursor += 1;
+                                self.step(1);
                             }
                         }
                     }
@@ -121,10 +124,12 @@ impl<'a> Parser<'a> {
             }
         }
 
+        self.commit();
         Ok(())
     });
 
-    token_parse!(skip_peek(self) -> &'a str {
+    /*
+    parse_fun!(skip_peek(self) -> &'a str {
         self.skip()?;
         let start = self.cursor;
         'outer: loop {
@@ -150,9 +155,10 @@ impl<'a> Parser<'a> {
         let end = self.cursor;
         Ok(&self.input[start..end])
     });
+    */
 
     /*
-    token_parse!(parse_token(self) -> Token<'a> {
+    parse_fun!(parse_token(self) -> Token<'a> {
         Err(())
         .or_else(|_| self.parse_keyword())
         .or_else(|_| self.parse_un_sn_fn())
@@ -163,14 +169,16 @@ impl<'a> Parser<'a> {
     });
     */
 
-    token_parse!(parse_keyword(self) -> Token<'a> {
+    /*
+    parse_fun!(parse_keyword(self) -> Keyword {
         Ok(match self.skip_peek()? {
             _ => Err(self.error_(Estr("KeywordNotRecognized")))?,
         })
     });
+    */
 
     /*
-    token_parse!(parse_un_sn_fn(self) -> Token<'a> {
+    parse_fun!(parse_un_sn_fn(self) -> Token<'a> {
         Ok(match self.skip_peek()? {
             "u8" => Token::U(N::N8),
             "u16" => Token::U(N::N16),
@@ -187,10 +195,14 @@ impl<'a> Parser<'a> {
         })
     });
     */
-    token_parse!(parse_un(self, bits: u32) -> u64 {
-        let mut s = self.skip_peek()?;
+    parse_fun!(:skip raw_parse_un(self, bits: u32) -> u64 {
+        let mut s = self.unparsed();
+
         let hex = s.starts_with("0x");
-        if hex { s = &s[2..]; }
+        if hex {
+            self.step(2);
+            s = self.unparsed();
+        }
 
         let mut n: u64 = 0;
         let mut allow_underscore = false;
@@ -206,6 +218,7 @@ impl<'a> Parser<'a> {
                 } else {
                     self.error(Estr("NotADecDigit"))?;
                 }
+                self.step(1);
                 s = &s[1..];
             }
         } else {
@@ -227,6 +240,7 @@ impl<'a> Parser<'a> {
                 } else {
                     self.error(Estr("NotAHexDigit"))?;
                 }
+                self.step(1);
                 s = &s[1..];
             }
         }
@@ -238,19 +252,25 @@ impl<'a> Parser<'a> {
         Ok(n)
     });
 
-    token_parse!(parse_sn(self, bits: u32) -> i64 {
-        let mut s = self.skip_peek()?;
-        let positive = if s.starts_with('+') {
-            s = &s[1..];
-            true
-        } else if s.starts_with('-') {
-            s = &s[1..];
-            false
-        } else {
-            return Err(self.error_(Estr("IntegerNotRecognized")));
+    parse_fun!(parse_un(self, bits: u32) -> u64 {
+        self.raw_parse_un(bits)
+    });
+
+    parse_fun!(parse_sn(self, bits: u32) -> i64 {
+        let positive = {
+            let s = self.unparsed();
+            if s.starts_with('+') {
+                self.step(1);
+                true
+            } else if s.starts_with('-') {
+                self.step(1);
+                false
+            } else {
+                return Err(self.error_(Estr("IntegerNotRecognized")));
+            }
         };
 
-        let unsigned_n = self.parse_un(64)?;
+        let unsigned_n = self.raw_parse_un(64)?;
         let n: i64;
 
         if positive {
@@ -267,24 +287,24 @@ impl<'a> Parser<'a> {
 
         Ok(n)
     });
-    token_parse!(parse_in(self, bits: u32) -> u64 {
+    parse_fun!(parse_in(self, bits: u32) -> u64 {
         Err(())
         .or_else(|_| self.parse_sn(bits).map(|x| x as u64))
         .or_else(|_| self.parse_un(bits))
     });
-    token_parse!(parse_string(self) -> Token<'a> {
+    parse_fun!(parse_string(self) -> &'a str {
 
         Err(self.error_(Estr("StringNotRecognized")))
     });
-    token_parse!(parse_id(self) -> Token<'a> {
+    parse_fun!(parse_id(self) -> &'a str {
 
         Err(self.error_(Estr("IdNotRecognized")))
     });
-    token_parse!(parse_parens(self) -> Token<'a> {
+    parse_fun!(parse_parens(self) -> () {
 
         Err(self.error_(Estr("ParensNotRecognized")))
     });
-    token_parse!(parse_reserved(self) -> Token<'a> {
+    parse_fun!(parse_reserved(self) -> &'a str {
 
         Err(self.error_(Estr("Reserved")))
     });
@@ -302,28 +322,59 @@ mod tests {
     fn parser(s: &str) -> Parser {
         Parser {
             input: s,
-            cursor: 0
+            position: 0,
+            commited_position: 0,
         }
     }
 
-    fn accept<T>(r: Result<T, ParserError>) {
-        r.unwrap();
+    struct Check {
+
+    }
+    fn check_case<T, F, P>(s: &str, f: &F, pred: &P)
+        where T: ::std::fmt::Debug,
+              F: Fn(&mut Parser) -> Result<T, ParserError>,
+              P: Fn(&Result<T, ParserError>) -> bool,
+    {
+        let mut p = parser(s);
+        let r = f(&mut p);
+        let validation = pred(&r);
+        if !validation {
+            panic!("Token stream: `{}`, Result: {:?}", s, r);
+        }
     }
 
-    fn accept_eq<T: PartialEq>(r: Result<T, ParserError>, expected: T) {
-        let is = r.unwrap();
-        assert!(is == expected);
+    fn check<T, F, P>(s: &str, f: F, pred: P)
+        where T: ::std::fmt::Debug,
+              F: Fn(&mut Parser) -> Result<T, ParserError>,
+              P: Fn(&Result<T, ParserError>) -> bool,
+    {
+        check_case(s, &f, &pred);
+        check_case(&format!(" {}", s), &f, &pred);
+        check_case(&format!(" {} ", s), &f, &pred);
+        check_case(&format!("\n{}", s), &f, &pred);
+        check_case(&format!("\n{}\n", s), &f, &pred);
     }
 
-    fn reject<T>(r: Result<T, ParserError>) {
-        assert!(r.is_err());
+    fn is_ok_with<T: PartialEq>(v: T) -> impl Fn(&Result<T, ParserError>) -> bool {
+        move |r: &Result<T, ParserError>| {
+            if let Ok(q) = r {
+                q == &v
+            } else {
+                false
+            }
+        }
     }
 
     #[test]
     fn parse_un() {
-        accept(parser("0").parse_un(8));
-        accept(parser("0").parse_un(16));
-        accept(parser("0").parse_un(32));
-        accept(parser("0").parse_un(64));
+        let parse_un8 = |x: &mut Parser| Parser::parse_un(x, 8);
+        let parse_un16 = |x: &mut Parser| Parser::parse_un(x, 16);
+        let parse_un32 = |x: &mut Parser| Parser::parse_un(x, 32);
+        let parse_un64 = |x: &mut Parser| Parser::parse_un(x, 64);
+
+        check("0", parse_un8, is_ok_with(0));
+        check("0", parse_un16, is_ok_with(0));
+        check("0", parse_un32, is_ok_with(0));
+        check("0", parse_un64, is_ok_with(0));
     }
 }
