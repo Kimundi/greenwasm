@@ -1,7 +1,3 @@
-use std::borrow::Cow;
-use std::fmt;
-use std::iter;
-
 #[derive(Debug)]
 pub enum ParserErrorEnum {
     UnbalancedBlockComment,
@@ -100,20 +96,30 @@ impl<'a> Parser<'a> {
 
 const MAX_VEC_LEN: usize = (1 << 32) - 1;
 
-/*
 macro_rules! token_enum {
     ($name:ident { $( $e:ident $(( $($et:ty),* ))? : $s:expr ),* $(,)? }) => (
+        #[derive(PartialEq)]
         pub enum $name {
             $(
                 $e $(( $($et),* ))?
             ),*
         }
         impl $name {
-            fn str(&self) -> &'static str {
+            /*
+            fn to_str(&self) -> &'static str {
                 match *self {
                     $(
                         $name::$e => $s,
                     )*
+                }
+            }
+            */
+            fn from_str(s: &str) -> Option<Self> {
+                match s {
+                    $(
+                        $s => Some($name::$e),
+                    )*
+                    _ => None,
                 }
             }
         }
@@ -129,12 +135,6 @@ token_enum!(Keyword {
     Param  : "param",
     Result : "result",
 });
-
-pub enum Token {
-    Keyword(Keyword),
-
-}
-*/
 
 trait ParseFloat: Copy + From<u8> + From<u16> {
     fn zero() -> Self;
@@ -601,26 +601,29 @@ impl<'a> Parser<'a> {
             self.error(Estr("NameIsNotUtf8"))
         }
     });
+    parse_fun!(:raw parse_id_char(self) -> char {
+        let c = self.expect_any()?;
+        match c {
+            | '0' ..= '9'
+            | 'A' ..= 'Z'
+            | 'a' ..= 'z'
+            | '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '+' | '-' | '.' | '/'
+            | ':' | '<' | '=' | '>' | '?' | '@' | '\\' | '^' | '_' | '`' | '|' | '~'
+            => {
+                Ok(c)
+            }
+            _ => {
+                self.error(Estr("InvalidIdChar"))?
+            }
+        }
+    });
     parse_fun!(parse_id(self) -> String {
         self.expect('$')?;
         let mut s = String::with_capacity(2);
         s.push('$');
 
         loop {
-            let c = self.expect_any()?;
-            match c {
-                | '0' ..= '9'
-                | 'A' ..= 'Z'
-                | 'a' ..= 'z'
-                | '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '+' | '-' | '.' | '/'
-                | ':' | '<' | '=' | '>' | '?' | '@' | '\\' | '^' | '_' | '`' | '|' | '~'
-                => {
-                    s.push(c);
-                }
-                _ => {
-                    self.error(Estr("InvalidSymbolInId"))?;
-                }
-            }
+            s.push(self.parse_id_char()?);
             if self.is_token_end() {
                 break;
             }
@@ -628,26 +631,40 @@ impl<'a> Parser<'a> {
 
         Ok(s)
     });
-    parse_fun!(parse_parens(self) -> () {
+    parse_fun!(parse_keyword(self) -> Keyword {
+        let start = self.position;
+        let mut end = start;
 
-        self.error(Estr("ParensNotRecognized"))
+        loop {
+            let c = self.parse_id_char()?;
+            end += c.len_utf8();
+            if self.is_token_end() {
+                break;
+            }
+        }
+
+        let slice = &self.input[start..end];
+
+        if let Some(k) = Keyword::from_str(slice) {
+            Ok(k)
+        } else {
+            self.error(Estr("NotAKeyword"))
+        }
     });
-    parse_fun!(parse_reserved(self) -> String {
-
-        self.error(Estr("Reserved"))
+    parse_fun!(expect_keyword(self, kw: Keyword) -> () {
+        if self.parse_keyword()? == kw {
+            Ok(())
+        } else {
+            self.error(Estr("UnexpectedKeyword"))
+        }
     });
 }
 
-pub struct WasmBuilder;
-pub struct StringBuilder(Vec<u8>);
-impl StringBuilder {
-    pub fn push(&mut self, c: char) {
-        let mut buf = [0; 4];
-        self.0.extend(c.encode_utf8(&mut buf).bytes());
-    }
-    pub fn pushb(&mut self, c: u8) {
-        self.0.push(c);
-    }
+use structure::types::ValType;
+impl<'a> Parser<'a> {
+    parse_fun!(parse_valtype(self) -> ValType {
+        unimplemented!()
+    });
 }
 
 use structure::modules::Module;

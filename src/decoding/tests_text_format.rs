@@ -1,3 +1,6 @@
+use std::fmt;
+use std::iter;
+
 use super::*;
 
 fn parser(s: &str) -> Parser {
