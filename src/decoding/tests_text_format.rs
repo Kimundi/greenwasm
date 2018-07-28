@@ -403,3 +403,35 @@ fn parse_valtype() {
     check("f32", parse_id, is_ok_with(ValType::F32));
     check("f64", parse_id, is_ok_with(ValType::F64));
 }
+
+#[test]
+fn parse_result() {
+    let parse_id = |p: &mut Parser| p.parse_result();
+
+    check("", parse_id, Result::is_err);
+    check("( result i32 )", parse_id, is_ok_with((ValType::I32)));
+    check("( result i64 )", parse_id, is_ok_with((ValType::I64)));
+    check("( result f32 )", parse_id, is_ok_with((ValType::F32)));
+    check("( result f64 )", parse_id, is_ok_with((ValType::F64)));
+}
+
+#[test]
+fn parse_resulttype() {
+    let parse_id = |p: &mut Parser| p.parse_resulttype();
+
+    // TODO: figure out how to test
+    //check("", parse_id, is_ok_with(None));
+    check("( result i32 )", parse_id, is_ok_with(Some(ValType::I32)));
+    check("( result i64 )", parse_id, is_ok_with(Some(ValType::I64)));
+    check("( result f32 )", parse_id, is_ok_with(Some(ValType::F32)));
+    check("( result f64 )", parse_id, is_ok_with(Some(ValType::F64)));
+}
+
+#[test]
+fn parse_param() {
+    let parse_id = |p: &mut Parser| p.parse_param();
+
+    check("asdf", parse_id, Result::is_err);
+    check("( param $test i32 )", parse_id, is_ok_with((ValType::I32)));
+    check("( param i32 )", parse_id, is_ok_with((ValType::I32)));
+}

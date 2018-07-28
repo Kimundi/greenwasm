@@ -15,6 +15,21 @@ pub struct Parser<'a> {
     input: &'a str,
     position: usize,
 }
+macro_rules! parse_preamble {
+    ($self:expr, $t:ty, $b:block) => (
+        {
+            $self.skip()?;
+            let prev_positon = $self.position;
+            let r = (|| -> Result<$t, ParserError> {
+                $b
+            })();
+            if r.is_err() {
+                $self.position = prev_positon;
+            }
+            r
+        }
+    )
+}
 macro_rules! parse_fun {
     (:raw $name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
         pub fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
@@ -24,13 +39,7 @@ macro_rules! parse_fun {
     );
     ($name:ident($self:ident $(,$arg:ident: $at:ty)*) -> $t:ty $b:block) => (
         pub fn $name(&mut $self $(,$arg: $at)*) -> Result<$t, ParserError> {
-            $self.skip()?;
-            let prev_positon = $self.position;
-            let r = (|| -> Result<$t, ParserError> {$b})();
-            if r.is_err() {
-                $self.position = prev_positon;
-            }
-            r
+            parse_preamble!($self, $t, $b)
         }
     )
 }
@@ -125,6 +134,11 @@ macro_rules! token_enum {
         }
     )
 }
+
+token_enum!(Token {
+    LPAREN : "(",
+    RPAREN : ")",
+});
 
 token_enum!(Keyword {
     I32    : "i32",
@@ -658,9 +672,38 @@ impl<'a> Parser<'a> {
             self.error(Estr("UnexpectedKeyword"))
         }
     });
+    parse_fun!(expect_token(self, tk: Token) -> () {
+        let c = self.expect_any()?;
+        match (c, tk) {
+            ('(', Token::LPAREN) => Ok(()),
+            (')', Token::RPAREN) => Ok(()),
+            _ => self.error(Estr("UnexpectedToken"))?
+        }
+    });
+
+    fn parse_parenthized<F: FnMut(&mut Self) -> Result<T, ParserError>, T>(&mut self, kw: Keyword, mut f: F) -> Result<T, ParserError> {
+        parse_preamble!(self, T, {
+            self.expect_token(Token::LPAREN)?;
+            self.expect_keyword(kw)?;
+            let r = f(self)?;
+            self.expect_token(Token::RPAREN)?;
+            Ok(r)
+        })
+    }
+
+    fn parse_optional<F: FnMut(&mut Self) -> Result<T, ParserError>, T>(&mut self, mut f: F) -> Result<Option<T>, ParserError> {
+        parse_preamble!(self, Option<T>, {
+            if let Ok(r) = f(self) {
+                Ok(Some(r))
+            } else {
+                Ok(None)
+            }
+        })
+    }
 }
 
 use structure::types::ValType;
+use structure::types::ResultType;
 impl<'a> Parser<'a> {
     parse_fun!(parse_valtype(self) -> ValType {
         let r = match self.parse_keyword()? {
@@ -671,6 +714,24 @@ impl<'a> Parser<'a> {
             _ => self.error(Estr("UnexpectedValType"))?
         };
         Ok(r)
+    });
+
+    parse_fun!(parse_resulttype(self) -> ResultType {
+        self.parse_optional(|s| {
+            s.parse_result()
+        })
+    });
+
+    parse_fun!(parse_result(self) -> ValType {
+        self.parse_parenthized(Keyword::Result, |s| {
+            s.parse_valtype()
+        })
+    });
+    parse_fun!(parse_param(self) -> ValType {
+        self.parse_parenthized(Keyword::Param, |s| {
+            s.parse_optional(|s| s.parse_id())?;
+            s.parse_valtype()
+        })
     });
 }
 
