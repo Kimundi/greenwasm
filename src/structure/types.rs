@@ -40,7 +40,7 @@ pub type F64 = f64;
 pub type Name = String;
 pub type Codepoint = char;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ValType {
     I32,
     I64,

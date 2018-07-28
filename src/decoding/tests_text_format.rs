@@ -392,3 +392,14 @@ fn parse_id() {
     check("$!#$%&'*+-./:<=>?@\\^_`|~", parse_id,
         is_ok_with("$!#$%&'*+-./:<=>?@\\^_`|~".into()));
 }
+
+#[test]
+fn parse_valtype() {
+    let parse_id = |p: &mut Parser| p.parse_valtype();
+
+    check("asdf", parse_id, Result::is_err);
+    check("i32", parse_id, is_ok_with(ValType::I32));
+    check("i64", parse_id, is_ok_with(ValType::I64));
+    check("f32", parse_id, is_ok_with(ValType::F32));
+    check("f64", parse_id, is_ok_with(ValType::F64));
+}

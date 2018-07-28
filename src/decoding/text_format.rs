@@ -663,7 +663,14 @@ impl<'a> Parser<'a> {
 use structure::types::ValType;
 impl<'a> Parser<'a> {
     parse_fun!(parse_valtype(self) -> ValType {
-        unimplemented!()
+        let r = match self.parse_keyword()? {
+            Keyword::I32 => ValType::I32,
+            Keyword::I64 => ValType::I64,
+            Keyword::F32 => ValType::F32,
+            Keyword::F64 => ValType::F64,
+            _ => self.error(Estr("UnexpectedValType"))?
+        };
+        Ok(r)
     });
 }
 
