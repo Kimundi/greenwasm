@@ -700,10 +700,24 @@ impl<'a> Parser<'a> {
             }
         })
     }
+
+    fn parse_vec<F: FnMut(&mut Self) -> Result<T, ParserError>, T>(&mut self, mut f: F) -> Result<Vec<T>, ParserError> {
+        parse_preamble!(self, Vec<T>, {
+            let mut v = vec![];
+            let mut i: u64 = 0;
+            while let Ok(r) = f(self) {
+                assert!(i < ::std::i32::MAX as u64);
+                v.push(r);
+                i += 1;
+            }
+            Ok(v)
+        })
+    }
 }
 
 use structure::types::ValType;
 use structure::types::ResultType;
+use structure::types::FuncType;
 impl<'a> Parser<'a> {
     parse_fun!(parse_valtype(self) -> ValType {
         let r = match self.parse_keyword()? {
@@ -731,6 +745,20 @@ impl<'a> Parser<'a> {
         self.parse_parenthized(Keyword::Param, |s| {
             s.parse_optional(|s| s.parse_id())?;
             s.parse_valtype()
+        })
+    });
+    parse_fun!(parse_functype(self) -> FuncType {
+        self.parse_parenthized(Keyword::Func, |s| {
+            let args = s.parse_vec(|s| {
+                s.parse_param()
+            })?;
+            let results = s.parse_vec(|s| {
+                s.parse_result()
+            })?;
+            Ok(FuncType {
+                args,
+                results,
+            })
         })
     });
 }

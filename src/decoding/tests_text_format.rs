@@ -409,10 +409,10 @@ fn parse_result() {
     let parse_id = |p: &mut Parser| p.parse_result();
 
     check("", parse_id, Result::is_err);
-    check("( result i32 )", parse_id, is_ok_with((ValType::I32)));
-    check("( result i64 )", parse_id, is_ok_with((ValType::I64)));
-    check("( result f32 )", parse_id, is_ok_with((ValType::F32)));
-    check("( result f64 )", parse_id, is_ok_with((ValType::F64)));
+    check("( result i32 )", parse_id, is_ok_with(ValType::I32));
+    check("( result i64 )", parse_id, is_ok_with(ValType::I64));
+    check("( result f32 )", parse_id, is_ok_with(ValType::F32));
+    check("( result f64 )", parse_id, is_ok_with(ValType::F64));
 }
 
 #[test]
@@ -432,6 +432,26 @@ fn parse_param() {
     let parse_id = |p: &mut Parser| p.parse_param();
 
     check("asdf", parse_id, Result::is_err);
-    check("( param $test i32 )", parse_id, is_ok_with((ValType::I32)));
-    check("( param i32 )", parse_id, is_ok_with((ValType::I32)));
+    check("( param $test i32 )", parse_id, is_ok_with(ValType::I32));
+    check("( param i32 )", parse_id, is_ok_with(ValType::I32));
+}
+
+#[test]
+fn parse_functype() {
+    let parse_id = |p: &mut Parser| p.parse_functype();
+
+    check("asdf", parse_id, Result::is_err);
+    check("( func )", parse_id, is_ok_with(
+          FuncType { args: vec![], results: vec![] }));
+    println!("oksydasdads");
+    check("( func ( param i32) )", parse_id, is_ok_with(
+          FuncType { args: vec![ValType::I32], results: vec![] }));
+    check("( func ( param $foo i32) )", parse_id, is_ok_with(
+          FuncType { args: vec![ValType::I32], results: vec![] }));
+
+    check("( func ( result i32) )", parse_id, is_ok_with(
+          FuncType { args: vec![], results: vec![ValType::I32] }));
+
+    check("( func ( param i32) ( result f64) )", parse_id, is_ok_with(
+          FuncType { args: vec![ValType::I32], results: vec![ValType::F64] }));
 }

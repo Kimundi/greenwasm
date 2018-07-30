@@ -53,7 +53,7 @@ pub enum ValType {
 
 pub type ResultType = Option<ValType>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FuncType {
     pub args: Wec<ValType>,
     pub results: Wec<ValType>,
