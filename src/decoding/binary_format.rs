@@ -78,6 +78,8 @@ named_args!(parse_sN(N: u32) <Inp, i64>, alt!(
 named!(pub parse_s32 <Inp, i32>, map!(apply!(parse_sN, 32), |x| x as i32));
 named!(pub parse_s64 <Inp, i64>, apply!(parse_sN, 64));
 
+named!(pub parse_i32 <Inp, u32>, map!(parse_s32, |x| x as u32));
+named!(pub parse_i64 <Inp, u64>, map!(parse_s64, |x| x as u64));
 
 #[cfg(test)]
 #[path="tests_binary_format.rs"]

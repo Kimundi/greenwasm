@@ -119,3 +119,54 @@ fn test_parse_s32() {
 fn test_parse_s64() {
     test_parse_sN(parse_s64, 64);
 }
+
+fn test_parse_iN<F>(parse: F, bits: u32)
+    where F: Fn(Inp) -> IResult<Inp, u64>,
+{
+    let minus1 = if bits == 32 {
+        0xff_ff_ff_ff
+    } else {
+        0xff_ff_ff_ff_ff_ff_ff_ff
+    };
+
+    check(&parse, &[0x00], OkWith(0x00));
+
+    check(&parse, &[0x00], OkWith(0x00));
+    check(&parse, &[0x3f], OkWith(0x3f));
+    check(&parse, &[0x7f], OkWith(minus1));
+    check(&parse, &[0xff], Failed);
+
+    check(&parse, &[0xff, 0x00], OkWith(0x7f));
+    check(&parse, &[0xff, 0x01], OkWith(0xff));
+    check(&parse, &[0xff, 0x80, 0x00], OkWith(0x7f));
+    check(&parse, &[0xff, 0x80, 0x80, 0x00], OkWith(0x7f));
+    check(&parse, &[0xff, 0x80, 0x80, 0x80, 0x00], OkWith(0x7f));
+
+    check(&parse, &[0x7f], OkWith(minus1));
+    check(&parse, &[0xff, 0x7f], OkWith(minus1));
+    check(&parse, &[0xff, 0xff, 0x7f], OkWith(minus1));
+    check(&parse, &[0xff, 0xff, 0xff, 0x7f], OkWith(minus1));
+    check(&parse, &[0xff, 0xff, 0xff, 0xff, 0x7f], OkWith(minus1));
+
+    if bits == 32 {
+        check(&parse, &[0xff, 0x80, 0x80, 0x80, 0x80, 0x00], Failed);
+    } else {
+        check(&parse, &[0xff, 0x80, 0x80, 0x80, 0x80, 0x00], OkWith(0x7f));
+        check(&parse, &[0xff, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00], OkWith(0x7f));
+        check(&parse, &[0xff, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00], Failed);
+    }
+
+    check(&parse, &[0xff, 0xff, 0xff, 0x7f], OkWith(minus1));
+    check(&parse, &[0b1_0011111, 0b1_0001111, 0b1_0000111, 0b0_0000011],
+             OkWith(0b__0000011______0000111______0001111______0011111));
+}
+
+#[test]
+fn test_parse_i32() {
+    test_parse_iN(|inp| parse_i32(inp).map(|(i, x)| (i, x as u64)), 32);
+}
+
+#[test]
+fn test_parse_i64() {
+    test_parse_iN(parse_i64, 64);
+}
