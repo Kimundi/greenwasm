@@ -59,41 +59,41 @@ pub struct FuncType {
     pub results: Wec<ValType>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Limits {
     pub min: U32,
     pub max: Option<U32>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct MemType {
     pub limits: Limits,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct TableType {
     pub limits: Limits,
     pub elemtype: ElemType,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ElemType {
     AnyFunc,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct GlobalType {
     pub mutability: Mut,
     pub valtype: ValType,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Mut {
     Const,
     Var,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ExternType {
     Func(FuncType),
     Table(TableType),

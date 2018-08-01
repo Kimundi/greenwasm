@@ -213,3 +213,50 @@ fn test_parse_name() {
 
     check(&parse_name, &vec![5, 0xff, 0xff, 0xff, 0xff, 0xff], Failed);
 }
+
+#[test]
+fn test_parse_result_valtype() {
+    check(&parse_blocktype, &[0x7f], OkWith(Some(ValType::I32)));
+    check(&parse_blocktype, &[0x7e], OkWith(Some(ValType::I64)));
+    check(&parse_blocktype, &[0x7d], OkWith(Some(ValType::F32)));
+    check(&parse_blocktype, &[0x7c], OkWith(Some(ValType::F64)));
+    check(&parse_blocktype, &[0x40], OkWith(None));
+}
+
+#[test]
+fn test_parse_functype() {
+    check(&parse_functype, &[0x60, 1, 0x7f, 2, 0x7e, 0x7c], OkWith(
+        FuncType {
+            args: vec![ValType::I32],
+            results: vec![ValType::I64, ValType::F64],
+        }
+    ));
+}
+
+#[test]
+fn test_parse_limits() {
+    check(&parse_limits, &[0x00, 0x00], OkWith(
+        Limits {
+            min: 0x00,
+            max: None,
+        }
+    ));
+    check(&parse_limits, &[0x00, 0xff, 0x01], OkWith(
+        Limits {
+            min: 0xff,
+            max: None,
+        }
+    ));
+    check(&parse_limits, &[0x01, 0x00, 0x00], OkWith(
+        Limits {
+            min: 0x00,
+            max: Some(0x00),
+        }
+    ));
+    check(&parse_limits, &[0x01, 0xff, 0x01, 0xff, 0x01], OkWith(
+        Limits {
+            min: 0xff,
+            max: Some(0xff),
+        }
+    ));
+}
