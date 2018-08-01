@@ -188,3 +188,28 @@ fn test_parse_f64() {
 
     check(&parse_f64, &b, OkWith(x));
 }
+
+#[test]
+fn test_parse_name() {
+    let s = "hello wörldß";
+
+    check(&parse_name, &{
+        let mut v = vec![s.len() as u8];
+        v.extend(s.bytes());
+        v
+    }, OkWith(s.into()));
+
+    check(&parse_name, &{
+        let mut v = vec![s.len() as u8 - 1];
+        v.extend(s.bytes());
+        v
+    }, Failed);
+
+    check(&parse_name, &{
+        let mut v = vec![s.len() as u8 + 1];
+        v.extend(s.bytes());
+        v
+    }, Failed);
+
+    check(&parse_name, &vec![5, 0xff, 0xff, 0xff, 0xff, 0xff], Failed);
+}
