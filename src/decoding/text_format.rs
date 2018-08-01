@@ -89,17 +89,22 @@ impl<'a> Parser<'a> {
     fn unstep(&mut self, n: usize) {
         self.position -= n;
     }
-    fn is_token_end(&self) -> bool {
-        match self.unparsedb() {
+    fn is_token_end_at(&self, i: usize) -> bool {
+        match self.unparsedb()[i..] {
             | []
             | [b' ',    ..]
             | [b'\x09', ..]
             | [b'\x0a', ..]
             | [b'\x0d', ..]
             | [b';', b';', ..]
-            | [b'(', b';', ..] => true,
+            | [b'(', b';', ..]
+            | [b'(']
+            | [b')'] => true,
             _ => false,
         }
+    }
+    fn is_token_end(&self) -> bool {
+        self.is_token_end_at(0)
     }
 }
 
@@ -107,7 +112,7 @@ const MAX_VEC_LEN: usize = (1 << 32) - 1;
 
 macro_rules! token_enum {
     ($name:ident { $( $e:ident $(( $($et:ty),* ))? : $s:expr ),* $(,)? }) => (
-        #[derive(PartialEq)]
+        #[derive(PartialEq, Debug)]
         pub enum $name {
             $(
                 $e $(( $($et),* ))?
@@ -615,7 +620,7 @@ impl<'a> Parser<'a> {
             self.error(Estr("NameIsNotUtf8"))
         }
     });
-    parse_fun!(:raw parse_id_char(self) -> char {
+    parse_fun!(parse_id_char(self) -> char {
         let c = self.expect_any()?;
         match c {
             | '0' ..= '9'
@@ -651,6 +656,7 @@ impl<'a> Parser<'a> {
 
         loop {
             let c = self.parse_id_char()?;
+            println!("look at {}", c);
             end += c.len_utf8();
             if self.is_token_end() {
                 break;
@@ -658,6 +664,7 @@ impl<'a> Parser<'a> {
         }
 
         let slice = &self.input[start..end];
+        println!("look at {}", slice);
 
         if let Some(k) = Keyword::from_str(slice) {
             Ok(k)
@@ -704,9 +711,9 @@ impl<'a> Parser<'a> {
     fn parse_vec<F: FnMut(&mut Self) -> Result<T, ParserError>, T>(&mut self, mut f: F) -> Result<Vec<T>, ParserError> {
         parse_preamble!(self, Vec<T>, {
             let mut v = vec![];
-            let mut i: u64 = 0;
+            let mut i: usize = 0;
             while let Ok(r) = f(self) {
-                assert!(i < ::std::i32::MAX as u64);
+                assert!(i < MAX_VEC_LEN);
                 v.push(r);
                 i += 1;
             }
@@ -760,6 +767,81 @@ impl<'a> Parser<'a> {
                 results,
             })
         })
+    });
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Sexp {
+    Keyword(Keyword),
+    U32(u32),
+    U64(u64),
+    S32(i32),
+    S64(i64),
+    F32(u64),
+    F64(u64),
+    String(Vec<u8>),
+    Id(String),
+    Parens(Vec<Sexp>),
+}
+
+impl<'a> Parser<'a> {
+    parse_fun!(parse_sexpr(self) -> Sexp {
+        println!("Kw?");
+        if let Ok(kw) = self.parse_keyword() {
+            return Ok(Sexp::Keyword(kw))
+        }
+        println!("Un?");
+        if let Ok(v) = self.parse_un(32) {
+            return Ok(Sexp::U32(v as u32))
+        }
+        if let Ok(v) = self.parse_un(64) {
+            return Ok(Sexp::U64(v))
+        }
+        println!("Sn?");
+        if let Ok(v) = self.parse_sn(32) {
+            return Ok(Sexp::S32(v as i32))
+        }
+        if let Ok(v) = self.parse_sn(64) {
+            return Ok(Sexp::S64(v))
+        }
+        println!("Fn?");
+        if let Ok(v) = self.parse_fn(32) {
+            return Ok(Sexp::F32(v))
+        }
+        if let Ok(v) = self.parse_fn(64) {
+            return Ok(Sexp::F64(v))
+        }
+        println!("String?");
+        if let Ok(s) = self.parse_string() {
+            return Ok(Sexp::String(s))
+        }
+        println!("Id?");
+        if let Ok(s) = self.parse_id() {
+            return Ok(Sexp::Id(s))
+        }
+
+        println!("(?");
+        if let Ok(_) = self.expect_token(Token::LPAREN) {
+            println!("(");
+            let mut v = vec![];
+
+            println!("sexpr?");
+            while let Ok(x) = self.parse_sexpr() {
+                v.push(x);
+                println!("sexpr");
+            }
+
+            println!(")?");
+            self.expect_token(Token::RPAREN)?;
+            println!(")");
+
+            return Ok(Sexp::Parens(v))
+        }
+
+        println!("");
+
+        // TODO: correct reserved handling
+        self.error(Estr("Reserved"))
     });
 }
 

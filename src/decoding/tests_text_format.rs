@@ -15,6 +15,7 @@ fn check_case<T, F, P>(s: &str, f: &F, pred: &P, end_offset: usize)
             F: Fn(&mut Parser) -> Result<T, ParserError>,
             P: Fn(&Result<T, ParserError>) -> bool,
 {
+    println!("testcase '{}'", s);
     let mut p = parser(s);
     let r = f(&mut p);
     let r = r.and_then(|x| {
@@ -35,6 +36,7 @@ fn check_case<T, F, P>(s: &str, f: &F, pred: &P, end_offset: usize)
             panic!("Token stream:\n`{}`\nResult: {:?}", s, r);
         }
     }
+    println!("OK");
 }
 
 fn check<T, F, P>(s: &str, f: F, pred: P)
@@ -454,4 +456,22 @@ fn parse_functype() {
 
     check("( func ( param i32) ( result f64) )", parse_id, is_ok_with(
           FuncType { args: vec![ValType::I32], results: vec![ValType::F64] }));
+}
+
+#[test]
+fn parse_sexp() {
+    let parse_id = |p: &mut Parser| p.parse_sexpr();
+
+    check("asdf", parse_id, Result::is_err);
+
+    check("func", parse_id, Result::is_ok);
+    check("1454", parse_id, Result::is_ok);
+    check("0x96", parse_id, Result::is_ok);
+    check("125.985", parse_id, Result::is_ok);
+    check("\"hello world \\ff\"", parse_id, Result::is_ok);
+    check("$foobar", parse_id, Result::is_ok);
+    check("()", parse_id, Result::is_ok);
+
+    check("(asdf)", parse_id, Result::is_err);
+    check("(func)", parse_id, Result::is_ok);
 }
