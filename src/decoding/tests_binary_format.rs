@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use super::*;
 use std::fmt::Debug;
 
@@ -7,7 +9,7 @@ enum CheckRes<T> {
 }
 use self::CheckRes::*;
 
-fn check<'a, T, F>(mut parse: F, input: &'a [u8], res: CheckRes<T>)
+fn check<'a, T, F>(parse: F, input: &'a [u8], res: CheckRes<T>)
     where T: Debug + PartialEq,
           F: Fn(Inp<'a>) -> IResult<Inp<'a>, T>,
 {
@@ -169,4 +171,20 @@ fn test_parse_i32() {
 #[test]
 fn test_parse_i64() {
     test_parse_iN(parse_i64, 64);
+}
+
+#[test]
+fn test_parse_f32() {
+    let x: f32 = -1459.78965;
+    let b = x.to_bits().to_le().to_bytes();
+
+    check(&parse_f32, &b, OkWith(x));
+}
+
+#[test]
+fn test_parse_f64() {
+    let x: f64 = -1459.78965;
+    let b = x.to_bits().to_le().to_bytes();
+
+    check(&parse_f64, &b, OkWith(x));
 }

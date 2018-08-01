@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use nom::IResult;
 use nom::types::CompleteByteSlice;
 
@@ -80,6 +82,15 @@ named!(pub parse_s64 <Inp, i64>, apply!(parse_sN, 64));
 
 named!(pub parse_i32 <Inp, u32>, map!(parse_s32, |x| x as u32));
 named!(pub parse_i64 <Inp, u64>, map!(parse_s64, |x| x as u64));
+
+named!(pub parse_f32 <Inp, f32>, do_parse!(
+    bs: map!(take!(4), |s| { let mut b = [0; 4]; b.copy_from_slice(&**s); b })
+    >> (f32::from_bits(u32::from_le(u32::from_bytes(bs))))
+));
+named!(pub parse_f64 <Inp, f64>, do_parse!(
+    bs: map!(take!(8), |s| { let mut b = [0; 8]; b.copy_from_slice(&**s); b })
+    >> (f64::from_bits(u64::from_le(u64::from_bytes(bs))))
+));
 
 #[cfg(test)]
 #[path="tests_binary_format.rs"]
