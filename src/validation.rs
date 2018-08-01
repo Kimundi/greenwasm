@@ -440,17 +440,149 @@ pub mod validate {
 
         let ty = match *instruction {
             // numeric instructions
-            TConst(x)       => ty![               ; x.ty()],
-            TUnop(x)        => ty![x.ty()         ; x.ty()],
-            TBinop(x)       => ty![x.ty(), x.ty() ; x.ty()],
-            IxxTestop(x, _) => ty![x.ty()         ; I32   ],
-            TRelop(x)       => ty![x.ty(), x.ty() ; x.ty()],
+            I32Const(_) => ty![ ; I32],
+            I64Const(_) => ty![ ; I64],
+            F32Const(_) => ty![ ; F32],
+            F64Const(_) => ty![ ; F64],
+
+            // unop
+            | I32Clz
+            | I32Ctz
+            | I32Popcnt
+            => ty![I32 ; I32],
+            | I64Clz
+            | I64Ctz
+            | I64Popcnt
+            => ty![I64 ; I64],
+            | F32Abs
+            | F32Neg
+            | F32Sqrt
+            | F32Ceil
+            | F32Floor
+            | F32Trunc
+            | F32Nearest
+            => ty![F32 ; F32],
+            | F64Abs
+            | F64Neg
+            | F64Sqrt
+            | F64Ceil
+            | F64Floor
+            | F64Trunc
+            | F64Nearest
+            => ty![F64 ; F64],
+
+            // binop
+            | I32Add
+            | I32Sub
+            | I32Mul
+            | I32DivU
+            | I32DivS
+            | I32RemU
+            | I32RemS
+            | I32And
+            | I32Or
+            | I32Xor
+            | I32Shl
+            | I32ShrU
+            | I32ShrS
+            | I32Rotl
+            | I32Rotr
+            => ty![I32, I32 ; I32],
+            | I64Add
+            | I64Sub
+            | I64Mul
+            | I64DivU
+            | I64DivS
+            | I64RemU
+            | I64RemS
+            | I64And
+            | I64Or
+            | I64Xor
+            | I64Shl
+            | I64ShrU
+            | I64ShrS
+            | I64Rotl
+            | I64Rotr
+            => ty![I64, I64 ; I64],
+            | F32Add
+            | F32Sub
+            | F32Mul
+            | F32Div
+            | F32Min
+            | F32Max
+            | F32CopySign
+            => ty![F32, F32 ; F32],
+            | F64Add
+            | F64Sub
+            | F64Mul
+            | F64Div
+            | F64Min
+            | F64Max
+            | F64CopySign
+            => ty![F64, F64 ; F64],
+
+            // testop
+            I32EqZ => ty![I32 ; I32],
+            I64EqZ => ty![I64 ; I32],
+
+            // relop
+            | I32Eq
+            | I32Ne
+            | I32LtU
+            | I32LtS
+            | I32GtU
+            | I32GtS
+            | I32LeU
+            | I32LeS
+            | I32GeU
+            | I32GeS
+            => ty![I32, I32 ; I32],
+            | I64Eq
+            | I64Ne
+            | I64LtU
+            | I64LtS
+            | I64GtU
+            | I64GtS
+            | I64LeU
+            | I64LeS
+            | I64GeU
+            | I64GeS
+            => ty![I64, I64 ; I32],
+            | F32Eq
+            | F32Ne
+            | F32Lt
+            | F32Gt
+            | F32Le
+            | F32Ge
+            => ty![F32, F32 ; I32],
+            | F64Eq
+            | F64Ne
+            | F64Lt
+            | F64Gt
+            | F64Le
+            | F64Ge
+            => ty![F64, F64 ; I32],
+
             // cvtops
-            TReinterpret(t)          => ty![t.from_ty() ; t.ty() ],
-            IxxTruncFxx(t2, _, t1)   => ty![t1.ty()     ; t2.ty()],
+            I32ReinterpretF32 => ty![I32 ; F32],
+            I64ReinterpretF64 => ty![I64 ; F64],
+            F32ReinterpretI32 => ty![F32 ; I32],
+            F64ReinterpretI64 => ty![F64 ; I64],
+
+            I32TruncUF32 | I32TruncSF32 => ty![I32 ; F32],
+            I32TruncUF64 | I32TruncSF64 => ty![I32 ; F64],
+            I64TruncUF32 | I64TruncSF32 => ty![I64 ; F32],
+            I64TruncUF64 | I64TruncSF64 => ty![I64 ; F64],
+
             I32WrapI64               => ty![I64         ; I32    ],
-            I64ExtendI32(_)          => ty![I32         ; I64    ],
-            FxxConvertUxx(t2, _, t1) => ty![t1.ty()     ; t2.ty()],
+            I64ExtendUI32            => ty![I32         ; I64    ],
+            I64ExtendSI32            => ty![I32         ; I64    ],
+
+            F32ConvertUI32 | F32ConvertSI32 => ty![F32 ; I32],
+            F32ConvertUI64 | F32ConvertSI64 => ty![F32 ; I64],
+            F64ConvertUI32 | F64ConvertSI32 => ty![F64 ; I32],
+            F64ConvertUI64 | F64ConvertSI64 => ty![F64 ; I64],
+
             F32DemoteF64             => ty![F64         ; F32    ],
             F64PromoteF32            => ty![F32         ; F64    ],
 
@@ -486,15 +618,30 @@ pub mod validate {
             }
 
             // memory instructions
-            ref load_store_instr @ TLoad(..) |
-            ref load_store_instr @ IxxLoad8(..) |
-            ref load_store_instr @ IxxLoad16(..) |
-            ref load_store_instr @ I64Load32(..) |
-            ref load_store_instr @ TStore(..) |
-            ref load_store_instr @ IxxStore8(..) |
-            ref load_store_instr @ IxxStore16(..) |
+            ref load_store_instr @ I32Load(..) |
+            ref load_store_instr @ I64Load(..) |
+            ref load_store_instr @ F32Load(..) |
+            ref load_store_instr @ F64Load(..) |
+            ref load_store_instr @ I32Load8U(..) |
+            ref load_store_instr @ I32Load8S(..) |
+            ref load_store_instr @ I64Load8U(..) |
+            ref load_store_instr @ I64Load8S(..) |
+            ref load_store_instr @ I32Load16U(..) |
+            ref load_store_instr @ I32Load16S(..) |
+            ref load_store_instr @ I64Load16U(..) |
+            ref load_store_instr @ I64Load16S(..) |
+            ref load_store_instr @ I64Load32U(..) |
+            ref load_store_instr @ I64Load32S(..) |
+            ref load_store_instr @ I32Store(..) |
+            ref load_store_instr @ I64Store(..) |
+            ref load_store_instr @ F32Store(..) |
+            ref load_store_instr @ F64Store(..) |
+            ref load_store_instr @ I32Store8(..) |
+            ref load_store_instr @ I64Store8(..) |
+            ref load_store_instr @ I32Store16(..) |
+            ref load_store_instr @ I64Store16(..) |
             ref load_store_instr @ I64Store32(..) => {
-                let validate = |memarg: Memarg, bit_width, e, r| {
+                let validate = |memarg: Memarg, bit_width: u32, e, r| {
                     c.mems(0)?;
                     let align = 1u32 << memarg.align;
                     if align > (bit_width / 8) {
@@ -512,15 +659,34 @@ pub mod validate {
                 };
 
                 match *load_store_instr {
-                    TLoad(t, memarg)        => load(t, memarg, t.bit_width())?,
-                    IxxLoad8(t, _, memarg)  => load(t.ty(), memarg, 8)?,
-                    IxxLoad16(t, _, memarg) => load(t.ty(), memarg, 16)?,
-                    I64Load32(_, memarg)    => load(I64, memarg, 32)?,
+                    I32Load8U(memarg)       => load(I32, memarg, 8)?,
+                    I32Load8S(memarg)       => load(I32, memarg, 8)?,
+                    I32Load16U(memarg)      => load(I32, memarg, 16)?,
+                    I32Load16S(memarg)      => load(I32, memarg, 16)?,
+                    I32Load(memarg)         => load(I32, memarg, 32)?,
 
-                    TStore(t, memarg)       => store(t, memarg, t.bit_width())?,
-                    IxxStore8(t, memarg)    => store(t.ty(), memarg, 8)?,
-                    IxxStore16(t, memarg)   => store(t.ty(), memarg, 16)?,
+                    I64Load8U(memarg)       => load(I64, memarg, 8)?,
+                    I64Load8S(memarg)       => load(I64, memarg, 8)?,
+                    I64Load16U(memarg)      => load(I64, memarg, 16)?,
+                    I64Load16S(memarg)      => load(I64, memarg, 16)?,
+                    I64Load32U(memarg)      => load(I64, memarg, 32)?,
+                    I64Load32S(memarg)      => load(I64, memarg, 32)?,
+                    I64Load(memarg)         => load(I64, memarg, 64)?,
+
+                    F32Load(memarg)         => load(F32, memarg, 32)?,
+                    F64Load(memarg)         => load(F64, memarg, 64)?,
+
+                    I32Store8(memarg)       => store(I32, memarg, 8)?,
+                    I32Store16(memarg)      => store(I32, memarg, 16)?,
+                    I32Store(memarg)        => store(I32, memarg, 32)?,
+
+                    I64Store8(memarg)       => store(I64, memarg, 8)?,
+                    I64Store16(memarg)      => store(I64, memarg, 16)?,
                     I64Store32(memarg)      => store(I64, memarg, 32)?,
+                    I64Store(memarg)        => store(I64, memarg, 64)?,
+
+                    F32Store(memarg)        => store(F32, memarg, 32)?,
+                    F64Store(memarg)        => store(F64, memarg, 64)?,
 
                     _ => unreachable!(),
                 }
@@ -620,7 +786,10 @@ pub mod validate {
         for instr in &const_expr.body {
             use self::Instr::*;
             match *instr {
-                TConst(_) => (),
+                I32Const(_) => (),
+                I64Const(_) => (),
+                F32Const(_) => (),
+                F64Const(_) => (),
                 GetGlobal(x) => {
                     if c.globals(x)?.mutability != Mut::Const {
                         c.error(ConstExprGetGlobalNotConst)?;

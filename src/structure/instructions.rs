@@ -5,49 +5,12 @@ use super::types::F32;
 use super::types::F64;
 use super::types::ResultType;
 use super::types::Wec;
-use super::types::ValType;
 
 use super::modules::LocalIdx;
 use super::modules::GlobalIdx;
 use super::modules::LabelIdx;
 use super::modules::FuncIdx;
 use super::modules::TypeIdx;
-
-#[derive(Copy, Clone)]
-pub enum IUnop {
-    Clz, Ctz, Popcnt,
-}
-
-#[derive(Copy, Clone)]
-pub enum IBinop {
-    Add, Sub, Mul, DivU, DivS, RemU, RemS,
-    And, Or, Xor, Shl, ShrU, ShrS, Rotl, Rotr,
-}
-
-#[derive(Copy, Clone)]
-pub enum FUnop {
-    Abs, Neg, Sqrt, Ceil, Floor, Trunc, Nearest,
-}
-
-#[derive(Copy, Clone)]
-pub enum FBinop {
-    Add, Sub, Mul, Div, Min, Max, CopySign,
-}
-
-#[derive(Copy, Clone)]
-pub enum ITestop {
-    EqZ,
-}
-
-#[derive(Copy, Clone)]
-pub enum IRelop {
-    Eq, Ne, LtU, LtS, GtU, GtS, LeU, LeS, GeU, GeS,
-}
-
-#[derive(Copy, Clone)]
-pub enum FRelop {
-    Eq, Ne, Lt, Gt, Le, Ge,
-}
 
 #[derive(Copy, Clone)]
 pub struct Memarg {
@@ -59,149 +22,153 @@ pub struct Expr {
     pub body: Vec<Instr>,
 }
 
-#[derive(Copy, Clone)]
-pub enum Sx {
-    U,
-    S,
-}
-
-/// Helper types to encode instructions more concise
-mod helper {
-    use super::*;
-
-    #[derive(Copy, Clone)]
-    pub enum TConst {
-        I32(I32),
-        I64(I64),
-        F32(F32),
-        F64(F64),
-    }
-    impl TConst {
-        pub fn ty(&self) -> ValType {
-            match *self {
-                TConst::I32(_) => ValType::I32,
-                TConst::I64(_) => ValType::I64,
-                TConst::F32(_) => ValType::F32,
-                TConst::F64(_) => ValType::F64,
-            }
-        }
-    }
-
-    #[derive(Copy, Clone)]
-    pub enum Ixx {
-        I32,
-        I64,
-    }
-    impl Ixx {
-        pub fn ty(&self) -> ValType {
-            match *self {
-                Ixx::I32 => ValType::I32,
-                Ixx::I64 => ValType::I64,
-            }
-        }
-    }
-
-    #[derive(Copy, Clone)]
-    pub enum Fxx {
-        F32,
-        F64,
-    }
-    impl Fxx {
-        pub fn ty(&self) -> ValType {
-            match *self {
-                Fxx::F32 => ValType::F32,
-                Fxx::F64 => ValType::F64,
-            }
-        }
-    }
-
-    #[derive(Copy, Clone)]
-    pub enum Unop {
-        IUnop(Ixx, IUnop),
-        FUnop(Fxx, FUnop),
-    }
-    impl Unop {
-        pub fn ty(&self) -> ValType {
-            match *self {
-                Unop::IUnop(x, _) => x.ty(),
-                Unop::FUnop(x, _) => x.ty(),
-            }
-        }
-    }
-
-    #[derive(Copy, Clone)]
-    pub enum Binop {
-        IBinop(Ixx, IBinop),
-        FBinop(Fxx, FBinop),
-    }
-    impl Binop {
-        pub fn ty(&self) -> ValType {
-            match *self {
-                Binop::IBinop(x, _) => x.ty(),
-                Binop::FBinop(x, _) => x.ty(),
-            }
-        }
-    }
-
-    #[derive(Copy, Clone)]
-    pub enum Relop {
-        IRelop(Ixx, IRelop),
-        FRelop(Fxx, FRelop),
-    }
-    impl Relop {
-        pub fn ty(&self) -> ValType {
-            match *self {
-                Relop::IRelop(x, _) => x.ty(),
-                Relop::FRelop(x, _) => x.ty(),
-            }
-        }
-    }
-
-    #[derive(Copy, Clone)]
-    pub enum TReinterpret {
-        I32F32,
-        I64F64,
-        F32I32,
-        F64I64,
-    }
-    impl TReinterpret {
-        pub fn ty(&self) -> ValType {
-            match *self {
-                TReinterpret::I32F32 => ValType::I32,
-                TReinterpret::I64F64 => ValType::I64,
-                TReinterpret::F32I32 => ValType::F32,
-                TReinterpret::F64I64 => ValType::F64,
-            }
-        }
-        pub fn from_ty(&self) -> ValType {
-            match *self {
-                TReinterpret::I32F32 => ValType::F32,
-                TReinterpret::I64F64 => ValType::F64,
-                TReinterpret::F32I32 => ValType::I32,
-                TReinterpret::F64I64 => ValType::I64,
-            }
-        }
-    }
-}
-pub use self::helper::*;
-
 pub enum Instr {
     // numeric instructions
-    TConst(TConst),
-    TUnop(Unop),
-    TBinop(Binop),
-    IxxTestop(Ixx, ITestop),
-    TRelop(Relop),
+    I32Const(I32),
+    I64Const(I64),
+    F32Const(F32),
+    F64Const(F64),
 
-    I32WrapI64, I64ExtendI32(Sx),
+    I32Clz,
+    I32Ctz,
+    I32Popcnt,
 
-    IxxTruncFxx(Ixx, Sx, Fxx),
+    I64Clz,
+    I64Ctz,
+    I64Popcnt,
 
-    F32DemoteF64, F64PromoteF32,
+    F32Abs,
+    F32Neg,
+    F32Sqrt,
+    F32Ceil,
+    F32Floor,
+    F32Trunc,
+    F32Nearest,
 
-    FxxConvertUxx(Fxx, Sx, Ixx),
+    F64Abs,
+    F64Neg,
+    F64Sqrt,
+    F64Ceil,
+    F64Floor,
+    F64Trunc,
+    F64Nearest,
 
-    TReinterpret(TReinterpret),
+    I32Add,
+    I32Sub,
+    I32Mul,
+    I32DivU,
+    I32DivS,
+    I32RemU,
+    I32RemS,
+    I32And,
+    I32Or,
+    I32Xor,
+    I32Shl,
+    I32ShrU,
+    I32ShrS,
+    I32Rotl,
+    I32Rotr,
+
+    I64Add,
+    I64Sub,
+    I64Mul,
+    I64DivU,
+    I64DivS,
+    I64RemU,
+    I64RemS,
+    I64And,
+    I64Or,
+    I64Xor,
+    I64Shl,
+    I64ShrU,
+    I64ShrS,
+    I64Rotl,
+    I64Rotr,
+
+    F32Add,
+    F32Sub,
+    F32Mul,
+    F32Div,
+    F32Min,
+    F32Max,
+    F32CopySign,
+
+    F64Add,
+    F64Sub,
+    F64Mul,
+    F64Div,
+    F64Min,
+    F64Max,
+    F64CopySign,
+
+    I32EqZ,
+    I64EqZ,
+
+    I32Eq,
+    I32Ne,
+    I32LtU,
+    I32LtS,
+    I32GtU,
+    I32GtS,
+    I32LeU,
+    I32LeS,
+    I32GeU,
+    I32GeS,
+
+    I64Eq,
+    I64Ne,
+    I64LtU,
+    I64LtS,
+    I64GtU,
+    I64GtS,
+    I64LeU,
+    I64LeS,
+    I64GeU,
+    I64GeS,
+
+    F32Eq,
+    F32Ne,
+    F32Lt,
+    F32Gt,
+    F32Le,
+    F32Ge,
+
+    F64Eq,
+    F64Ne,
+    F64Lt,
+    F64Gt,
+    F64Le,
+    F64Ge,
+
+    I32WrapI64,
+    I64ExtendUI32,
+    I64ExtendSI32,
+
+    I32TruncUF32,
+    I32TruncUF64,
+    I32TruncSF32,
+    I32TruncSF64,
+    I64TruncUF32,
+    I64TruncUF64,
+    I64TruncSF32,
+    I64TruncSF64,
+
+    F32DemoteF64,
+    F64PromoteF32,
+
+    F32ConvertUI32,
+    F64ConvertUI32,
+    F32ConvertSI32,
+    F64ConvertSI32,
+    F32ConvertUI64,
+    F64ConvertUI64,
+    F32ConvertSI64,
+    F64ConvertSI64,
+
+    I32ReinterpretF32,
+    I64ReinterpretF64,
+    F32ReinterpretI32,
+    F64ReinterpretI64,
 
     // parametric instructions
     Drop,
@@ -215,15 +182,33 @@ pub enum Instr {
     SetGlobal(GlobalIdx),
 
     // memory instructions
-    TLoad(ValType, Memarg),
-    TStore(ValType, Memarg),
+    I32Load(Memarg),
+    I64Load(Memarg),
+    F32Load(Memarg),
+    F64Load(Memarg),
 
-    IxxLoad8(Ixx, Sx, Memarg),
-    IxxLoad16(Ixx, Sx, Memarg),
-    I64Load32(Sx, Memarg),
+    I32Store(Memarg),
+    I64Store(Memarg),
+    F32Store(Memarg),
+    F64Store(Memarg),
 
-    IxxStore8(Ixx, Memarg),
-    IxxStore16(Ixx, Memarg),
+    I32Load8U(Memarg),
+    I32Load8S(Memarg),
+    I64Load8U(Memarg),
+    I64Load8S(Memarg),
+
+    I32Load16U(Memarg),
+    I32Load16S(Memarg),
+    I64Load16U(Memarg),
+    I64Load16S(Memarg),
+
+    I64Load32U(Memarg),
+    I64Load32S(Memarg),
+
+    I32Store8(Memarg),
+    I64Store8(Memarg),
+    I32Store16(Memarg),
+    I64Store16(Memarg),
     I64Store32(Memarg),
 
     CurrentMemory,

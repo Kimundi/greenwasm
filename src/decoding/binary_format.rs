@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case, unused_imports)]
 
 // TODO: Open PR in nom for where applicable
 macro_rules! verify_ref (
@@ -231,16 +231,6 @@ macro_rules! ins {
     )
 }
 use structure::instructions::Instr;
-use structure::instructions::Ixx;
-use structure::instructions::Sx;
-use structure::instructions::TConst;
-use structure::instructions::IUnop;
-use structure::instructions::IBinop;
-use structure::instructions::FUnop;
-use structure::instructions::FBinop;
-use structure::instructions::ITestop;
-use structure::instructions::IRelop;
-use structure::instructions::FRelop;
 named!(parse_instr <Inp, Instr>, alt!(
     // 5.4.1. Control Instructions
     ins!(0x00, Instr::Unreachable)
@@ -296,53 +286,193 @@ named!(parse_instr <Inp, Instr>, alt!(
     | ins!(0x24, Instr::SetGlobal(x); x: parse_globalidx)
 
     // 5.4.4. Memory Instructions
-    | ins!(0x28, Instr::TLoad(ValType::I32, m); m: parse_memarg)
-    | ins!(0x29, Instr::TLoad(ValType::I64, m); m: parse_memarg)
-    | ins!(0x2A, Instr::TLoad(ValType::F32, m); m: parse_memarg)
-    | ins!(0x2B, Instr::TLoad(ValType::F64, m); m: parse_memarg)
+    | ins!(0x28, Instr::I32Load(m); m: parse_memarg)
+    | ins!(0x29, Instr::I64Load(m); m: parse_memarg)
+    | ins!(0x2A, Instr::F32Load(m); m: parse_memarg)
+    | ins!(0x2B, Instr::F64Load(m); m: parse_memarg)
 
-    | ins!(0x2C, Instr::IxxLoad8(Ixx::I32, Sx::S, m); m: parse_memarg)
-    | ins!(0x2D, Instr::IxxLoad8(Ixx::I32, Sx::U, m); m: parse_memarg)
-    | ins!(0x2E, Instr::IxxLoad16(Ixx::I32, Sx::S, m); m: parse_memarg)
-    | ins!(0x2F, Instr::IxxLoad16(Ixx::I32, Sx::U, m); m: parse_memarg)
+    | ins!(0x2C, Instr::I32Load8S(m); m: parse_memarg)
+    | ins!(0x2D, Instr::I32Load8U(m); m: parse_memarg)
+    | ins!(0x2E, Instr::I32Load16S(m); m: parse_memarg)
+    | ins!(0x2F, Instr::I32Load16U(m); m: parse_memarg)
 
-    | ins!(0x30, Instr::IxxLoad8(Ixx::I64, Sx::S, m); m: parse_memarg)
-    | ins!(0x31, Instr::IxxLoad8(Ixx::I64, Sx::U, m); m: parse_memarg)
-    | ins!(0x32, Instr::IxxLoad16(Ixx::I64, Sx::S, m); m: parse_memarg)
-    | ins!(0x33, Instr::IxxLoad16(Ixx::I64, Sx::U, m); m: parse_memarg)
-    | ins!(0x34, Instr::I64Load32(Sx::S, m); m: parse_memarg)
-    | ins!(0x35, Instr::I64Load32(Sx::U, m); m: parse_memarg)
+    | ins!(0x30, Instr::I64Load8S(m); m: parse_memarg)
+    | ins!(0x31, Instr::I64Load8U(m); m: parse_memarg)
+    | ins!(0x32, Instr::I64Load16S(m); m: parse_memarg)
+    | ins!(0x33, Instr::I64Load16U(m); m: parse_memarg)
+    | ins!(0x34, Instr::I64Load32S(m); m: parse_memarg)
+    | ins!(0x35, Instr::I64Load32U(m); m: parse_memarg)
 
-    | ins!(0x36, Instr::TStore(ValType::I32, m); m: parse_memarg)
-    | ins!(0x37, Instr::TStore(ValType::I64, m); m: parse_memarg)
-    | ins!(0x38, Instr::TStore(ValType::F32, m); m: parse_memarg)
-    | ins!(0x39, Instr::TStore(ValType::F64, m); m: parse_memarg)
+    | ins!(0x36, Instr::I32Store(m); m: parse_memarg)
+    | ins!(0x37, Instr::I64Store(m); m: parse_memarg)
+    | ins!(0x38, Instr::F32Store(m); m: parse_memarg)
+    | ins!(0x39, Instr::F64Store(m); m: parse_memarg)
 
-    | ins!(0x3A, Instr::IxxStore8(Ixx::I32, m); m: parse_memarg)
-    | ins!(0x3B, Instr::IxxStore16(Ixx::I32, m); m: parse_memarg)
+    | ins!(0x3A, Instr::I32Store8(m); m: parse_memarg)
+    | ins!(0x3B, Instr::I32Store16(m); m: parse_memarg)
 
-    | ins!(0x3C, Instr::IxxStore8(Ixx::I64, m); m: parse_memarg)
-    | ins!(0x3D, Instr::IxxStore16(Ixx::I64, m); m: parse_memarg)
+    | ins!(0x3C, Instr::I64Store8(m); m: parse_memarg)
+    | ins!(0x3D, Instr::I64Store16(m); m: parse_memarg)
     | ins!(0x3E, Instr::I64Store32(m); m: parse_memarg)
 
     | ins!(0x3F, Instr::CurrentMemory)
     | ins!(0x40, Instr::GrowMemory)
 
     // 5.4.5. Numeric Instructions
-    | ins!(0x41, Instr::TConst(TConst::I32(n)); n: parse_i32)
-    | ins!(0x42, Instr::TConst(TConst::I64(n)); n: parse_i64)
-    | ins!(0x43, Instr::TConst(TConst::F32(z)); z: parse_f32)
-    | ins!(0x44, Instr::TConst(TConst::F64(z)); z: parse_f64)
+    | ins!(0x41, Instr::I32Const(n); n: parse_i32)
+    | ins!(0x42, Instr::I64Const(n); n: parse_i64)
+    | ins!(0x43, Instr::F32Const(z); z: parse_f32)
+    | ins!(0x44, Instr::F64Const(z); z: parse_f64)
 
-    //| ins!(0x, Instr::IxxTestop(Ixx::i32, ITestop::EqZ)))
-    //| ins!(0x, Instr::IxxTestop(Ixx::i32, ITestop::EqZ)))
+    | ins!(0x45, Instr::I32EqZ)
+    | ins!(0x46, Instr::I32Eq)
+    | ins!(0x47, Instr::I32Ne)
+    | ins!(0x48, Instr::I32LtS)
+    | ins!(0x49, Instr::I32LtU)
+    | ins!(0x4A, Instr::I32GtS)
+    | ins!(0x4B, Instr::I32GtU)
+    | ins!(0x4C, Instr::I32LeS)
+    | ins!(0x4D, Instr::I32LeU)
+    | ins!(0x4E, Instr::I32GeS)
+    | ins!(0x4F, Instr::I32GeU)
 
+    | ins!(0x50, Instr::I64EqZ)
+    | ins!(0x51, Instr::I64Eq)
+    | ins!(0x52, Instr::I64Ne)
+    | ins!(0x53, Instr::I64LtS)
+    | ins!(0x54, Instr::I64LtU)
+    | ins!(0x55, Instr::I64GtS)
+    | ins!(0x56, Instr::I64GtU)
+    | ins!(0x57, Instr::I64LeS)
+    | ins!(0x58, Instr::I64LeU)
+    | ins!(0x59, Instr::I64GeS)
+    | ins!(0x5A, Instr::I64GeU)
+
+    | ins!(0x5B, Instr::F32Eq)
+    | ins!(0x5C, Instr::F32Ne)
+    | ins!(0x5D, Instr::F32Lt)
+    | ins!(0x5E, Instr::F32Gt)
+    | ins!(0x5F, Instr::F32Le)
+    | ins!(0x60, Instr::F32Ge)
+
+    | ins!(0x61, Instr::F64Eq)
+    | ins!(0x62, Instr::F64Ne)
+    | ins!(0x63, Instr::F64Lt)
+    | ins!(0x64, Instr::F64Gt)
+    | ins!(0x65, Instr::F64Le)
+    | ins!(0x66, Instr::F64Ge)
+
+    | ins!(0x67, Instr::I32Clz)
+    | ins!(0x68, Instr::I32Ctz)
+    | ins!(0x69, Instr::I32Popcnt)
+    | ins!(0x6A, Instr::I32Add)
+    | ins!(0x6B, Instr::I32Sub)
+    | ins!(0x6C, Instr::I32Mul)
+    | ins!(0x6D, Instr::I32DivS)
+    | ins!(0x6E, Instr::I32DivU)
+    | ins!(0x6F, Instr::I32RemS)
+    | ins!(0x70, Instr::I32RemU)
+    | ins!(0x71, Instr::I32And)
+    | ins!(0x72, Instr::I32Or)
+    | ins!(0x73, Instr::I32Xor)
+    | ins!(0x74, Instr::I32Shl)
+    | ins!(0x75, Instr::I32ShrS)
+    | ins!(0x76, Instr::I32ShrU)
+    | ins!(0x77, Instr::I32Rotl)
+    | ins!(0x78, Instr::I32Rotr)
+
+    | ins!(0x79, Instr::I64Clz)
+    | ins!(0x7A, Instr::I64Ctz)
+    | ins!(0x7B, Instr::I64Popcnt)
+    | ins!(0x7C, Instr::I64Add)
+    | ins!(0x7D, Instr::I64Sub)
+    | ins!(0x7E, Instr::I64Mul)
+    | ins!(0x7F, Instr::I64DivS)
+    | ins!(0x80, Instr::I64DivU)
+    | ins!(0x81, Instr::I64RemS)
+    | ins!(0x82, Instr::I64RemU)
+    | ins!(0x83, Instr::I64And)
+    | ins!(0x84, Instr::I64Or)
+    | ins!(0x85, Instr::I64Xor)
+    | ins!(0x86, Instr::I64Shl)
+    | ins!(0x87, Instr::I64ShrS)
+    | ins!(0x88, Instr::I64ShrU)
+    | ins!(0x89, Instr::I64Rotl)
+    | ins!(0x8A, Instr::I64Rotr)
+
+    | ins!(0x8B, Instr::F32Abs)
+    | ins!(0x8C, Instr::F32Neg)
+    | ins!(0x8D, Instr::F32Ceil)
+    | ins!(0x8E, Instr::F32Floor)
+    | ins!(0x8F, Instr::F32Trunc)
+    | ins!(0x90, Instr::F32Nearest)
+    | ins!(0x91, Instr::F32Sqrt)
+    | ins!(0x92, Instr::F32Add)
+    | ins!(0x93, Instr::F32Sub)
+    | ins!(0x94, Instr::F32Mul)
+    | ins!(0x95, Instr::F32Div)
+    | ins!(0x96, Instr::F32Min)
+    | ins!(0x97, Instr::F32Max)
+    | ins!(0x98, Instr::F32CopySign)
+
+    | ins!(0x99, Instr::F64Abs)
+    | ins!(0x9A, Instr::F64Neg)
+    | ins!(0x9B, Instr::F64Ceil)
+    | ins!(0x9C, Instr::F64Floor)
+    | ins!(0x9D, Instr::F64Trunc)
+    | ins!(0x9E, Instr::F64Nearest)
+    | ins!(0x9F, Instr::F64Sqrt)
+    | ins!(0xA0, Instr::F64Add)
+    | ins!(0xA1, Instr::F64Sub)
+    | ins!(0xA2, Instr::F64Mul)
+    | ins!(0xA3, Instr::F64Div)
+    | ins!(0xA4, Instr::F64Min)
+    | ins!(0xA5, Instr::F64Max)
+    | ins!(0xA6, Instr::F64CopySign)
+
+    | ins!(0xA7, Instr::I32WrapI64)
+    | ins!(0xA8, Instr::I32TruncSF32)
+    | ins!(0xA9, Instr::I32TruncUF32)
+    | ins!(0xAA, Instr::I32TruncSF64)
+    | ins!(0xAB, Instr::I32TruncUF64)
+
+    | ins!(0xAC, Instr::I64ExtendSI32)
+    | ins!(0xAD, Instr::I64ExtendUI32)
+    | ins!(0xAE, Instr::I64TruncSF32)
+    | ins!(0xAF, Instr::I64TruncUF32)
+    | ins!(0xB0, Instr::I64TruncSF64)
+    | ins!(0xB1, Instr::I64TruncUF64)
+
+    | ins!(0xB2, Instr::F32ConvertSI32)
+    | ins!(0xB3, Instr::F32ConvertUI32)
+    | ins!(0xB4, Instr::F32ConvertSI64)
+    | ins!(0xB5, Instr::F32ConvertUI64)
+    | ins!(0xB6, Instr::F32DemoteF64)
+
+    | ins!(0xB7, Instr::F64ConvertSI32)
+    | ins!(0xB8, Instr::F64ConvertUI32)
+    | ins!(0xB9, Instr::F64ConvertSI64)
+    | ins!(0xBA, Instr::F64ConvertUI64)
+    | ins!(0xBB, Instr::F64PromoteF32)
+
+    | ins!(0xBC, Instr::I32ReinterpretF32)
+    | ins!(0xBD, Instr::I64ReinterpretF64)
+    | ins!(0xBE, Instr::F32ReinterpretI32)
+    | ins!(0xBF, Instr::F64ReinterpretI64)
 ));
 use structure::instructions::Memarg;
 named!(parse_memarg <Inp, Memarg>, do_parse!(
     a: parse_u32
     >> o: parse_u32
     >> (Memarg { offset: o, align: a })
+));
+
+// 5.4.6. Expressions
+use structure::instructions::Expr;
+named!(parse_expr <Inp, Expr>, do_parse!(
+    ins: many0!(parse_instr)
+    >> btag!(0x0B)
+    >> (Expr { body: ins })
 ));
 
 // 5.5.1. Indices
@@ -360,6 +490,36 @@ named!(parse_memidx <Inp, MemIdx>, call!(parse_u32));
 named!(parse_globalidx <Inp, GlobalIdx>, call!(parse_u32));
 named!(parse_localidx <Inp, LocalIdx>, call!(parse_u32));
 named!(parse_labelidx <Inp, LabelIdx>, call!(parse_u32));
+
+// 5.5.1. Sections
+fn parse_section<'a, F, B>(input: Inp<'a>, N: u8, parse_B: F) -> IResult<Inp<'a>, B>
+    where F: Fn(Inp<'a>) -> IResult<Inp<'a>, B>
+{
+    do_parse!(input,
+        btag!(N)
+        >> cont: length_value!(
+            parse_u32,
+            parse_B
+        )
+        >> (cont)
+    )
+}
+
+// 5.5.3. Custom Section
+use structure::modules::Custom;
+named!(parse_custom <Inp, Custom>, do_parse!(
+    name: parse_name
+    >> bytes: many0!(parse_byte)
+    >> (Custom { name, bytes })
+));
+named!(parse_customsec <Inp, Custom>,
+    call!(parse_section, 0, parse_custom)
+);
+named!(parse_customsecs <Inp, Vec<Custom>>,
+    many0!(parse_customsec)
+);
+
+
 
 #[cfg(test)]
 #[path="tests_binary_format.rs"]

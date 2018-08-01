@@ -90,3 +90,9 @@ pub enum ImportDesc {
     Mem(MemType),
     Global(GlobalType),
 }
+
+#[derive(Debug, PartialEq)]
+pub struct Custom {
+    pub name: Name,
+    pub bytes: Vec<u8>,
+}
