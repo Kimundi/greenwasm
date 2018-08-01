@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 
 [dependencies]
+nom = { version = "4.0", features = ["verbose-errors"] }
