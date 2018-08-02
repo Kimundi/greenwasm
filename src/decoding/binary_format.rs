@@ -763,7 +763,7 @@ named!(parse_module <Inp, (Module, Vec<Custom>)>, do_parse!(
 pub enum ParseError<'a> {
     NomError(::nom::Err<CompleteByteSlice<'a>, u32>)
 }
-pub fn from_binary_format(b: &[u8]) -> Result<(Module, Vec<Custom>), ParseError> {
+pub fn parse_binary_format(b: &[u8]) -> Result<(Module, Vec<Custom>), ParseError> {
     let res = exact!(CompleteByteSlice(b), parse_module);
     match res {
         Ok((CompleteByteSlice(s), res)) => {
