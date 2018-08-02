@@ -42,6 +42,7 @@ pub enum ValidationErrorEnum {
     InstrStoreOveraligned,
     InstrBrTableNotSameLabelType,
     InstrCallIndirectElemTypeNotAnyFunc,
+    InstrWithTypeNotValid,
     ConstExprGetGlobalNotConst,
     ConstExprIlligalInstruction,
     ElemElemTypeNotAnyFunc,
@@ -489,26 +490,26 @@ pub mod validate {
             self.opds.push(type_);
         }
 
-        fn pop_opd(&mut self) -> ValTypeOrUnknown {
+        fn pop_opd(&mut self) -> VResult<ValTypeOrUnknown> {
             if self.opds.len() ==  self.ctrls.last().unwrap().height
                 &&  self.ctrls.last().unwrap().unreachable
             {
-                return Unknown;
+                return Ok(Unknown);
             }
             if self.opds.len() == self.ctrls.last().unwrap().height {
-                self.error()
+                self.error()?;
             }
-            return self.opds.pop().unwrap();
+            return Ok(self.opds.pop().unwrap());
         }
 
-        fn pop_opd_expect(&mut self, expect: ValTypeOrUnknown) -> ValTypeOrUnknown {
-            let actual = self.pop_opd();
-            if actual == Unknown { return expect; }
-            if expect == Unknown { return actual; }
+        fn pop_opd_expect(&mut self, expect: ValTypeOrUnknown) -> VResult<ValTypeOrUnknown> {
+            let actual = self.pop_opd()?;
+            if actual == Unknown { return Ok(expect); }
+            if expect == Unknown { return Ok(actual); }
             if actual != expect {
-                self.error()
+                self.error()?;
             }
-            return actual;
+            return Ok(actual);
         }
 
         fn push_opds(&mut self, types: &[ValType]) {
@@ -517,10 +518,11 @@ pub mod validate {
             }
         }
 
-        fn pop_opds(&mut self, types: &[ValType]) {
+        fn pop_opds(&mut self, types: &[ValType]) -> VResult<Valid> {
             for t in types.iter().rev() {
-                self.pop_opd_expect(ValTypeOrUnknown::ValType(*t));
+                self.pop_opd_expect(ValTypeOrUnknown::ValType(*t))?;
             }
+            Ok(Valid)
         }
 
         fn push_ctrl(&mut self, label: &[ValType], out: &[ValType]) {
@@ -533,17 +535,17 @@ pub mod validate {
             self.ctrls.push(frame);
         }
 
-        fn pop_ctrl(&mut self) -> Vec<ValType> {
+        fn pop_ctrl(&mut self) -> VResult<Vec<ValType>> {
             if self.ctrls.is_empty() {
-                self.error();
+                self.error()?;
             }
             let frame = self.ctrls.last().unwrap().clone(); // TODO: Bad clone
-            self.pop_opds(&frame.end_types);
+            self.pop_opds(&frame.end_types)?;
             if self.opds.len() != frame.height {
-                self.error();
+                self.error()?;
             }
             self.ctrls.pop();
-            return frame.end_types;
+            return Ok(frame.end_types);
         }
 
         fn unreachable(&mut self) {
@@ -551,13 +553,16 @@ pub mod validate {
             self.ctrls.last_mut().unwrap().unreachable = true;
         }
 
-        fn error(&mut self) {
-            unimplemented!()
+        fn error(&mut self) -> VResult<Valid> {
+            Err(ValidationError{
+                kind: InstrWithTypeNotValid
+            })
         }
 
-        fn simple_instr(&mut self, args: &[ValType], results: &[ValType]) {
-            self.pop_opds(args);
+        fn simple_instr(&mut self, args: &[ValType], results: &[ValType]) -> VResult<Valid> {
+            self.pop_opds(args)?;
             self.push_opds(results);
+            Ok(Valid)
         }
     }
 
@@ -565,22 +570,31 @@ pub mod validate {
         use self::Instr::*;
         use self::ValType::*;
 
+        macro_rules! ity {
+            ($($arg:expr),* ; $($result:expr),*) => (
+                {
+                    ic.simple_instr(&[$($arg),*], &[$($result),*])?;
+                    ty![$($arg),* ; $($result),*]
+                }
+            )
+        }
+
         let ty = match *instruction {
             // numeric instructions
-            I32Const(_) => ty![ ; I32],
-            I64Const(_) => ty![ ; I64],
-            F32Const(_) => ty![ ; F32],
-            F64Const(_) => ty![ ; F64],
+            I32Const(_) => ity![ ; I32],
+            I64Const(_) => ity![ ; I64],
+            F32Const(_) => ity![ ; F32],
+            F64Const(_) => ity![ ; F64],
 
             // unop
             | I32Clz
             | I32Ctz
             | I32Popcnt
-            => ty![I32 ; I32],
+            => ity![I32 ; I32],
             | I64Clz
             | I64Ctz
             | I64Popcnt
-            => ty![I64 ; I64],
+            => ity![I64 ; I64],
             | F32Abs
             | F32Neg
             | F32Sqrt
@@ -588,7 +602,7 @@ pub mod validate {
             | F32Floor
             | F32Trunc
             | F32Nearest
-            => ty![F32 ; F32],
+            => ity![F32 ; F32],
             | F64Abs
             | F64Neg
             | F64Sqrt
@@ -596,7 +610,7 @@ pub mod validate {
             | F64Floor
             | F64Trunc
             | F64Nearest
-            => ty![F64 ; F64],
+            => ity![F64 ; F64],
 
             // binop
             | I32Add
@@ -614,7 +628,7 @@ pub mod validate {
             | I32ShrS
             | I32Rotl
             | I32Rotr
-            => ty![I32, I32 ; I32],
+            => ity![I32, I32 ; I32],
             | I64Add
             | I64Sub
             | I64Mul
@@ -630,7 +644,7 @@ pub mod validate {
             | I64ShrS
             | I64Rotl
             | I64Rotr
-            => ty![I64, I64 ; I64],
+            => ity![I64, I64 ; I64],
             | F32Add
             | F32Sub
             | F32Mul
@@ -638,7 +652,7 @@ pub mod validate {
             | F32Min
             | F32Max
             | F32CopySign
-            => ty![F32, F32 ; F32],
+            => ity![F32, F32 ; F32],
             | F64Add
             | F64Sub
             | F64Mul
@@ -646,11 +660,11 @@ pub mod validate {
             | F64Min
             | F64Max
             | F64CopySign
-            => ty![F64, F64 ; F64],
+            => ity![F64, F64 ; F64],
 
             // testop
-            I32EqZ => ty![I32 ; I32],
-            I64EqZ => ty![I64 ; I32],
+            I32EqZ => ity![I32 ; I32],
+            I64EqZ => ity![I64 ; I32],
 
             // relop
             | I32Eq
@@ -663,7 +677,7 @@ pub mod validate {
             | I32LeS
             | I32GeU
             | I32GeS
-            => ty![I32, I32 ; I32],
+            => ity![I32, I32 ; I32],
             | I64Eq
             | I64Ne
             | I64LtU
@@ -674,44 +688,44 @@ pub mod validate {
             | I64LeS
             | I64GeU
             | I64GeS
-            => ty![I64, I64 ; I32],
+            => ity![I64, I64 ; I32],
             | F32Eq
             | F32Ne
             | F32Lt
             | F32Gt
             | F32Le
             | F32Ge
-            => ty![F32, F32 ; I32],
+            => ity![F32, F32 ; I32],
             | F64Eq
             | F64Ne
             | F64Lt
             | F64Gt
             | F64Le
             | F64Ge
-            => ty![F64, F64 ; I32],
+            => ity![F64, F64 ; I32],
 
             // cvtops
-            I32ReinterpretF32 => ty![F32 ; I32],
-            I64ReinterpretF64 => ty![F64 ; I64],
-            F32ReinterpretI32 => ty![I32 ; F32],
-            F64ReinterpretI64 => ty![I64 ; F64],
+            I32ReinterpretF32 => ity![F32 ; I32],
+            I64ReinterpretF64 => ity![F64 ; I64],
+            F32ReinterpretI32 => ity![I32 ; F32],
+            F64ReinterpretI64 => ity![I64 ; F64],
 
-            I32TruncUF32 | I32TruncSF32 => ty![F32 ; I32],
-            I32TruncUF64 | I32TruncSF64 => ty![F64 ; I32],
-            I64TruncUF32 | I64TruncSF32 => ty![F32 ; I64],
-            I64TruncUF64 | I64TruncSF64 => ty![F64 ; I64],
+            I32TruncUF32 | I32TruncSF32 => ity![F32 ; I32],
+            I32TruncUF64 | I32TruncSF64 => ity![F64 ; I32],
+            I64TruncUF32 | I64TruncSF32 => ity![F32 ; I64],
+            I64TruncUF64 | I64TruncSF64 => ity![F64 ; I64],
 
-            I32WrapI64    => ty![I64 ; I32],
-            I64ExtendUI32 => ty![I32 ; I64],
-            I64ExtendSI32 => ty![I32 ; I64],
+            I32WrapI64    => ity![I64 ; I32],
+            I64ExtendUI32 => ity![I32 ; I64],
+            I64ExtendSI32 => ity![I32 ; I64],
 
-            F32ConvertUI32 | F32ConvertSI32 => ty![I32 ; F32],
-            F32ConvertUI64 | F32ConvertSI64 => ty![I64 ; F32],
-            F64ConvertUI32 | F64ConvertSI32 => ty![I32 ; F64],
-            F64ConvertUI64 | F64ConvertSI64 => ty![I64 ; F64],
+            F32ConvertUI32 | F32ConvertSI32 => ity![I32 ; F32],
+            F32ConvertUI64 | F32ConvertSI64 => ity![I64 ; F32],
+            F64ConvertUI32 | F64ConvertSI32 => ity![I32 ; F64],
+            F64ConvertUI64 | F64ConvertSI64 => ity![I64 ; F64],
 
-            F32DemoteF64  => ty![F64 ; F32],
-            F64PromoteF32 => ty![F32 ; F64],
+            F32DemoteF64  => ity![F64 ; F32],
+            F64PromoteF32 => ity![F32 ; F64],
 
             // parametric instructions
             Drop   => ty![any() ; ],
