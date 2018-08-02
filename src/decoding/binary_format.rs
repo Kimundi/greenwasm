@@ -500,7 +500,7 @@ fn parse_section<'a, F, B>(input: Inp<'a>, N: u8, parse_B: F) -> IResult<Inp<'a>
         btag!(N)
         >> cont: length_value!(
             parse_u32,
-            parse_B
+            exact!(parse_B)
         )
         >> (cont)
     )
@@ -634,6 +634,7 @@ named!(parse_elemsec <Inp, Wec<Elem>>,
 );
 
 // 5.5.13. Code Section
+#[derive(Debug, PartialEq)]
 struct Code {
     locals: Wec<ValType>,
     body: Expr,
@@ -658,7 +659,7 @@ named!(parse_func <Inp, Code>, do_parse!(
 named!(parse_code <Inp, Code>, do_parse!(
     code: length_value!(
         parse_u32,
-        parse_func
+        exact!(parse_func)
     )
     >> (code)
 ));

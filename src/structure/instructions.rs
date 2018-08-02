@@ -12,16 +12,18 @@ use super::modules::LabelIdx;
 use super::modules::FuncIdx;
 use super::modules::TypeIdx;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Memarg {
     pub offset: U32,
     pub align: U32,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Expr {
     pub body: Vec<Instr>,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Instr {
     // numeric instructions
     I32Const(I32),

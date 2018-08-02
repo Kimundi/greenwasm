@@ -292,7 +292,45 @@ fn test_parse_customsecs() {
     ]));
 }
 
-// TODO: Some test for length_value! overhang
-// [ n [  parse  ]####]
-// ^------n-----------^
-// solution =? exact!()
+#[test]
+fn test_parse_code() {
+    check(&parse_code, &[
+        4,    // 4 bytes
+        1,    // 1 compressed locals
+        2,    // 2x f32 types
+        0x7D,
+        0x0B, // empty expression
+    ], OkWith(
+        Code {
+            locals: vec![ValType::F32, ValType::F32],
+            body: Expr { body: vec![] },
+        }
+    ));
+
+    check(&parse_code, &[
+        6,    // 6 bytes
+        1,    // 1 compressed locals
+        2,    // 2x f32 types
+        0x7D,
+        0x0B, // empty expression
+        0x00, // trash bytes
+        0x00,
+    ], Failed);
+
+    check(&parse_code, &[
+        8,    // 4 bytes
+        2,    // 2 compressed locals
+        2,    // 2x f32 types
+        0x7D,
+        1,    // 1x i32 types
+        0x7F,
+        0x00,
+        0x47,
+        0x0B, // empty expression
+    ], OkWith(
+        Code {
+            locals: vec![ValType::F32, ValType::F32, ValType::I32],
+            body: Expr { body: vec![Instr::Unreachable, Instr::I32Ne] },
+        }
+    ));
+}
