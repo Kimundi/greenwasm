@@ -238,13 +238,6 @@ impl<'a> Ctx<'a> {
             }
         }
     }
-
-    fn find_ty_prefix(&self, t2: &[AnyValType], t: &[AnyValType])
-        -> VResult<Vec<AnyValType>>
-    {
-        println!("find_ty_prefix of {:?} and {:?}", t2, t);
-        unimplemented!()
-    }
 }
 
 fn any_vec_to_option(vec: &[AnyValType]) -> Option<AnyValType> {
@@ -382,6 +375,18 @@ impl MustBeValidWith for AnyResultType {
     }
 }
 
+impl<'a> Ctx<'a> {
+    fn find_ty_prefix(&self, t2: &[AnyValType], t: &[AnyValType])
+        -> VResult<Vec<AnyValType>>
+    {
+        println!("find_ty_prefix of {:?} and {:?}", t2, t);
+
+
+
+        unimplemented!()
+    }
+}
+
 macro_rules! valid_with {
     (($ctx:ident, $name:ident: $type:ty) -> $rt:ty $b:block) => (
         pub fn $name($ctx: &Ctx, $name: &$type) -> VResult<$rt> {
@@ -402,8 +407,10 @@ pub mod validate {
     use super::*;
 
     valid_with!((c, limit: Limits) -> Valid {
-        if limit.max.unwrap_or(0) < limit.min {
-            c.error(LimitMaxSmallerMin)?
+        if let Some(max) = limit.max {
+            if max < limit.min {
+                c.error(LimitMaxSmallerMin)?
+            }
         }
 
         Valid
@@ -566,27 +573,27 @@ pub mod validate {
             => ty![F64, F64 ; I32],
 
             // cvtops
-            I32ReinterpretF32 => ty![I32 ; F32],
-            I64ReinterpretF64 => ty![I64 ; F64],
-            F32ReinterpretI32 => ty![F32 ; I32],
-            F64ReinterpretI64 => ty![F64 ; I64],
+            I32ReinterpretF32 => ty![F32 ; I32],
+            I64ReinterpretF64 => ty![F64 ; I64],
+            F32ReinterpretI32 => ty![I32 ; F32],
+            F64ReinterpretI64 => ty![I64 ; F64],
 
-            I32TruncUF32 | I32TruncSF32 => ty![I32 ; F32],
-            I32TruncUF64 | I32TruncSF64 => ty![I32 ; F64],
-            I64TruncUF32 | I64TruncSF32 => ty![I64 ; F32],
-            I64TruncUF64 | I64TruncSF64 => ty![I64 ; F64],
+            I32TruncUF32 | I32TruncSF32 => ty![F32 ; I32],
+            I32TruncUF64 | I32TruncSF64 => ty![F64 ; I32],
+            I64TruncUF32 | I64TruncSF32 => ty![F32 ; I64],
+            I64TruncUF64 | I64TruncSF64 => ty![F64 ; I64],
 
-            I32WrapI64               => ty![I64         ; I32    ],
-            I64ExtendUI32            => ty![I32         ; I64    ],
-            I64ExtendSI32            => ty![I32         ; I64    ],
+            I32WrapI64    => ty![I64 ; I32],
+            I64ExtendUI32 => ty![I32 ; I64],
+            I64ExtendSI32 => ty![I32 ; I64],
 
-            F32ConvertUI32 | F32ConvertSI32 => ty![F32 ; I32],
-            F32ConvertUI64 | F32ConvertSI64 => ty![F32 ; I64],
-            F64ConvertUI32 | F64ConvertSI32 => ty![F64 ; I32],
-            F64ConvertUI64 | F64ConvertSI64 => ty![F64 ; I64],
+            F32ConvertUI32 | F32ConvertSI32 => ty![I32 ; F32],
+            F32ConvertUI64 | F32ConvertSI64 => ty![I64 ; F32],
+            F64ConvertUI32 | F64ConvertSI32 => ty![I32 ; F64],
+            F64ConvertUI64 | F64ConvertSI64 => ty![I64 ; F64],
 
-            F32DemoteF64             => ty![F64         ; F32    ],
-            F64PromoteF32            => ty![F32         ; F64    ],
+            F32DemoteF64  => ty![F64 ; F32],
+            F64PromoteF32 => ty![F32 ; F64],
 
             // parametric instructions
             Drop   => ty![any('t')                ;         ],
