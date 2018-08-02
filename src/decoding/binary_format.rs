@@ -82,8 +82,8 @@ named_args!(parse_uN(N: u32) <Inp, u64>, alt!(
     )
 ));
 
-named!(pub parse_u32 <Inp, u32>, map!(apply!(parse_uN, 32), |x| x as u32));
-named!(pub parse_u64 <Inp, u64>, apply!(parse_uN, 64));
+named!(parse_u32 <Inp, u32>, map!(apply!(parse_uN, 32), |x| x as u32));
+named!(parse_u64 <Inp, u64>, apply!(parse_uN, 64));
 
 named_args!(parse_sN(N: u32) <Inp, i64>, alt!(
     do_parse!(
@@ -519,7 +519,72 @@ named!(parse_customsecs <Inp, Vec<Custom>>,
     many0!(parse_customsec)
 );
 
+// 5.5.4. Type Section
+use structure::types::Wec;
+named!(parse_type <Inp, Wec<FuncType>>, call!(parse_vec, parse_functype));
+named!(parse_typesec <Inp, Wec<FuncType>>,
+    map!(opt!(call!(parse_section, 1, parse_type)), |x| x.unwrap_or_default())
+);
 
+// 5.5.5. Import Section
+use structure::modules::Import;
+use structure::modules::ImportDesc;
+named!(parse_import <Inp, Import>, do_parse!(
+    module: parse_name
+    >> name: parse_name
+    >> desc: parse_importdesc
+    >> (Import { module, name, desc })
+));
+named!(parse_imports <Inp, Wec<Import>>, call!(parse_vec, parse_import));
+named!(parse_importsec <Inp, Wec<Import>>,
+    map!(opt!(call!(parse_section, 2, parse_imports)), |x| x.unwrap_or_default())
+);
+named!(parse_importdesc <Inp, ImportDesc>, alt!(
+      do_parse!(btag!(0x00) >> x:  parse_typeidx    >> (ImportDesc::Func(x)))
+    | do_parse!(btag!(0x01) >> tt: parse_tabletype  >> (ImportDesc::Table(tt)))
+    | do_parse!(btag!(0x02) >> mt: parse_memtype    >> (ImportDesc::Mem(mt)))
+    | do_parse!(btag!(0x03) >> gt: parse_globaltype >> (ImportDesc::Global(gt)))
+));
+
+// 5.5.6. Function Section
+named!(parse_func <Inp, Wec<TypeIdx>>, call!(parse_vec, parse_typeidx));
+named!(parse_funcsec <Inp, Wec<TypeIdx>>,
+    map!(opt!(call!(parse_section, 3, parse_func)), |x| x.unwrap_or_default())
+);
+
+// 5.5.7. Table Section
+use structure::modules::Table;
+named!(parse_table <Inp, Table>, do_parse!(
+    tt: parse_tabletype
+    >> (Table { type_: tt })
+));
+named!(parse_tables <Inp, Wec<Table>>, call!(parse_vec, parse_table));
+named!(parse_tablesec <Inp, Wec<Table>>,
+    map!(opt!(call!(parse_section, 4, parse_tables)), |x| x.unwrap_or_default())
+);
+
+// 5.5.8. Memory Section
+use structure::modules::Mem;
+named!(parse_mem <Inp, Mem>, do_parse!(
+    mt: parse_memtype
+    >> (Mem { type_: mt })
+));
+named!(parse_mems <Inp, Wec<Mem>>, call!(parse_vec, parse_mem));
+named!(parse_memsec <Inp, Wec<Mem>>,
+    map!(opt!(call!(parse_section, 5, parse_mems)), |x| x.unwrap_or_default())
+);
+
+// 5.5.9. Global Section
+use structure::modules::Global;
+named!(parse_global <Inp, Global>, do_parse!(
+    gt: parse_globaltype
+    >> e: parse_expr
+    >> (Global { type_: gt, init: e })
+));
+named!(parse_globals <Inp, Wec<Global>>, call!(parse_vec, parse_global));
+named!(parse_globalsec <Inp, Wec<Global>>,
+    map!(opt!(call!(parse_section, 6, parse_globals)), |x| x.unwrap_or_default())
+);
 
 #[cfg(test)]
 #[path="tests_binary_format.rs"]

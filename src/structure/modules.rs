@@ -21,6 +21,7 @@ pub struct Module {
     pub start:   Option<Start>,
     pub imports: Wec<Import>,
     pub exports: Wec<Export>,
+    pub customs: Vec<Custom>,
 }
 
 pub type TypeIdx = U32;
