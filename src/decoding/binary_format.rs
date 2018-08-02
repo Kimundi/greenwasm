@@ -764,7 +764,7 @@ pub enum ParseError<'a> {
     NomError(::nom::Err<CompleteByteSlice<'a>, u32>)
 }
 pub fn from_binary_format(b: &[u8]) -> Result<(Module, Vec<Custom>), ParseError> {
-    let res = parse_module(CompleteByteSlice(b));
+    let res = exact!(CompleteByteSlice(b), parse_module);
     match res {
         Ok((CompleteByteSlice(s), res)) => {
             assert!(s.len() == 0);
