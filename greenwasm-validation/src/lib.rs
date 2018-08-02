@@ -1,3 +1,5 @@
+#![feature(macro_at_most_once_rep)]
+
 extern crate greenwasm_structure as structure;
 
 use structure::types::FuncType;
@@ -571,8 +573,11 @@ pub mod validate {
         use self::ValType::*;
 
         macro_rules! ity {
-            ($($arg:expr),* ; $($result:expr),*) => (
+            ($(:$ci:expr;)? $($arg:expr),* ; $($result:expr),*) => (
                 {
+                    $(
+                        let ic = $ci;
+                    )?
                     ic.simple_instr(&[$($arg),*], &[$($result),*])?;
                     ty![$($arg),* ; $($result),*]
                 }
@@ -728,26 +733,36 @@ pub mod validate {
             F64PromoteF32 => ity![F32 ; F64],
 
             // parametric instructions
-            Drop   => ty![any() ; ],
-            Select => ty![any_constr('b'), any_constr('b'), I32 ; any_constr('b')],
+            Drop => {
+                ic.pop_opd()?;
+                ty![any() ; ]
+            },
+            Select => {
+                ic.pop_opd_expect(ValTypeOrUnknown::ValType(ValType::I32))?;
+                let t1 = ic.pop_opd()?;
+                let t2 = ic.pop_opd_expect(t1)?;
+                ic.push_opd(t2);
+
+                ty![any_constr('b'), any_constr('b'), I32 ; any_constr('b')]
+            },
 
             // variable instructions
             GetLocal(x) => {
                 let t = c.locals(x)?;
-                ty![ ; t]
+                ity![ ; t]
             }
             SetLocal(x) => {
                 let t = c.locals(x)?;
-                ty![t ; ]
+                ity![t ; ]
             }
             TeeLocal(x) => {
                 let t = c.locals(x)?;
-                ty![t ; t]
+                ity![t ; t]
             }
             GetGlobal(x) => {
                 let mut_t = c.globals(x)?;
                 let t = mut_t.valtype;
-                ty![ ; t]
+                ity![ ; t]
             }
             SetGlobal(x) => {
                 let mut_t = c.globals(x)?;
@@ -755,7 +770,7 @@ pub mod validate {
                 if mut_t.mutability != Mut::Var  {
                     c.error(InstrSetGlobalNotVar)?;
                 }
-                ty![t ; ]
+                ity![t ; ]
             }
 
             // memory instructions
@@ -790,54 +805,57 @@ pub mod validate {
                     }
                     Ok(r)
                 };
-                let load = |t: ValType, memarg: Memarg, bit_width| {
+                let load = |ic: &mut InstrCtx, t: ValType, memarg: Memarg, bit_width| {
                     validate(memarg, bit_width,
-                             InstrLoadOveraligned, ty![I32 ; t])
+                             InstrLoadOveraligned, ity![:ic; I32 ; t])
                 };
-                let store = |t: ValType, memarg: Memarg, bit_width| {
+                let store = |ic: &mut InstrCtx, t: ValType, memarg: Memarg, bit_width| {
                     validate(memarg, bit_width,
-                             InstrStoreOveraligned, ty![I32, t ; ])
+                             InstrStoreOveraligned, ity![:ic; I32, t ; ])
                 };
 
                 match *load_store_instr {
-                    I32Load8U(memarg)       => load(I32, memarg, 8)?,
-                    I32Load8S(memarg)       => load(I32, memarg, 8)?,
-                    I32Load16U(memarg)      => load(I32, memarg, 16)?,
-                    I32Load16S(memarg)      => load(I32, memarg, 16)?,
-                    I32Load(memarg)         => load(I32, memarg, 32)?,
+                    I32Load8U(memarg)       => load(ic, I32, memarg, 8)?,
+                    I32Load8S(memarg)       => load(ic, I32, memarg, 8)?,
+                    I32Load16U(memarg)      => load(ic, I32, memarg, 16)?,
+                    I32Load16S(memarg)      => load(ic, I32, memarg, 16)?,
+                    I32Load(memarg)         => load(ic, I32, memarg, 32)?,
 
-                    I64Load8U(memarg)       => load(I64, memarg, 8)?,
-                    I64Load8S(memarg)       => load(I64, memarg, 8)?,
-                    I64Load16U(memarg)      => load(I64, memarg, 16)?,
-                    I64Load16S(memarg)      => load(I64, memarg, 16)?,
-                    I64Load32U(memarg)      => load(I64, memarg, 32)?,
-                    I64Load32S(memarg)      => load(I64, memarg, 32)?,
-                    I64Load(memarg)         => load(I64, memarg, 64)?,
+                    I64Load8U(memarg)       => load(ic, I64, memarg, 8)?,
+                    I64Load8S(memarg)       => load(ic, I64, memarg, 8)?,
+                    I64Load16U(memarg)      => load(ic, I64, memarg, 16)?,
+                    I64Load16S(memarg)      => load(ic, I64, memarg, 16)?,
+                    I64Load32U(memarg)      => load(ic, I64, memarg, 32)?,
+                    I64Load32S(memarg)      => load(ic, I64, memarg, 32)?,
+                    I64Load(memarg)         => load(ic, I64, memarg, 64)?,
 
-                    F32Load(memarg)         => load(F32, memarg, 32)?,
-                    F64Load(memarg)         => load(F64, memarg, 64)?,
+                    F32Load(memarg)         => load(ic, F32, memarg, 32)?,
+                    F64Load(memarg)         => load(ic, F64, memarg, 64)?,
 
-                    I32Store8(memarg)       => store(I32, memarg, 8)?,
-                    I32Store16(memarg)      => store(I32, memarg, 16)?,
-                    I32Store(memarg)        => store(I32, memarg, 32)?,
+                    I32Store8(memarg)       => store(ic, I32, memarg, 8)?,
+                    I32Store16(memarg)      => store(ic, I32, memarg, 16)?,
+                    I32Store(memarg)        => store(ic, I32, memarg, 32)?,
 
-                    I64Store8(memarg)       => store(I64, memarg, 8)?,
-                    I64Store16(memarg)      => store(I64, memarg, 16)?,
-                    I64Store32(memarg)      => store(I64, memarg, 32)?,
-                    I64Store(memarg)        => store(I64, memarg, 64)?,
+                    I64Store8(memarg)       => store(ic, I64, memarg, 8)?,
+                    I64Store16(memarg)      => store(ic, I64, memarg, 16)?,
+                    I64Store32(memarg)      => store(ic, I64, memarg, 32)?,
+                    I64Store(memarg)        => store(ic, I64, memarg, 64)?,
 
-                    F32Store(memarg)        => store(F32, memarg, 32)?,
-                    F64Store(memarg)        => store(F64, memarg, 64)?,
+                    F32Store(memarg)        => store(ic, F32, memarg, 32)?,
+                    F64Store(memarg)        => store(ic, F64, memarg, 64)?,
 
                     _ => unreachable!(),
                 }
             }
-            CurrentMemory => { c.mems(0)?; ty![    ; I32] }
-            GrowMemory    => { c.mems(0)?; ty![I32 ; I32] }
+            CurrentMemory => { c.mems(0)?; ity![    ; I32] }
+            GrowMemory    => { c.mems(0)?; ity![I32 ; I32] }
 
             // control instructions
-            Nop => ty![ ; ],
-            Unreachable => ty![any_seq() ; any_seq()],
+            Nop => ity![ ; ],
+            Unreachable => {
+                ic.unreachable();
+                ty![any_seq() ; any_seq()]
+            },
             Block(resulttype, ref block) => {
                 let c_ = c.with().prepend_label(resulttype);
                 let ty = ty![ ; resulttype];
