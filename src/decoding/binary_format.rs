@@ -36,7 +36,7 @@ macro_rules! btag {
     ($i:expr, $b:expr) => (tag!($i, &[$b][..]))
 }
 macro_rules! btagmap {
-    ($i:expr, $b:expr, $r:expr) => (map!($i, btag!($b), |_| $r))
+    ($i:expr, $b:expr, $r:expr) => (value!($i, $r, btag!($b)))
 }
 
 use nom::IResult;
@@ -136,12 +136,13 @@ named!(parse_f64 <Inp, f64>, do_parse!(
 ));
 
 // 5.2.4. Names
-named!(parse_name <Inp, String>, do_parse!(
+use structure::types::Name;
+named!(parse_name <Inp, Name>, do_parse!(
     bs: map!(
         verify_ref!(
             map!(
                 call!(parse_vec, parse_byte),
-                String::from_utf8
+                Name::from_utf8
             ),
             |res: &Result<_, _>| res.is_ok()
         ),
@@ -506,7 +507,11 @@ fn parse_section<'a, F, B>(input: Inp<'a>, N: u8, parse_B: F) -> IResult<Inp<'a>
 }
 
 // 5.5.3. Custom Section
-use structure::modules::Custom;
+#[derive(Debug, PartialEq)]
+pub struct Custom {
+    pub name: Name,
+    pub bytes: Vec<u8>,
+}
 named!(parse_custom <Inp, Custom>, do_parse!(
     name: parse_name
     >> bytes: many0!(parse_byte)
@@ -675,6 +680,98 @@ named!(parse_datasec <Inp, Wec<Data>>,
     map!(opt!(call!(parse_section, 11, parse_datas)), |x| x.unwrap_or_default())
 );
 
+// 5.5.15. Modules
+use structure::modules::Module;
+use structure::modules::Func;
+named!(parse_magic <Inp, ()>,
+    value!((), tag!(&[0x00, 0x61, 0x73, 0x6D][..]))
+);
+named!(parse_version <Inp, ()>,
+    value!((), tag!(&[0x01, 0x00, 0x00, 0x00][..]))
+);
+named!(parse_module <Inp, (Module, Vec<Custom>)>, do_parse!(
+    parse_magic
+    >> parse_version
+
+    >> cs00: parse_customsecs
+    >> types: parse_typesec
+    >> cs01: parse_customsecs
+    >> imports: parse_importsec
+    >> cs02: parse_customsecs
+    >> typeindices_n: parse_funcsec
+    >> cs03: parse_customsecs
+    >> tables: parse_tablesec
+    >> cs04: parse_customsecs
+    >> mems: parse_memsec
+    >> cs05: parse_customsecs
+    >> globals: parse_globalsec
+    >> cs06: parse_customsecs
+    >> exports: parse_exportsec
+    >> cs07: parse_customsecs
+    >> start: parse_startsec
+    >> cs08: parse_customsecs
+    >> elem: parse_elemsec
+    >> cs09: parse_customsecs
+    >> codes_n: parse_codesec
+    >> cs10: parse_customsecs
+    >> data: parse_datasec
+    >> cs11: parse_customsecs
+
+    >> verify!(value!(()), |_| typeindices_n.len() == codes_n.len())
+
+    >> ({
+        let funcs = typeindices_n.into_iter().zip(codes_n)
+            .map(|(type_, Code { locals, body })| {
+                Func { type_, locals, body }
+            })
+            .collect();
+        let customs = vec![
+            cs00,
+            cs01,
+            cs02,
+            cs03,
+            cs04,
+            cs05,
+            cs06,
+            cs07,
+            cs08,
+            cs09,
+            cs10,
+            cs11,
+        ].into_iter().flat_map(|cs| cs).collect();
+
+        (
+            Module {
+                types,
+                funcs,
+                tables,
+                mems,
+                globals,
+                elem,
+                data,
+                start,
+                imports,
+                exports,
+            },
+            customs
+        )
+    })
+));
+
+#[derive(Debug)]
+pub enum ParseError<'a> {
+    NomError(::nom::Err<CompleteByteSlice<'a>, u32>)
+}
+pub fn from_binary_format(b: &[u8]) -> Result<(Module, Vec<Custom>), ParseError> {
+    let res = parse_module(CompleteByteSlice(b));
+    match res {
+        Ok((CompleteByteSlice(s), res)) => {
+            assert!(s.len() == 0);
+            Ok(res)
+        }
+        Err(x) => Err(ParseError::NomError(x))
+    }
+}
 
 #[cfg(test)]
 #[path="tests_binary_format.rs"]

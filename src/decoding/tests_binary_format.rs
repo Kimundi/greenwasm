@@ -291,3 +291,8 @@ fn test_parse_customsecs() {
         Custom { name: "defg".into(), bytes: vec![0xa0, 0xb1, 0xc2] },
     ]));
 }
+
+// TODO: Some test for length_value! overhang
+// [ n [  parse  ]####]
+// ^------n-----------^
+// solution =? exact!()

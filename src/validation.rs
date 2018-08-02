@@ -1032,7 +1032,6 @@ pub mod validate {
             start,
             imports,
             exports,
-            customs: _
         } = module;
 
         validate::module_prepass(empty_c, module)?;

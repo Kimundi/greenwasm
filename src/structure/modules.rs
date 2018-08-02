@@ -21,7 +21,6 @@ pub struct Module {
     pub start:   Option<Start>,
     pub imports: Wec<Import>,
     pub exports: Wec<Export>,
-    pub customs: Vec<Custom>,
 }
 
 pub type TypeIdx = U32;
@@ -90,11 +89,4 @@ pub enum ImportDesc {
     Table(TableType),
     Mem(MemType),
     Global(GlobalType),
-}
-
-// TODO: Maybe just expose at the parser result, not in the module itself
-#[derive(Debug, PartialEq)]
-pub struct Custom {
-    pub name: Name,
-    pub bytes: Vec<u8>,
 }
