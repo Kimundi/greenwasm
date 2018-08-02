@@ -256,18 +256,26 @@ pub enum AnyValType {
     I64,
     F32,
     F64,
-    Any(char),
-    AnySeq(char),
-    AnyOpt(char),
+    Any,
+    AnyConstr(char),
+    AnySeq,
+    AnySeqConstr(char),
+    AnyOpt,
 }
-fn any(t: char) -> AnyValType {
-    AnyValType::Any(t)
+fn any() -> AnyValType {
+    AnyValType::Any
 }
-fn any_seq(t: char) -> AnyValType {
-    AnyValType::AnySeq(t)
+fn any_seq() -> AnyValType {
+    AnyValType::AnySeq
 }
-fn any_opt(t: char) -> AnyValType {
-    AnyValType::AnyOpt(t)
+fn any_constr(t: char) -> AnyValType {
+    AnyValType::AnyConstr(t)
+}
+fn any_seq_constr(t: char) -> AnyValType {
+    AnyValType::AnySeqConstr(t)
+}
+fn any_opt() -> AnyValType {
+    AnyValType::AnyOpt
 }
 impl ::std::fmt::Debug for AnyValType {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
@@ -277,9 +285,11 @@ impl ::std::fmt::Debug for AnyValType {
             I64 => write!(f, "i64"),
             F32 => write!(f, "f32"),
             F64 => write!(f, "f64"),
-            Any(t) => write!(f, "{}", t),
-            AnySeq(t) => write!(f, "{}*", t),
-            AnyOpt(t) => write!(f, "{}?", t),
+            Any => write!(f, ""),
+            AnySeq => write!(f, "*"),
+            AnyConstr(t) => write!(f, "{}", t),
+            AnySeqConstr(t) => write!(f, "{}*", t),
+            AnyOpt => write!(f, "?"),
         }
     }
 }
@@ -379,7 +389,7 @@ impl<'a> Ctx<'a> {
     fn find_ty_prefix(&self, t2: &[AnyValType], t: &[AnyValType])
         -> VResult<Vec<AnyValType>>
     {
-        println!("find_ty_prefix of {:?} and {:?}", t2, t);
+        println!("find_ty_prefix: find t0 such that {:?} == [t0*]++{:?}", t2, t);
 
 
 
@@ -596,8 +606,8 @@ pub mod validate {
             F64PromoteF32 => ty![F32 ; F64],
 
             // parametric instructions
-            Drop   => ty![any('t')                ;         ],
-            Select => ty![any('t'), any('t'), I32 ; any('t')],
+            Drop   => ty![any() ; ],
+            Select => ty![any_constr('b'), any_constr('b'), I32 ; any_constr('b')],
 
             // variable instructions
             GetLocal(x) => {
@@ -705,7 +715,7 @@ pub mod validate {
 
             // control instructions
             Nop => ty![ ; ],
-            Unreachable => ty![any_seq('t') ; any_seq('u')],
+            Unreachable => ty![any_seq() ; any_seq()],
             Block(resulttype, ref block) => {
                 let c_ = c.with().prepend_label(resulttype);
                 let ty = ty![ ; resulttype];
@@ -727,7 +737,7 @@ pub mod validate {
             }
             Br(labelidx) => {
                 let resulttype = c.labels(labelidx)?;
-                ty![any_seq('t'), resulttype ; any_seq('u')]
+                ty![any_seq(), resulttype ; any_seq()]
             }
             BrIf(labelidx) => {
                 let resulttype = c.labels(labelidx)?;
@@ -741,11 +751,11 @@ pub mod validate {
                         c.error(InstrBrTableNotSameLabelType)?;
                     }
                 }
-                ty![any_seq('t'), resulttype, I32 ; any_seq('u')]
+                ty![any_seq(), resulttype, I32 ; any_seq()]
             }
             Return => {
                 let resulttype = c.return_(0)?;
-                ty![any_seq('t'), resulttype ; any_seq('u')]
+                ty![any_seq(), resulttype ; any_seq()]
             }
             Call(x) => {
                 c.funcs(x)?.into()
@@ -767,7 +777,7 @@ pub mod validate {
     });
 
     valid_with!((c, instruction_sequence: [Instr]) -> AnyFuncType {
-        let mut instrs_ty = ty![any_seq('t') ; any_seq('t')];
+        let mut instrs_ty = ty![any_seq_constr('k') ; any_seq_constr('k')];
 
         for instr_n in instruction_sequence {
             let AnyFuncType {
@@ -787,7 +797,7 @@ pub mod validate {
 
     valid_with!((c, expr: Expr) -> AnyResultType {
         let instrs_ty = validate::instruction_sequence(&c, &expr.body)?;
-        instrs_ty.must_by_valid_with(&ty![ ; any_opt('t')])?;
+        instrs_ty.must_by_valid_with(&ty![ ; any_opt()])?;
         any_vec_to_option(&instrs_ty.results)
     });
 
