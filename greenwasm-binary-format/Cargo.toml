@@ -1,0 +1,9 @@
+[package]
+name = "greenwasm-binary-format"
+version = "0.1.0"
+authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
+workspace = ".."
+
+[dependencies]
+greenwasm-structure = { path = "../greenwasm-structure" }
+nom = { version = "4.0", features = ["verbose-errors"] }

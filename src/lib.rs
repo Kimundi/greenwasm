@@ -4,13 +4,8 @@
 #![feature(slice_patterns)]
 #![feature(macro_at_most_once_rep)]
 
-#![recursion_limit="256"]
-
-#[macro_use]
-extern crate nom;
-
 pub extern crate greenwasm_structure as structure;
 pub extern crate greenwasm_validation as validation;
+pub extern crate greenwasm_binary_format as binary_format;
 
-pub mod decoding;
 pub mod execution;

@@ -6,4 +6,4 @@ authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 [dependencies]
 greenwasm-structure = { path = "greenwasm-structure" }
 greenwasm-validation = { path = "greenwasm-validation" }
-nom = { version = "4.0", features = ["verbose-errors"] }
+greenwasm-binary-format = { path = "greenwasm-binary-format" }

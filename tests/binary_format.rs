@@ -4,7 +4,7 @@ use greenwasm::structure::types::*;
 use greenwasm::structure::modules::*;
 use greenwasm::structure::instructions::Instr::*;
 use greenwasm::structure::instructions::*;
-use greenwasm::decoding::binary_format::parse_binary_format;
+use greenwasm::binary_format::parse_binary_format;
 use greenwasm::validation::*;
 
 macro_rules! test_file {
