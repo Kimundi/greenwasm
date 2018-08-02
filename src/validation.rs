@@ -27,9 +27,11 @@ use super::structure::modules::ImportDesc;
 use super::structure::modules::Module;
 
 pub type VResult<T> = Result<T, ValidationError>;
+#[derive(Debug)]
 pub struct ValidationError {
     pub kind: ValidationErrorEnum,
 }
+#[derive(Debug)]
 pub enum ValidationErrorEnum {
     LimitMaxSmallerMin,
     FunctionTypeResultArityGreaterOne,
