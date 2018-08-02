@@ -1,11 +1,11 @@
-extern crate green_wasm;
+extern crate greenwasm;
 
-use green_wasm::structure::types::*;
-use green_wasm::structure::modules::*;
-use green_wasm::structure::instructions::Instr::*;
-use green_wasm::structure::instructions::*;
-use green_wasm::decoding::binary_format::parse_binary_format;
-use green_wasm::validation::*;
+use greenwasm::structure::types::*;
+use greenwasm::structure::modules::*;
+use greenwasm::structure::instructions::Instr::*;
+use greenwasm::structure::instructions::*;
+use greenwasm::decoding::binary_format::parse_binary_format;
+use greenwasm::validation::*;
 
 macro_rules! test_file {
     ($name:ident, $path:expr, $module:expr) => (
