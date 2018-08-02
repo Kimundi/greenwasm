@@ -457,16 +457,17 @@ pub mod validate {
 
     // Stack based instruction validator as presented in the spec appendix:
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Copy, Clone)]
     enum ValTypeOrUnknown {
         ValType(ValType),
         Unknown
     }
     use self::ValTypeOrUnknown::Unknown;
 
+    #[derive(Debug, PartialEq, Clone)]
     struct CtrlFrame {
         label_types: Vec<ValType>,
-        end_types: Option<ValType>,
+        end_types: Vec<ValType>,
         height: usize,
         unreachable: bool,
     }
@@ -489,12 +490,12 @@ pub mod validate {
         }
 
         fn pop_opd(&mut self) -> ValTypeOrUnknown {
-            let ctrls_top = self.ctrls.last().unwrap();
-            if self.opds.len() == ctrls_top.height && ctrls_top.unreachable
+            if self.opds.len() ==  self.ctrls.last().unwrap().height
+                &&  self.ctrls.last().unwrap().unreachable
             {
                 return Unknown;
             }
-            if self.opds.len() == ctrls_top.height {
+            if self.opds.len() == self.ctrls.last().unwrap().height {
                 self.error()
             }
             return self.opds.pop().unwrap();
@@ -515,13 +516,42 @@ pub mod validate {
                 self.push_opd(ValTypeOrUnknown::ValType(*t));
             }
         }
+
         fn pop_opds(&mut self, types: &[ValType]) {
             for t in types.iter().rev() {
                 self.pop_opd_expect(ValTypeOrUnknown::ValType(*t));
             }
         }
 
-        fn error(&self) {
+        fn push_ctrl(&mut self, label: &[ValType], out: &[ValType]) {
+            let frame = CtrlFrame {
+                label_types: label.to_owned(),
+                end_types: out.to_owned(),
+                height: self.opds.len(),
+                unreachable: false,
+            };
+            self.ctrls.push(frame);
+        }
+
+        fn pop_ctrl(&mut self) -> Vec<ValType> {
+            if self.ctrls.is_empty() {
+                self.error();
+            }
+            let frame = self.ctrls.last().unwrap().clone(); // TODO: Bad clone
+            self.pop_opds(&frame.end_types);
+            if self.opds.len() != frame.height {
+                self.error();
+            }
+            self.ctrls.pop();
+            return frame.end_types;
+        }
+
+        fn unreachable(&mut self) {
+            self.opds.resize(self.ctrls.last().unwrap().height, Unknown);
+            self.ctrls.last_mut().unwrap().unreachable = true;
+        }
+
+        fn error(&mut self) {
             unimplemented!()
         }
 
