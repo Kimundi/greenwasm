@@ -547,9 +547,9 @@ named!(parse_importdesc <Inp, ImportDesc>, alt!(
 ));
 
 // 5.5.6. Function Section
-named!(parse_func <Inp, Wec<TypeIdx>>, call!(parse_vec, parse_typeidx));
+named!(parse_func_ <Inp, Wec<TypeIdx>>, call!(parse_vec, parse_typeidx));
 named!(parse_funcsec <Inp, Wec<TypeIdx>>,
-    map!(opt!(call!(parse_section, 3, parse_func)), |x| x.unwrap_or_default())
+    map!(opt!(call!(parse_section, 3, parse_func_)), |x| x.unwrap_or_default())
 );
 
 // 5.5.7. Table Section
@@ -585,6 +585,96 @@ named!(parse_globals <Inp, Wec<Global>>, call!(parse_vec, parse_global));
 named!(parse_globalsec <Inp, Wec<Global>>,
     map!(opt!(call!(parse_section, 6, parse_globals)), |x| x.unwrap_or_default())
 );
+
+// 5.5.10. Export Section
+use structure::modules::Export;
+use structure::modules::ExportDesc;
+named!(parse_export <Inp, Export>, do_parse!(
+    name: parse_name
+    >> desc: parse_exportdesc
+    >> (Export { name, desc })
+));
+named!(parse_exports <Inp, Wec<Export>>, call!(parse_vec, parse_export));
+named!(parse_exportsec <Inp, Wec<Export>>,
+    map!(opt!(call!(parse_section, 7, parse_exports)), |x| x.unwrap_or_default())
+);
+named!(parse_exportdesc <Inp, ExportDesc>, alt!(
+      do_parse!(btag!(0x00) >> x: parse_funcidx    >> (ExportDesc::Func(x)))
+    | do_parse!(btag!(0x01) >> x: parse_tableidx   >> (ExportDesc::Table(x)))
+    | do_parse!(btag!(0x02) >> x: parse_memidx     >> (ExportDesc::Mem(x)))
+    | do_parse!(btag!(0x03) >> x: parse_globalidx  >> (ExportDesc::Global(x)))
+));
+
+// 5.5.11. Start Section
+use structure::modules::Start;
+named!(parse_start <Inp, Start>, do_parse!(
+    x: parse_funcidx
+    >> (Start { func: x })
+));
+named!(parse_startsec <Inp, Option<Start>>,
+    opt!(call!(parse_section, 8, parse_start))
+);
+
+// 5.5.12. Element Section
+use structure::modules::Elem;
+named!(parse_elem <Inp, Elem>, do_parse!(
+    x: parse_tableidx
+    >> e: parse_expr
+    >> ys: call!(parse_vec, parse_funcidx)
+    >> (Elem { table: x, offset: e, init: ys })
+));
+named!(parse_elems <Inp, Wec<Elem>>, call!(parse_vec, parse_elem));
+named!(parse_elemsec <Inp, Wec<Elem>>,
+    map!(opt!(call!(parse_section, 9, parse_elems)), |x| x.unwrap_or_default())
+);
+
+// 5.5.13. Code Section
+struct Code {
+    locals: Wec<ValType>,
+    body: Expr,
+}
+named!(parse_locals <Inp, (usize, ValType)>, do_parse!(
+    n: parse_u32
+    >> t: parse_valtype
+    >> ((n as usize, t))
+));
+named!(parse_func <Inp, Code>, do_parse!(
+    ts: verify_ref!(map!(
+            call!(parse_vec, parse_locals),
+            |tss| tss.into_iter()
+                     .flat_map(|(n, t)| ::std::iter::repeat(t).take(n))
+                     .collect()
+        ),
+        |v: &Vec<_>| v.len() <= ::std::u32::MAX as usize
+    )
+    >> e: parse_expr
+    >> (Code { locals: ts, body: e })
+));
+named!(parse_code <Inp, Code>, do_parse!(
+    code: length_value!(
+        parse_u32,
+        parse_func
+    )
+    >> (code)
+));
+named!(parse_codes <Inp, Wec<Code>>, call!(parse_vec, parse_code));
+named!(parse_codesec <Inp, Wec<Code>>,
+    map!(opt!(call!(parse_section, 10, parse_codes)), |x| x.unwrap_or_default())
+);
+
+// 5.5.14. Data Section
+use structure::modules::Data;
+named!(parse_data <Inp, Data>, do_parse!(
+    x: parse_memidx
+    >> e: parse_expr
+    >> bs: call!(parse_vec, parse_byte)
+    >> (Data { data: x, offset: e, init: bs })
+));
+named!(parse_datas <Inp, Wec<Data>>, call!(parse_vec, parse_data));
+named!(parse_datasec <Inp, Wec<Data>>,
+    map!(opt!(call!(parse_section, 11, parse_datas)), |x| x.unwrap_or_default())
+);
+
 
 #[cfg(test)]
 #[path="tests_binary_format.rs"]

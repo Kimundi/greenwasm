@@ -92,6 +92,7 @@ pub enum ImportDesc {
     Global(GlobalType),
 }
 
+// TODO: Maybe just expose at the parser result, not in the module itself
 #[derive(Debug, PartialEq)]
 pub struct Custom {
     pub name: Name,
