@@ -1,30 +1,32 @@
-use super::structure::types::FuncType;
-use super::structure::types::TableType;
-use super::structure::types::MemType;
-use super::structure::types::GlobalType;
-use super::structure::types::ValType;
-use super::structure::types::ResultType;
-use super::structure::types::Limits;
-use super::structure::types::Mut;
-use super::structure::types::ElemType;
-use super::structure::types::ExternType;
+extern crate greenwasm_structure as structure;
 
-use super::structure::instructions::Instr;
-use super::structure::instructions::Expr;
-use super::structure::instructions::Memarg;
+use structure::types::FuncType;
+use structure::types::TableType;
+use structure::types::MemType;
+use structure::types::GlobalType;
+use structure::types::ValType;
+use structure::types::ResultType;
+use structure::types::Limits;
+use structure::types::Mut;
+use structure::types::ElemType;
+use structure::types::ExternType;
 
-use super::structure::modules::Func;
-use super::structure::modules::Table;
-use super::structure::modules::Mem;
-use super::structure::modules::Global;
-use super::structure::modules::Elem;
-use super::structure::modules::Data;
-use super::structure::modules::Start;
-use super::structure::modules::Export;
-use super::structure::modules::ExportDesc;
-use super::structure::modules::Import;
-use super::structure::modules::ImportDesc;
-use super::structure::modules::Module;
+use structure::instructions::Instr;
+use structure::instructions::Expr;
+use structure::instructions::Memarg;
+
+use structure::modules::Func;
+use structure::modules::Table;
+use structure::modules::Mem;
+use structure::modules::Global;
+use structure::modules::Elem;
+use structure::modules::Data;
+use structure::modules::Start;
+use structure::modules::Export;
+use structure::modules::ExportDesc;
+use structure::modules::Import;
+use structure::modules::ImportDesc;
+use structure::modules::Module;
 
 pub type VResult<T> = Result<T, ValidationError>;
 #[derive(Debug)]
@@ -515,11 +517,11 @@ pub mod validate {
         }
         fn pop_opds(&mut self, types: &[ValType]) {
             for t in types.iter().rev() {
-                self.pop_opd(ValTypeOrUnknown::ValType(*t));
+                self.pop_opd_expect(ValTypeOrUnknown::ValType(*t));
             }
         }
 
-        fn error(&mut self) {
+        fn error(&self) {
             unimplemented!()
         }
 

@@ -10,7 +10,7 @@
 extern crate nom;
 
 pub extern crate greenwasm_structure as structure;
+pub extern crate greenwasm_validation as validation;
 
 pub mod decoding;
-pub mod validation;
 pub mod execution;

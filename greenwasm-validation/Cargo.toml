@@ -1,0 +1,8 @@
+[package]
+name = "greenwasm-validation"
+version = "0.1.0"
+authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
+workspace = ".."
+
+[dependencies]
+greenwasm-structure = { path = "../greenwasm-structure" }
