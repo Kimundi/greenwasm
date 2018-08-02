@@ -398,8 +398,8 @@ impl<'a> Ctx<'a> {
 }
 
 macro_rules! valid_with {
-    (($ctx:ident, $name:ident: $type:ty) -> $rt:ty $b:block) => (
-        pub fn $name($ctx: &Ctx, $name: &$type) -> VResult<$rt> {
+    (($ctx:ident, $name:ident: $type:ty $(,$arg:ident: $argty:ty)*) -> $rt:ty $b:block) => (
+        pub fn $name($ctx: &Ctx, $name: &$type $(,$arg: $argty)*) -> VResult<$rt> {
             let ty = $b;
             Ok(ty)
         }
@@ -453,7 +453,83 @@ pub mod validate {
         Valid
     });
 
-    valid_with!((c, instruction: Instr) -> AnyFuncType {
+    // Stack based instruction validator as presented in the spec appendix:
+
+    #[derive(Debug, PartialEq)]
+    enum ValTypeOrUnknown {
+        ValType(ValType),
+        Unknown
+    }
+    use self::ValTypeOrUnknown::Unknown;
+
+    struct CtrlFrame {
+        label_types: Vec<ValType>,
+        end_types: Option<ValType>,
+        height: usize,
+        unreachable: bool,
+    }
+
+    pub struct InstrCtx {
+        opds: Vec<ValTypeOrUnknown>,
+        ctrls: Vec<CtrlFrame>,
+    }
+
+    impl InstrCtx {
+        fn new() -> Self {
+            InstrCtx{
+                ctrls: unimplemented!(),
+                opds: unimplemented!(),
+            }
+        }
+
+        fn push_opd(&mut self, type_: ValTypeOrUnknown) {
+            self.opds.push(type_);
+        }
+
+        fn pop_opd(&mut self) -> ValTypeOrUnknown {
+            let ctrls_top = self.ctrls.last().unwrap();
+            if self.opds.len() == ctrls_top.height && ctrls_top.unreachable
+            {
+                return Unknown;
+            }
+            if self.opds.len() == ctrls_top.height {
+                self.error()
+            }
+            return self.opds.pop().unwrap();
+        }
+
+        fn pop_opd_expect(&mut self, expect: ValTypeOrUnknown) -> ValTypeOrUnknown {
+            let actual = self.pop_opd();
+            if actual == Unknown { return expect; }
+            if expect == Unknown { return actual; }
+            if actual != expect {
+                self.error()
+            }
+            return actual;
+        }
+
+        fn push_opds(&mut self, types: &[ValType]) {
+            for t in types {
+                self.push_opd(ValTypeOrUnknown::ValType(*t));
+            }
+        }
+        fn pop_opds(&mut self, types: &[ValType]) {
+            for t in types.iter().rev() {
+                self.pop_opd(ValTypeOrUnknown::ValType(*t));
+            }
+        }
+
+        fn error(&mut self) {
+            unimplemented!()
+        }
+
+        fn simple_instr(&mut self, args: &[ValType], results: &[ValType]) {
+            self.pop_opds(args);
+            self.push_opds(results);
+        }
+    }
+
+    valid_with!((c, instruction: Instr, ic: &mut InstrCtx) -> AnyFuncType {
         use self::Instr::*;
         use self::ValType::*;
 
@@ -777,6 +853,7 @@ pub mod validate {
     });
 
     valid_with!((c, instruction_sequence: [Instr]) -> AnyFuncType {
+        let mut ic = InstrCtx::new();
         let mut instrs_ty = ty![any_seq_constr('k') ; any_seq_constr('k')];
 
         for instr_n in instruction_sequence {
@@ -787,7 +864,7 @@ pub mod validate {
             let AnyFuncType {
                 args:    t,
                 results: t3,
-            } = validate::instruction(&c, instr_n)?;
+            } = validate::instruction(&c, instr_n, &mut ic)?;
             let t0 = c.find_ty_prefix(&t2, &t)?;
             instrs_ty = ty![t1 ; t0, t3];
         }
