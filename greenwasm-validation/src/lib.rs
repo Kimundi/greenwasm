@@ -813,6 +813,10 @@ pub mod validate {
                     ic.error()?;
                 }
                 let tmp = ic.ctrls.at(n).label_types.to_owned(); // TODO: Bad copy
+                assert_eq!(
+                    resulttype.as_ref().map(::std::slice::from_ref).unwrap_or(&[]),
+                    &tmp[..]
+                );
                 ic.pop_opds(&tmp)?;
                 ic.unreachable();
 
@@ -827,6 +831,10 @@ pub mod validate {
                 }
                 ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
                 let tmp = ic.ctrls.at(n).label_types.to_owned(); // TODO: Bad copy
+                assert_eq!(
+                    resulttype.as_ref().map(::std::slice::from_ref).unwrap_or(&[]),
+                    &tmp[..]
+                );
                 ic.pop_opds(&tmp)?;
                 ic.push_opds(&tmp);
 
@@ -850,6 +858,10 @@ pub mod validate {
                 }
                 ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
                 let tmp = ic.ctrls.at(m).label_types.to_owned(); // TODO: Bad copy
+                assert_eq!(
+                    resulttype.as_ref().map(::std::slice::from_ref).unwrap_or(&[]),
+                    &tmp[..]
+                );
                 ic.pop_opds(&tmp)?;
                 ic.unreachable();
 
@@ -868,6 +880,10 @@ pub mod validate {
 
                 let n = ic.ctrls.size() - 1;
                 let tmp = ic.ctrls.at(n).label_types.to_owned(); // TODO: Bad copy
+                assert_eq!(
+                    resulttype.as_ref().map(::std::slice::from_ref).unwrap_or(&[]),
+                    &tmp[..]
+                );
                 ic.pop_opds(&tmp)?;
                 ic.unreachable();
 
