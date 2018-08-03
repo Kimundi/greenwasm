@@ -36,17 +36,25 @@ fn diff_print<T: ::std::fmt::Debug>(value_is: &T, value_should: &T) -> String {
 }
 
 macro_rules! test_file {
-    ($name:ident, $path:expr, $module:expr) => (
+    (@ $name:ident, $path:expr, $module:expr) => (
         #[test]
         fn $name() {
             let file = std::fs::read($path).unwrap();
             let (module, _custom_sections) = parse_binary_format(&file).unwrap();
-            assert!(module == $module, "{}", diff_print(&module, &$module));
+            if let Some(ref_module) = $module {
+                assert!(module == ref_module, "{}", diff_print(&module, &ref_module));
+            }
 
             let validation_result = validate::module(&Ctx::new(), &module).unwrap();
 
             println!("Is valid with {:?}", validation_result);
         }
+    );
+    ($name:ident, $path:expr) => (
+        test_file!(@ $name, $path, None);
+    );
+    ($name:ident, $path:expr, $module:expr) => (
+        test_file!(@ $name, $path, Some($module));
     )
 }
 
