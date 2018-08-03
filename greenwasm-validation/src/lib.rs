@@ -1142,7 +1142,9 @@ pub mod validate {
         imports.iter().filter_map(move |import| {
             match import.desc {
                 ImportDesc::Func(x) => {
-                    types.get(x as usize)
+                    let r = types.get(x as usize);
+                    println!("Import Func {:?}, in types: {:?}", x, r);
+                    r
                 }
                 _ => None,
             }
@@ -1207,19 +1209,33 @@ pub mod validate {
         let c = {
             let functypes = types;
 
-            let import_funcs   = import_filter_funcs(&functypes, &imports);
-            let import_tables  = import_filter_tables(&imports);
-            let import_mems    = import_filter_mems(&imports);
-            let import_globals = import_filter_globals(&imports);
+            let funcs_it   = import_filter_funcs(functypes, imports);
+            let tables_it  = import_filter_tables(imports);
+            let mems_it    = import_filter_mems(imports);
+            let globals_it = import_filter_globals(imports);
 
-            let conc_funcs   = import_funcs  .chain(functypes);
-            let conc_tables  = import_tables .chain(tables.iter() .map(|x| &x.type_));
-            let conc_mems    = import_mems   .chain(mems.iter()   .map(|x| &x.type_));
-            let conc_globals = import_globals.chain(globals.iter().map(|x| &x.type_));
+            let fts = funcs.iter().flat_map(|x| {
+                functypes.get(x.type_ as usize)
+            });
+            let tts = tables.iter() .map(|x| &x.type_);
+            let mts = mems.iter()   .map(|x| &x.type_);
+            let gts = globals.iter().map(|x| &x.type_);
+
+            let conc_funcs   = funcs_it  .chain(fts);
+            let conc_tables  = tables_it .chain(tts);
+            let conc_mems    = mems_it   .chain(mts);
+            let conc_globals = globals_it.chain(gts);
+
+            let final_funcs = conc_funcs.cloned().collect();
+
+            println!("FuncTypes: {:#?}", functypes);
+            println!("Imports: {:#?}", imports);
+            println!("Funcs: {:#?}", funcs);
+            println!("ctx funcs: {:#?}", final_funcs);
 
             &empty_c.with()
             .set_types(types.clone())
-            .set_funcs(conc_funcs.cloned().collect())
+            .set_funcs(final_funcs)
             .set_tables(conc_tables.cloned().collect())
             .set_mems(conc_mems.cloned().collect())
             .set_globals(conc_globals.cloned().collect())
@@ -1260,16 +1276,16 @@ pub mod validate {
             let Valid = validate::start(c, start)?;
         }
 
-        let mut externtype = Vec::new();
+        let mut its = Vec::new();
         for importi in imports {
-            let externtypei = validate::import(c, importi)?;
-            externtype.push(externtypei);
+            let iti = validate::import(c, importi)?;
+            its.push(iti);
         }
 
-        let mut externtype_ = Vec::new();
+        let mut ets = Vec::new();
         for exporti in exports {
-            let externtypei_ = validate::export(c, exporti)?;
-            externtype_.push(externtypei_);
+            let eti = validate::export(c, exporti)?;
+            ets.push(eti);
         }
 
         if c.length_tables() > 1 {
@@ -1295,8 +1311,8 @@ pub mod validate {
         }
 
         ImportExportMapping {
-            from: externtype,
-            to: externtype_,
+            from: its,
+            to: ets,
         }
     });
 }
