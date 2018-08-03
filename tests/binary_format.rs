@@ -198,3 +198,6 @@ test_file!(stuff, "tests/stuff.wasm", Module {
         },
     ],
 });
+
+test_file!(fuzz0, "tests/fuzz0.wasm");
+test_file!(pong, "tests/pong.wasm");
