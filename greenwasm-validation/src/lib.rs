@@ -1142,9 +1142,8 @@ pub mod validate {
         imports.iter().filter_map(move |import| {
             match import.desc {
                 ImportDesc::Func(x) => {
-                    let r = types.get(x as usize);
-                    println!("Import Func {:?}, in types: {:?}", x, r);
-                    r
+                    // TODO: Catch None case early in validation
+                    types.get(x as usize)
                 }
                 _ => None,
             }
@@ -1214,6 +1213,7 @@ pub mod validate {
             let mems_it    = import_filter_mems(imports);
             let globals_it = import_filter_globals(imports);
 
+            // TODO: Catch None case early in validation
             let fts = funcs.iter().flat_map(|x| {
                 functypes.get(x.type_ as usize)
             });
@@ -1226,16 +1226,9 @@ pub mod validate {
             let conc_mems    = mems_it   .chain(mts);
             let conc_globals = globals_it.chain(gts);
 
-            let final_funcs = conc_funcs.cloned().collect();
-
-            println!("FuncTypes: {:#?}", functypes);
-            println!("Imports: {:#?}", imports);
-            println!("Funcs: {:#?}", funcs);
-            println!("ctx funcs: {:#?}", final_funcs);
-
             &empty_c.with()
             .set_types(types.clone())
-            .set_funcs(final_funcs)
+            .set_funcs(conc_funcs.cloned().collect())
             .set_tables(conc_tables.cloned().collect())
             .set_mems(conc_mems.cloned().collect())
             .set_globals(conc_globals.cloned().collect())
