@@ -62,6 +62,7 @@ pub enum ValidationErrorEnum {
     CtxTypesIdxDoesNotExist,
     CtxLabelsIdxDoesNotExist,
     CtxReturnDoesNotExist,
+    StartFunNotValidWithEmptyEmpty,
 }
 use self::ValidationErrorEnum::*;
 
@@ -248,136 +249,6 @@ impl<'a> Ctx<'a> {
 fn vec_to_option(vec: &[ValType]) -> Option<ValType> {
     assert!(vec.len() <= 1);
     vec.get(0).cloned()
-}
-
-#[derive(Eq, PartialEq, Copy, Clone)]
-pub enum AnyValType {
-    I32,
-    I64,
-    F32,
-    F64,
-    Any,
-    AnyConstr(char),
-    AnySeq,
-    AnySeqConstr(char),
-    AnyOpt,
-}
-fn any() -> AnyValType {
-    AnyValType::Any
-}
-fn any_seq() -> AnyValType {
-    AnyValType::AnySeq
-}
-fn any_constr(t: char) -> AnyValType {
-    AnyValType::AnyConstr(t)
-}
-
-impl ::std::fmt::Debug for AnyValType {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        use self::AnyValType::*;
-        match *self {
-            I32 => write!(f, "i32"),
-            I64 => write!(f, "i64"),
-            F32 => write!(f, "f32"),
-            F64 => write!(f, "f64"),
-            Any => write!(f, ""),
-            AnySeq => write!(f, "*"),
-            AnyConstr(t) => write!(f, "{}", t),
-            AnySeqConstr(t) => write!(f, "{}*", t),
-            AnyOpt => write!(f, "?"),
-        }
-    }
-}
-
-impl From<ValType> for AnyValType {
-    fn from(other: ValType) -> Self {
-        match other {
-            ValType::I32 => AnyValType::I32,
-            ValType::I64 => AnyValType::I64,
-            ValType::F32 => AnyValType::F32,
-            ValType::F64 => AnyValType::F64,
-        }
-    }
-}
-
-trait AnyValTypeBuilder<T> {
-    fn append(self, e: T) -> Self;
-}
-impl AnyValTypeBuilder<ValType> for Vec<AnyValType> {
-    fn append(mut self, e: ValType) -> Self {
-        self.push(e.into());
-        self
-    }
-}
-impl AnyValTypeBuilder<ResultType> for Vec<AnyValType> {
-    fn append(mut self, e: ResultType) -> Self {
-        self.extend(e.map(|x| -> AnyValType { x.into() }));
-        self
-    }
-}
-impl AnyValTypeBuilder<AnyValType> for Vec<AnyValType> {
-    fn append(mut self, e: AnyValType) -> Self {
-        self.push(e);
-        self
-    }
-}
-impl AnyValTypeBuilder<Vec<AnyValType>> for Vec<AnyValType> {
-    fn append(mut self, e: Vec<AnyValType>) -> Self {
-        self.extend(e);
-        self
-    }
-}
-impl AnyValTypeBuilder<Vec<ValType>> for Vec<AnyValType> {
-    fn append(mut self, e: Vec<ValType>) -> Self {
-        self.extend(e.into_iter().map(|x| -> AnyValType { x.into() }));
-        self
-    }
-}
-
-#[derive(Eq, PartialEq, Clone)]
-pub struct AnyFuncType {
-    args: Vec<AnyValType>,
-    results: Vec<AnyValType>,
-}
-impl From<FuncType> for AnyFuncType {
-    fn from(FuncType { args, results }: FuncType) -> Self {
-        AnyFuncType {
-            args: args.into_iter().map(|x| x.into()).collect(),
-            results: results.into_iter().map(|x| x.into()).collect(),
-        }
-    }
-}
-impl ::std::fmt::Debug for AnyFuncType {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        write!(f, "{:?} -> {:?}", self.args, self.results)
-    }
-}
-
-pub type AnyResultType = Option<AnyValType>;
-
-macro_rules! ty {
-    ($($a:expr),*;$($r:expr),*) => (AnyFuncType {
-        args:    { let v = vec![]; $( let v = v.append($a); )* v },
-        results: { let v = vec![]; $( let v = v.append($r); )* v },
-    })
-}
-
-trait MustBeValidWith {
-    fn must_by_valid_with(&self, expected: &Self) -> VResult<()>;
-}
-
-impl MustBeValidWith for AnyFuncType {
-    fn must_by_valid_with(&self, expected: &Self) -> VResult<()> {
-        println!("{:?} must be valid with {:?}", self, expected);
-        unimplemented!()
-    }
-}
-
-impl MustBeValidWith for AnyResultType {
-    fn must_by_valid_with(&self, expected: &Self) -> VResult<()> {
-        println!("{:?} must be valid with {:?}", self, expected);
-        unimplemented!()
-    }
 }
 
 macro_rules! valid_with {
@@ -594,7 +465,7 @@ pub mod validate {
         }
     }
 
-    valid_with!((c, instruction: Instr, ic: &mut InstrCtx) -> AnyFuncType {
+    valid_with!((c, instruction: Instr, ic: &mut InstrCtx) -> Valid {
         use self::Instr::*;
         use self::ValType::*;
 
@@ -605,7 +476,7 @@ pub mod validate {
                         let ic = $ci;
                     )?
                     ic.simple_instr(&[$($arg),*], &[$($result),*])?;
-                    ty![$($arg),* ; $($result),*]
+                    Valid
                 }
             )
         }
@@ -761,7 +632,7 @@ pub mod validate {
             // parametric instructions
             Drop => {
                 ic.pop_opd()?;
-                ty![any() ; ]
+                Valid
             },
             Select => {
                 ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
@@ -769,7 +640,7 @@ pub mod validate {
                 let t2 = ic.pop_opd_expect(t1)?;
                 ic.push_opd(t2);
 
-                ty![any_constr('b'), any_constr('b'), I32 ; any_constr('b')]
+                Valid
             },
 
             // variable instructions
@@ -880,7 +751,7 @@ pub mod validate {
             Nop => ity![ ; ],
             Unreachable => {
                 ic.unreachable();
-                ty![any_seq() ; any_seq()]
+                Valid
             },
             Block(resulttype, ref block) => {
                 let c_ = c.with().prepend_label(resulttype);
@@ -895,7 +766,7 @@ pub mod validate {
                 // "end" event
                 ic.end_instr()?;
 
-                ty![ ; resulttype]
+                Valid
             }
             Loop(resulttype, ref block) => {
                 let c_ = c.with().prepend_label(None);
@@ -910,7 +781,7 @@ pub mod validate {
                 // "end" event
                 ic.end_instr()?;
 
-                ty![ ; resulttype]
+                Valid
             }
             IfElse(resulttype, ref if_block, ref else_block) => {
                 let c_ = c.with().prepend_label(resulttype);
@@ -932,7 +803,7 @@ pub mod validate {
                 // "end" event
                 ic.end_instr()?;
 
-                ty![I32 ; resulttype]
+                Valid
             }
             Br(labelidx) => {
                 let resulttype = c.labels(labelidx)?;
@@ -945,7 +816,7 @@ pub mod validate {
                 ic.pop_opds(&tmp)?;
                 ic.unreachable();
 
-                ty![any_seq(), resulttype ; any_seq()]
+                Valid
             }
             BrIf(labelidx) => {
                 let resulttype = c.labels(labelidx)?;
@@ -959,7 +830,7 @@ pub mod validate {
                 ic.pop_opds(&tmp)?;
                 ic.push_opds(&tmp);
 
-                ty![resulttype, I32; resulttype]
+                Valid
             }
             BrTable(ref labelindices, labelidx_n) => {
                 let resulttype = c.labels(labelidx_n)?;
@@ -982,7 +853,7 @@ pub mod validate {
                 ic.pop_opds(&tmp)?;
                 ic.unreachable();
 
-                ty![any_seq(), resulttype, I32 ; any_seq()]
+                Valid
             }
             Return => {
                 // TODO: Possible bug ambiguity in c.return?
@@ -1000,14 +871,14 @@ pub mod validate {
                 ic.pop_opds(&tmp)?;
                 ic.unreachable();
 
-                ty![any_seq(), resulttype ; any_seq()]
+                Valid
             }
             Call(x) => {
                 let f = c.funcs(x)?;
 
                 ic.simple_instr(&f.args, &f.results)?;
 
-                f.into()
+                Valid
             }
             CallIndirect(x) => {
                 let TableType {
@@ -1023,7 +894,7 @@ pub mod validate {
                 ic.pop_opds(&ty.args)?;
                 ic.push_opds(&ty.results);
 
-                ty![ty.args, I32 ; ty.results]
+                Valid
             }
         };
 
@@ -1168,9 +1039,11 @@ pub mod validate {
             func: x
         } = start;
 
-        let ty: AnyFuncType = c.funcs(*x)?.into();
+        let ty: FuncType = c.funcs(*x)?;
 
-        ty.must_by_valid_with(&ty![ ; ])?;
+        if !ty.args.is_empty() || !ty.results.is_empty() {
+            c.error(StartFunNotValidWithEmptyEmpty)?;
+        }
 
         Valid
     });
