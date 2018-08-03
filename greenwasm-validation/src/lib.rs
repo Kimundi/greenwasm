@@ -245,11 +245,6 @@ impl<'a> Ctx<'a> {
     }
 }
 
-fn any_vec_to_option(vec: &[AnyValType]) -> Option<AnyValType> {
-    assert!(vec.len() <= 1);
-    vec.get(0).cloned()
-}
-
 fn vec_to_option(vec: &[ValType]) -> Option<ValType> {
     assert!(vec.len() <= 1);
     vec.get(0).cloned()
@@ -276,12 +271,7 @@ fn any_seq() -> AnyValType {
 fn any_constr(t: char) -> AnyValType {
     AnyValType::AnyConstr(t)
 }
-fn any_seq_constr(t: char) -> AnyValType {
-    AnyValType::AnySeqConstr(t)
-}
-fn any_opt() -> AnyValType {
-    AnyValType::AnyOpt
-}
+
 impl ::std::fmt::Debug for AnyValType {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         use self::AnyValType::*;
@@ -390,18 +380,6 @@ impl MustBeValidWith for AnyResultType {
     }
 }
 
-impl<'a> Ctx<'a> {
-    fn find_ty_prefix(&self, t2: &[AnyValType], t: &[AnyValType])
-        -> VResult<Vec<AnyValType>>
-    {
-        println!("find_ty_prefix: find t0 such that {:?} == [t0*]++{:?}", t2, t);
-
-
-
-        unimplemented!()
-    }
-}
-
 macro_rules! valid_with {
     (($ctx:ident, $name:ident: $type:ty $(,$arg:ident: $argty:ty)*) -> $rt:ty $b:block) => (
         pub fn $name($ctx: &Ctx, $name: &$type $(,$arg: $argty)*) -> VResult<$rt> {
@@ -471,20 +449,62 @@ pub mod validate {
     struct CtrlFrame {
         label_types: Vec<ValType>,
         end_types: Vec<ValType>,
-        height: usize,
+        height: u32,
         unreachable: bool,
     }
 
+    struct Stack<T> {
+        data: Vec<T>
+    }
+
+    impl<T> Stack<T> {
+        fn new() -> Self { Stack { data: Vec::new() } }
+        fn pop(&mut self) -> T {
+            self.data.pop().unwrap()
+        }
+        fn push(&mut self, v: T) {
+            self.data.push(v);
+        }
+        fn at(&self, i: u32) -> &T {
+            let i = i as usize;
+            let l = self.data.len();
+            &self.data[l - i - 1]
+        }
+        fn at_mut(&mut self, i: u32) -> &mut T {
+            let i = i as usize;
+            let l = self.data.len();
+            &mut self.data[l - i - 1]
+        }
+        fn size(&self) -> u32 {
+            let l = self.data.len();
+            // NB: As far as I know, this limit should not exist according
+            // to the spec, but casting to u32 here makes the code more readable
+            // at the usage sites.
+            //
+            // Since this only fails if there are more than u32::MAX
+            // nested control instructions in a function,
+            // and the amount of instructions is limited to u32::MAX,
+            // it is probably impossible to hit in practice anyway.
+            //
+            // See also CtrlFrame::height being defined as a u32
+            assert!(l <= ::std::u32::MAX as usize);
+            l as u32
+        }
+        fn resize(&mut self, s: u32) {
+            self.data.truncate(s as usize);
+        }
+    }
+
     pub struct InstrCtx {
-        opds: Vec<ValTypeOrUnknown>,
-        ctrls: Vec<CtrlFrame>,
+        opds: Stack<ValTypeOrUnknown>,
+        ctrls: Stack<CtrlFrame>,
     }
 
     impl InstrCtx {
         fn new() -> Self {
             InstrCtx{
-                ctrls: unimplemented!(),
-                opds: unimplemented!(),
+                ctrls: Stack::new(),
+                opds: Stack::new(),
             }
         }
 
@@ -493,15 +513,15 @@ pub mod validate {
         }
 
         fn pop_opd(&mut self) -> VResult<ValTypeOrUnknown> {
-            if self.opds.len() ==  self.ctrls.last().unwrap().height
-                &&  self.ctrls.last().unwrap().unreachable
+            if self.opds.size() ==  self.ctrls.at(0).height
+                &&  self.ctrls.at(0).unreachable
             {
                 return Ok(Unknown);
             }
-            if self.opds.len() == self.ctrls.last().unwrap().height {
+            if self.opds.size() == self.ctrls.at(0).height {
                 self.error()?;
             }
-            return Ok(self.opds.pop().unwrap());
+            return Ok(self.opds.pop());
         }
 
         fn pop_opd_expect(&mut self, expect: ValTypeOrUnknown) -> VResult<ValTypeOrUnknown> {
@@ -531,19 +551,19 @@ pub mod validate {
             let frame = CtrlFrame {
                 label_types: label.to_owned(),
                 end_types: out.to_owned(),
-                height: self.opds.len(),
+                height: self.opds.size(),
                 unreachable: false,
             };
             self.ctrls.push(frame);
         }
 
         fn pop_ctrl(&mut self) -> VResult<Vec<ValType>> {
-            if self.ctrls.is_empty() {
+            if self.ctrls.size() == 0 {
                 self.error()?;
             }
-            let frame = self.ctrls.last().unwrap().clone(); // TODO: Bad clone
+            let frame = self.ctrls.at(0).clone(); // TODO: Bad clone
             self.pop_opds(&frame.end_types)?;
-            if self.opds.len() != frame.height {
+            if self.opds.size() != frame.height {
                 self.error()?;
             }
             self.ctrls.pop();
@@ -551,8 +571,8 @@ pub mod validate {
         }
 
         fn unreachable(&mut self) {
-            self.opds.resize(self.ctrls.last().unwrap().height, Unknown);
-            self.ctrls.last_mut().unwrap().unreachable = true;
+            self.opds.resize(self.ctrls.at(0).height);
+            self.ctrls.at_mut(0).unreachable = true;
         }
 
         fn error(&mut self) -> VResult<Valid> {
@@ -564,6 +584,12 @@ pub mod validate {
         fn simple_instr(&mut self, args: &[ValType], results: &[ValType]) -> VResult<Valid> {
             self.pop_opds(args)?;
             self.push_opds(results);
+            Ok(Valid)
+        }
+
+        fn end_instr(&mut self) -> VResult<Valid> {
+            let results = self.pop_ctrl()?;
+            self.push_opds(&results);
             Ok(Valid)
         }
     }
@@ -738,7 +764,7 @@ pub mod validate {
                 ty![any() ; ]
             },
             Select => {
-                ic.pop_opd_expect(ValTypeOrUnknown::ValType(ValType::I32))?;
+                ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
                 let t1 = ic.pop_opd()?;
                 let t2 = ic.pop_opd_expect(t1)?;
                 ic.push_opd(t2);
@@ -858,47 +884,130 @@ pub mod validate {
             },
             Block(resulttype, ref block) => {
                 let c_ = c.with().prepend_label(resulttype);
-                let ty = ty![ ; resulttype];
-                validate::instruction_sequence(&c_, block)?.must_by_valid_with(&ty)?;
-                ty
+
+                // "block" event
+                let a = resulttype.as_ref().map(::std::slice::from_ref)
+                                           .unwrap_or(&[]);
+                ic.push_ctrl(&a, &a);
+
+                validate::instruction_sequence(&c_, block, ic)?;
+
+                // "end" event
+                ic.end_instr()?;
+
+                ty![ ; resulttype]
             }
             Loop(resulttype, ref block) => {
                 let c_ = c.with().prepend_label(None);
-                let ty = ty![ ; resulttype];
-                validate::instruction_sequence(&c_, block)?.must_by_valid_with(&ty)?;
-                ty
+
+                // "loop" event
+                let a = resulttype.as_ref().map(::std::slice::from_ref)
+                                           .unwrap_or(&[]);
+                ic.push_ctrl(&[], &a);
+
+                validate::instruction_sequence(&c_, block, ic)?;
+
+                // "end" event
+                ic.end_instr()?;
+
+                ty![ ; resulttype]
             }
             IfElse(resulttype, ref if_block, ref else_block) => {
                 let c_ = c.with().prepend_label(resulttype);
-                let ty = ty![ ; resulttype];
-                validate::instruction_sequence(&c_, if_block)?.must_by_valid_with(&ty)?;
-                validate::instruction_sequence(&c_, else_block)?.must_by_valid_with(&ty)?;
+
+                // "if" event
+                ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
+                let a = resulttype.as_ref().map(::std::slice::from_ref)
+                                           .unwrap_or(&[]);
+                ic.push_ctrl(&a, &a);
+
+                validate::instruction_sequence(&c_, if_block, ic)?;
+
+                // "else" event
+                let results = ic.pop_ctrl()?;
+                ic.push_ctrl(&results, &results);
+
+                validate::instruction_sequence(&c_, else_block, ic)?;
+
+                // "end" event
+                ic.end_instr()?;
+
                 ty![I32 ; resulttype]
             }
             Br(labelidx) => {
                 let resulttype = c.labels(labelidx)?;
+
+                let n = labelidx;
+                if ic.ctrls.size() < n {
+                    ic.error()?;
+                }
+                let tmp = ic.ctrls.at(n).label_types.to_owned(); // TODO: Bad copy
+                ic.pop_opds(&tmp)?;
+                ic.unreachable();
+
                 ty![any_seq(), resulttype ; any_seq()]
             }
             BrIf(labelidx) => {
                 let resulttype = c.labels(labelidx)?;
+
+                let n = labelidx;
+                if ic.ctrls.size() < n {
+                    ic.error()?;
+                }
+                ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
+                let tmp = ic.ctrls.at(n).label_types.to_owned(); // TODO: Bad copy
+                ic.pop_opds(&tmp)?;
+                ic.push_opds(&tmp);
+
                 ty![resulttype, I32; resulttype]
             }
             BrTable(ref labelindices, labelidx_n) => {
                 let resulttype = c.labels(labelidx_n)?;
-                for &li in labelindices {
-                    let resulttype_i = c.labels(li)?;
-                    if resulttype_i != resulttype {
-                        c.error(InstrBrTableNotSameLabelType)?;
+
+                let ns = labelindices;
+                let m = labelidx_n;
+
+                if ic.ctrls.size() < m {
+                    ic.error()?;
+                }
+                for &n in ns {
+                    if ic.ctrls.size() < n
+                    || ic.ctrls.at(n).label_types != ic.ctrls.at(m).label_types
+                    {
+                        ic.error()?;
                     }
                 }
+                ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
+                let tmp = ic.ctrls.at(m).label_types.to_owned(); // TODO: Bad copy
+                ic.pop_opds(&tmp)?;
+                ic.unreachable();
+
                 ty![any_seq(), resulttype, I32 ; any_seq()]
             }
             Return => {
+                // TODO: Possible bug ambiguity in c.return?
+                // Empty result != missing result
+                // See note on 3.3.5.9 in spec
+
                 let resulttype = c.return_(0)?;
+
+                // TODO: Not sure if implemented correctly
+                // Following the wording on 2.4.5., returns is equivalent
+                // to br(max_label)
+
+                let n = ic.ctrls.size() - 1;
+                let tmp = ic.ctrls.at(n).label_types.to_owned(); // TODO: Bad copy
+                ic.pop_opds(&tmp)?;
+                ic.unreachable();
+
                 ty![any_seq(), resulttype ; any_seq()]
             }
             Call(x) => {
-                c.funcs(x)?.into()
+                let f = c.funcs(x)?;
+
+                ic.simple_instr(&f.args, &f.results)?;
+
+                f.into()
             }
             CallIndirect(x) => {
                 let TableType {
@@ -909,6 +1018,11 @@ pub mod validate {
                     c.error(InstrCallIndirectElemTypeNotAnyFunc)?;
                 }
                 let ty = c.types(x)?;
+
+                ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
+                ic.pop_opds(&ty.args)?;
+                ic.push_opds(&ty.results);
+
                 ty![ty.args, I32 ; ty.results]
             }
         };
@@ -916,30 +1030,34 @@ pub mod validate {
         ty
     });
 
-    valid_with!((c, instruction_sequence: [Instr]) -> AnyFuncType {
-        let mut ic = InstrCtx::new();
-        let mut instrs_ty = ty![any_seq_constr('k') ; any_seq_constr('k')];
-
+    valid_with!((c, instruction_sequence: [Instr], ic: &mut InstrCtx) -> Valid {
         for instr_n in instruction_sequence {
-            let AnyFuncType {
-                args:    t1,
-                results: t2,
-            } = instrs_ty;
-            let AnyFuncType {
-                args:    t,
-                results: t3,
-            } = validate::instruction(&c, instr_n, &mut ic)?;
-            let t0 = c.find_ty_prefix(&t2, &t)?;
-            instrs_ty = ty![t1 ; t0, t3];
+            validate::instruction(&c, instr_n, ic)?;
         }
-
-        instrs_ty
+        Valid
     });
 
-    valid_with!((c, expr: Expr) -> AnyResultType {
-        let instrs_ty = validate::instruction_sequence(&c, &expr.body)?;
-        instrs_ty.must_by_valid_with(&ty![ ; any_opt()])?;
-        any_vec_to_option(&instrs_ty.results)
+    valid_with!((c, expr: Expr, with: ResultType) -> Valid {
+        let mut ic = InstrCtx::new();
+
+        // TODO: Push [] -> [t?] ????
+        // Reasonable guess: start context empty, ensure afterwards
+        // that it only contains 0 or 1 value?
+        // incoperate "with" variable!!!!
+        // => then valid
+
+        // "block" event
+        let a = with.as_ref().map(::std::slice::from_ref).unwrap_or(&[]);
+        ic.push_ctrl(&a, &a);
+
+        // ???
+        // let c_ = c.with().prepend_label(with);
+        validate::instruction_sequence(&c, &expr.body, &mut ic)?;
+
+        // "end" event
+        ic.end_instr()?;
+
+        Valid
     });
 
     valid_with!((c, const_expr: Expr) -> Valid {
@@ -976,7 +1094,7 @@ pub mod validate {
             .set_label(result)
             .set_return_(result);
 
-        validate::expr(&c_, expr)?.must_by_valid_with(&result.map(|x| x.into()))?;
+        validate::expr(&c_, expr, result.map(|x| x.into()))?;
 
         ty
     });
@@ -1000,7 +1118,7 @@ pub mod validate {
         let t = type_.valtype;
 
         validate::global_type(c, &type_)?;
-        validate::expr(c, &expr)?.must_by_valid_with(&Some(t.into()))?;
+        validate::expr(c, &expr, Some(t.into()))?;
         validate::const_expr(c, &expr)?;
 
         *type_
@@ -1022,7 +1140,7 @@ pub mod validate {
             c.error(ElemElemTypeNotAnyFunc)?;
         }
 
-        validate::expr(c, expr)?.must_by_valid_with(&Some(AnyValType::I32))?;
+        validate::expr(c, expr, Some(ValType::I32))?;
         validate::const_expr(c, expr)?;
         for yi in y {
             c.funcs(*yi)?;
@@ -1039,7 +1157,7 @@ pub mod validate {
         } = data;
 
         c.mems(*x)?;
-        validate::expr(c, expr)?.must_by_valid_with(&Some(AnyValType::I32))?;
+        validate::expr(c, expr, Some(ValType::I32))?;
         validate::const_expr(c, expr)?;
 
         Valid
