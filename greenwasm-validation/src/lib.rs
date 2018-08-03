@@ -1299,7 +1299,6 @@ pub mod validate {
                         c.error(ModuleExportDuplicateName)?;
                     }
                 }
-                unreachable!()
             }
         }
 
