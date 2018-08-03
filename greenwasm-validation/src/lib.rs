@@ -260,6 +260,7 @@ macro_rules! valid_with {
     )
 }
 
+#[derive(Debug, PartialEq)]
 pub struct ImportExportMapping {
     pub from: Vec<ExternType>,
     pub to: Vec<ExternType>,

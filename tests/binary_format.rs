@@ -15,8 +15,9 @@ macro_rules! test_file {
             let (module, _custom_sections) = parse_binary_format(&file).unwrap();
             assert_eq!(module, $module);
 
-            let _validation_result = validate::module(&Ctx::new(), &module).unwrap();
+            let validation_result = validate::module(&Ctx::new(), &module).unwrap();
 
+            println!("Is valid with {:?}", validation_result);
         }
     )
 }
