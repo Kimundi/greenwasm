@@ -1058,7 +1058,7 @@ pub mod validate {
 
         let ty: FuncType = c.funcs(*x)?;
 
-        if !ty.args.is_empty() || !ty.results.is_empty() {
+        if !(ty.args.is_empty() && ty.results.is_empty()) {
             c.error(StartFunNotValidWithEmptyEmpty)?;
         }
 
