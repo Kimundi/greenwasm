@@ -254,16 +254,17 @@ impl Into<InstrEvent> for Instr {
 struct InstrStack {
     stack: Vec<(InstrEvent, Vec<Instr>)>,
 }
+#[derive(Debug)]
+struct InstrStackError(&'static str);
 impl InstrStack {
     fn new() -> Self { Default::default() }
     fn top(&mut self) -> &mut (InstrEvent, Vec<Instr>) {
         self.stack.last_mut().unwrap()
     }
-    fn error(&mut self, msg: &'static str) -> Result<(), ()> {
-        Err(())
+    fn error(&mut self, msg: &'static str) -> Result<(), InstrStackError> {
+        Err(InstrStackError(msg))
     }
-    fn event(&mut self, e: InstrEvent) -> Result<Option<Vec<Instr>>, ()> {
-        println!("event {:?}", e);
+    fn event(&mut self, e: InstrEvent) -> Result<Option<Vec<Instr>>, InstrStackError> {
         match e {
             InstrEvent::Expr => {
                 assert!(self.stack.is_empty());
@@ -355,7 +356,8 @@ fn parse_instrs_end(i: Inp) -> IResult<Inp, Vec<Instr>> {
                             return Ok((input, ins));
                         }
                     }
-                    Err(e) => {
+                    Err(_e) => {
+                        // TODO: Expose error message
                         return Err(Err::Error(error_position!(input, nom::ErrorKind::Custom(1))));
                     }
                 }

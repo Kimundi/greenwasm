@@ -202,3 +202,4 @@ test_file!(stuff, "tests/stuff.wasm", Module {
 test_file!(fuzz0, "tests/fuzz0.wasm");
 test_file!(pong, "tests/pong.wasm");
 test_file!(function_space, "tests/function_space.wasm");
+test_file!(parser_abort, "tests/parser_abort.wasm");
