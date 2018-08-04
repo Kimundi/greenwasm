@@ -4,9 +4,48 @@ pub mod conventions;
 
 // 2.1.3 Vectors
 
-/// vec(A)
-// TODO: Ensure size < 2^32-1
-pub type Wec<A> = Vec<A>;
+/// Vectors may have at most 2^32 - 1 elements, presumably
+/// to ensure their size can be expressed as a u32.
+const WEC_MAX_SIZE: usize = ::std::u32::MAX as usize;
+
+/// A vec(A) according to the spec.
+///
+/// Called Wec to prevent confusion with Rusts Vec type.
+#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Default)]
+pub struct Wec<A> {
+    vec: Vec<A>
+}
+impl<A> From<Vec<A>> for Wec<A> {
+    fn from(vec: Vec<A>) -> Self {
+        assert!(vec.len() <= WEC_MAX_SIZE);
+        Wec { vec }
+    }
+}
+impl<A> Into<Vec<A>> for Wec<A> {
+    fn into(self) -> Vec<A> {
+        self.vec
+    }
+}
+impl<A> ::std::ops::Deref for Wec<A> {
+    type Target = Vec<A>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.vec
+    }
+}
+impl<A> ::std::ops::DerefMut for Wec<A> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.vec
+    }
+}
+impl<'a, A> IntoIterator for &'a Wec<A> {
+    type Item = &'a A;
+    type IntoIter = <&'a Vec<A> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.vec.iter()
+    }
+}
 
 // 2.2 Values
 // 2.2.1 Bytes

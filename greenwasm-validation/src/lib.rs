@@ -1223,7 +1223,7 @@ pub mod validate {
             let conc_globals = globals_it.chain(gts);
 
             &empty_c.with()
-            .set_types(types.clone())
+            .set_types(types.clone().into())
             .set_funcs(conc_funcs.cloned().collect())
             .set_tables(conc_tables.cloned().collect())
             .set_mems(conc_mems.cloned().collect())
