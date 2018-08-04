@@ -928,17 +928,13 @@ pub mod validate {
     valid_with!((c, expr: Expr, with: ResultType) -> Valid {
         let mut ic = InstrCtx::new();
 
-        // TODO: Push [] -> [t?] ????
-        // Reasonable guess: start context empty, ensure afterwards
-        // that it only contains 0 or 1 value?
-        // incoperate "with" variable!!!!
-        // => then valid
-
         // "block" event
         let a = with.as_ref().map(::std::slice::from_ref).unwrap_or(&[]);
         ic.push_ctrl(&a, &a);
 
-        // ???
+        // TODO: According to the wording of the spec, pushing
+        // the with label is unneeded, but it seems weird not to do it...
+
         // let c_ = c.with().prepend_label(with);
         validate::instruction_sequence(&c, &expr.body, &mut ic)?;
 
