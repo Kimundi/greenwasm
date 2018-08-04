@@ -50,8 +50,8 @@ use nom::types::CompleteByteSlice;
 type Inp<'a> = CompleteByteSlice<'a>;
 
 // 5.1.3. Vectors
-fn parse_vec<'a, F, B>(input: Inp<'a>, mut parse_b: F) -> IResult<Inp<'a>, Vec<B>>
-    where F: FnMut(Inp<'a>) -> IResult<Inp<'a>, B>
+fn parse_vec<'a, F, B>(input: Inp<'a>, parse_b: F) -> IResult<Inp<'a>, Vec<B>>
+    where F: Fn(Inp<'a>) -> IResult<Inp<'a>, B>
 {
     do_parse!(input,
         n: apply!(parse_uN, 32)
@@ -228,6 +228,12 @@ named!(parse_mut <Inp, Mut>, alt!(
 ));
 
 // 5.4. Instructions
+use structure::instructions::Instr;
+// NB: The canonical grammar is defined with recursion for nested control
+// instructions. This can lead to stack overflows during parsing, so
+// we modified the parser such that it builds up a stack of instructions
+// in the heap instead.
+
 macro_rules! ins {
     ($i:expr, $b:expr, $r:expr; $($t:tt)*) => (
         do_parse!($i, btag!($b) >> $($t)* >> ($r))
@@ -236,27 +242,37 @@ macro_rules! ins {
         do_parse!($i, btag!($b) >> ($r))
     )
 }
-use structure::instructions::Instr;
-named!(parse_instr <Inp, Instr>, alt!(
+struct InstrStack {
+
+}
+fn parse_instrs_end(input: Inp) -> IResult<Inp, Vec<Instr>> {
+    do_parse!(input,
+        stack: value!(InstrStack{})
+        >> ins: many0!(call!(parse_instrs_stack, &stack))
+        >> btag!(0x0B)
+        >> (ins)
+    )
+}
+named_args!(parse_instrs_stack<'a>(stack: &InstrStack) <Inp<'a>, Instr>, alt!(
     // 5.4.1. Control Instructions
     ins!(0x00, Instr::Unreachable)
     | ins!(0x01, Instr::Nop)
     | ins!(0x02, Instr::Block(rt, ins);
         rt: parse_blocktype
-        >> ins: many0!(parse_instr)
+        >> ins: many0!(call!(parse_instrs_stack, stack))
         >> btag!(0x0b)
     )
     | ins!(0x03, Instr::Loop(rt, ins);
         rt: parse_blocktype
-        >> ins: many0!(parse_instr)
+        >> ins: many0!(call!(parse_instrs_stack, stack))
         >> btag!(0x0b)
     )
     | ins!(0x04, Instr::IfElse(rt, ins1, ins2);
         rt: parse_blocktype
-        >> ins1: many0!(parse_instr)
+        >> ins1: many0!(call!(parse_instrs_stack, stack))
         >> ins2: map!(opt!(do_parse!(
             btag!(0x05)
-            >> ins2: many0!(parse_instr)
+            >> ins2: many0!(call!(parse_instrs_stack, stack))
             >> (ins2)
         )), |x| x.unwrap_or_default())
         >> btag!(0x0b)
@@ -476,8 +492,7 @@ named!(parse_memarg <Inp, Memarg>, do_parse!(
 // 5.4.6. Expressions
 use structure::instructions::Expr;
 named!(parse_expr <Inp, Expr>, do_parse!(
-    ins: many0!(parse_instr)
-    >> btag!(0x0B)
+    ins: parse_instrs_end
     >> (Expr { body: ins })
 ));
 
