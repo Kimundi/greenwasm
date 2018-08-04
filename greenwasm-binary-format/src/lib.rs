@@ -229,54 +229,167 @@ named!(parse_mut <Inp, Mut>, alt!(
 
 // 5.4. Instructions
 use structure::instructions::Instr;
+
 // NB: The canonical grammar is defined with recursion for nested control
 // instructions. This can lead to stack overflows during parsing, so
 // we modified the parser such that it builds up a stack of instructions
 // in the heap instead.
 
+#[derive(Debug)]
+enum InstrEvent {
+    Expr,
+    Instr(Instr),
+    Block(ResultType),
+    Loop(ResultType),
+    If(ResultType),
+    Else,
+    End,
+}
+impl Into<InstrEvent> for Instr {
+    fn into(self) -> InstrEvent {
+        InstrEvent::Instr(self)
+    }
+}
+#[derive(Default)]
+struct InstrStack {
+    stack: Vec<(InstrEvent, Vec<Instr>)>,
+}
+impl InstrStack {
+    fn new() -> Self { Default::default() }
+    fn top(&mut self) -> &mut (InstrEvent, Vec<Instr>) {
+        self.stack.last_mut().unwrap()
+    }
+    fn error(&mut self, msg: &'static str) -> Result<(), ()> {
+        Err(())
+    }
+    fn event(&mut self, e: InstrEvent) -> Result<Option<Vec<Instr>>, ()> {
+        println!("event {:?}", e);
+        match e {
+            InstrEvent::Expr => {
+                assert!(self.stack.is_empty());
+                self.stack.push((InstrEvent::Expr, vec![]));
+            }
+            InstrEvent::Instr(instr) => {
+                assert!(!self.stack.is_empty());
+                self.top().1.push(instr);
+            }
+            InstrEvent::Block(rt) => {
+                self.stack.push((InstrEvent::Block(rt), vec![]));
+            }
+            InstrEvent::Loop(rt) => {
+                self.stack.push((InstrEvent::Loop(rt), vec![]));
+            }
+            InstrEvent::If(rt) => {
+                self.stack.push((InstrEvent::If(rt), vec![]));
+            }
+            InstrEvent::Else => {
+                assert!(!self.stack.is_empty());
+                if let InstrEvent::If(_) = self.top().0 {
+                    self.stack.push((InstrEvent::Else, vec![]));
+                } else {
+                    self.error("else without previous if")?;
+                }
+            }
+            InstrEvent::End => {
+                let old_top = self.stack.pop()
+                    .expect(concat!(
+                        "stack bottom element will always be Expr, ",
+                        "which ends the loop"
+                    ));
+
+                match old_top {
+                    (InstrEvent::Expr, ins) => {
+                        assert!(self.stack.is_empty());
+                        return Ok(Some(ins));
+                    }
+                    (InstrEvent::Block(rt), ins) => {
+                        self.top().1.push(Instr::Block(rt, ins));
+                    }
+                    (InstrEvent::Loop(rt), ins) => {
+                        self.top().1.push(Instr::Loop(rt, ins));
+                    }
+                    (InstrEvent::If(rt), ins) => {
+                        self.top().1.push(Instr::IfElse(rt, ins, vec![]));
+                    }
+                    (InstrEvent::Else, else_ins) => {
+                        let old_top2 = self.stack.pop()
+                            .expect(concat!(
+                                "top level element will always be If"
+                            ));
+                        if let (InstrEvent::If(rt), if_ins) = old_top2 {
+                            self.top().1.push(Instr::IfElse(rt, if_ins, else_ins));
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                    (InstrEvent::End, _) | (InstrEvent::Instr(_), _) => {
+                        unreachable!()
+                    }
+                }
+            }
+        }
+
+        Ok(None)
+    }
+}
+fn parse_instrs_end(i: Inp) -> IResult<Inp, Vec<Instr>> {
+    use nom::Err;
+
+    let mut input = i;
+    let mut stack = InstrStack::new();
+    stack.event(InstrEvent::Expr).expect("stack has exactly one Expr at its bottom");
+
+    loop {
+        match parse_instr_event(input) {
+            Ok((i, o)) => {
+                // loop trip must always consume (otherwise infinite loops)
+                if i == input {
+                    return Err(Err::Error(error_position!(input, nom::ErrorKind::Custom(0))));
+                }
+
+                match stack.event(o) {
+                    Ok(o) => {
+                        input = i;
+
+                        if let Some(ins) = o {
+                            return Ok((input, ins));
+                        }
+                    }
+                    Err(e) => {
+                        return Err(Err::Error(error_position!(input, nom::ErrorKind::Custom(1))));
+                    }
+                }
+            },
+            Err(e) => {
+                return Err(e);
+            },
+        }
+    }
+}
+
 macro_rules! ins {
     ($i:expr, $b:expr, $r:expr; $($t:tt)*) => (
-        do_parse!($i, btag!($b) >> $($t)* >> ($r))
+        do_parse!($i, btag!($b) >> $($t)* >> ($r.into()))
     );
     ($i:expr, $b:expr, $r:expr) => (
-        do_parse!($i, btag!($b) >> ($r))
+        do_parse!($i, btag!($b) >> ($r.into()))
     )
 }
-struct InstrStack {
-
-}
-fn parse_instrs_end(input: Inp) -> IResult<Inp, Vec<Instr>> {
-    do_parse!(input,
-        stack: value!(InstrStack{})
-        >> ins: many0!(call!(parse_instrs_stack, &stack))
-        >> btag!(0x0B)
-        >> (ins)
-    )
-}
-named_args!(parse_instrs_stack<'a>(stack: &InstrStack) <Inp<'a>, Instr>, alt!(
+named!(parse_instr_event <Inp, InstrEvent>, alt!(
     // 5.4.1. Control Instructions
     ins!(0x00, Instr::Unreachable)
     | ins!(0x01, Instr::Nop)
-    | ins!(0x02, Instr::Block(rt, ins);
+    | ins!(0x02, InstrEvent::Block(rt);
         rt: parse_blocktype
-        >> ins: many0!(call!(parse_instrs_stack, stack))
-        >> btag!(0x0b)
     )
-    | ins!(0x03, Instr::Loop(rt, ins);
+    | ins!(0x03, InstrEvent::Loop(rt);
         rt: parse_blocktype
-        >> ins: many0!(call!(parse_instrs_stack, stack))
-        >> btag!(0x0b)
     )
-    | ins!(0x04, Instr::IfElse(rt, ins1, ins2);
+    | ins!(0x04, InstrEvent::If(rt);
         rt: parse_blocktype
-        >> ins1: many0!(call!(parse_instrs_stack, stack))
-        >> ins2: map!(opt!(do_parse!(
-            btag!(0x05)
-            >> ins2: many0!(call!(parse_instrs_stack, stack))
-            >> (ins2)
-        )), |x| x.unwrap_or_default())
-        >> btag!(0x0b)
     )
+    | ins!(0x05, InstrEvent::Else)
+    | ins!(0x0B, InstrEvent::End)
     | ins!(0x0c, Instr::Br(l);
         l: parse_labelidx
     )
