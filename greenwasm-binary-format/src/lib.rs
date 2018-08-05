@@ -50,13 +50,14 @@ use nom::types::CompleteByteSlice;
 type Inp<'a> = CompleteByteSlice<'a>;
 
 // 5.1.3. Vectors
-fn parse_vec<'a, F, B>(input: Inp<'a>, parse_b: F) -> IResult<Inp<'a>, Vec<B>>
+use structure::types::Wec;
+fn parse_vec<'a, F, B>(input: Inp<'a>, parse_b: F) -> IResult<Inp<'a>, Wec<B>>
     where F: Fn(Inp<'a>) -> IResult<Inp<'a>, B>
 {
     do_parse!(input,
         n: apply!(parse_uN, 32)
         >> res: many_m_n!(n as usize, n as usize, parse_b)
-        >> (res)
+        >> (res.into())
     )
 }
 
@@ -147,7 +148,7 @@ named!(parse_name <Inp, Name>, do_parse!(
         verify_ref!(
             map!(
                 call!(parse_vec, parse_byte),
-                Name::from_utf8
+                |v| Name::from_utf8(v.into())
             ),
             |res: &Result<_, _>| res.is_ok()
         ),
@@ -660,7 +661,6 @@ named!(parse_customsecs <Inp, Vec<Custom>>,
 );
 
 // 5.5.4. Type Section
-use structure::types::Wec;
 named!(parse_type <Inp, Wec<FuncType>>, call!(parse_vec, parse_functype));
 named!(parse_typesec <Inp, Wec<FuncType>>,
     map!(opt!(call!(parse_section, 1, parse_type)), |x| x.unwrap_or_default())
@@ -780,14 +780,14 @@ named!(parse_locals <Inp, (usize, ValType)>, do_parse!(
     >> ((n as usize, t))
 ));
 named!(parse_func <Inp, Code>, do_parse!(
-    ts: verify_ref!(map!(
+    ts: map!(verify_ref!(map!(
             call!(parse_vec, parse_locals),
             |tss| tss.into_iter()
                      .flat_map(|(n, t)| ::std::iter::repeat(t).take(n))
                      .collect()
         ),
-        |v: &Vec<_>| v.len() <= ::std::u32::MAX as usize
-    )
+        |v: &Vec<_>| v.len() <= ::structure::types::WEC_MAX_SIZE
+    ), |v: Vec<_>| v.into())
     >> e: parse_expr
     >> (Code { locals: ts, body: e })
 ));

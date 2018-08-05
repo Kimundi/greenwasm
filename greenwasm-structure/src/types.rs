@@ -6,12 +6,12 @@ pub mod conventions;
 
 /// Vectors may have at most 2^32 - 1 elements, presumably
 /// to ensure their size can be expressed as a u32.
-const WEC_MAX_SIZE: usize = ::std::u32::MAX as usize;
+pub const WEC_MAX_SIZE: usize = ::std::u32::MAX as usize;
 
 /// A vec(A) according to the spec.
 ///
 /// Called Wec to prevent confusion with Rusts Vec type.
-#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Wec<A> {
     vec: Vec<A>
 }
@@ -33,17 +33,32 @@ impl<A> ::std::ops::Deref for Wec<A> {
         &self.vec
     }
 }
-impl<A> ::std::ops::DerefMut for Wec<A> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.vec
-    }
-}
 impl<'a, A> IntoIterator for &'a Wec<A> {
     type Item = &'a A;
     type IntoIter = <&'a Vec<A> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.vec.iter()
+    }
+}
+impl<A> IntoIterator for Wec<A> {
+    type Item = A;
+    type IntoIter = <Vec<A> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.vec.into_iter()
+    }
+}
+impl<A> ::std::iter::FromIterator<A> for Wec<A> {
+    fn from_iter<T>(iter: T) -> Self
+        where T: IntoIterator<Item = A>
+    {
+        Vec::from_iter(iter).into()
+    }
+}
+impl<A> Default for Wec<A> {
+    fn default() -> Self {
+        Vec::default().into()
     }
 }
 

@@ -40,6 +40,10 @@ fn check<'a, T, F>(parse: F, input: &'a [u8], res: CheckRes<T>)
     }
 }
 
+macro_rules! wec {
+    ($($t:tt)*) => ({let v: Wec<_> = vec![$($t)*].into(); v})
+}
+
 fn test_parse_uN<F>(parse: F, bits: u32)
     where F: Fn(Inp) -> IResult<Inp, u64>,
 {
@@ -227,8 +231,8 @@ fn test_parse_result_valtype() {
 fn test_parse_functype() {
     check(&parse_functype, &[0x60, 1, 0x7f, 2, 0x7e, 0x7c], OkWith(
         FuncType {
-            args: vec![ValType::I32],
-            results: vec![ValType::I64, ValType::F64],
+            args: wec![ValType::I32],
+            results: wec![ValType::I64, ValType::F64],
         }
     ));
 }
@@ -302,7 +306,7 @@ fn test_parse_code() {
         0x0B, // empty expression
     ], OkWith(
         Code {
-            locals: vec![ValType::F32, ValType::F32],
+            locals: wec![ValType::F32, ValType::F32],
             body: Expr { body: vec![] },
         }
     ));
@@ -329,7 +333,7 @@ fn test_parse_code() {
         0x0B, // empty expression
     ], OkWith(
         Code {
-            locals: vec![ValType::F32, ValType::F32, ValType::I32],
+            locals: wec![ValType::F32, ValType::F32, ValType::I32],
             body: Expr { body: vec![Instr::Unreachable, Instr::I32Ne] },
         }
     ));

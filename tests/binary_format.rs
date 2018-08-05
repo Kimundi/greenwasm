@@ -61,14 +61,14 @@ macro_rules! test_file {
 test_file!(factorial, "tests/factorial.wasm", Module {
     types: vec![
         FuncType {
-            args: vec![ValType::F64],
-            results: vec![ValType::F64],
+            args: vec![ValType::F64].into(),
+            results: vec![ValType::F64].into(),
         },
-    ],
+    ].into(),
     funcs: vec![
         Func {
             type_: 0,
-            locals: vec![],
+            locals: vec![].into(),
             body: Expr {
                 body: vec![
                     GetLocal(0),
@@ -87,47 +87,41 @@ test_file!(factorial, "tests/factorial.wasm", Module {
                 ]
             },
         },
-    ],
-    tables: vec![
-    ],
-    mems: vec![
-    ],
-    globals: vec![
-    ],
-    elem: vec![
-    ],
-    data: vec![
-    ],
+    ].into(),
+    tables: vec![].into(),
+    mems: vec![].into(),
+    globals: vec![].into(),
+    elem: vec![].into(),
+    data: vec![].into(),
     start: None,
-    imports: vec![
-    ],
+    imports: vec![].into(),
     exports: vec![
         Export {
             name: "fac".to_string(),
             desc: ExportDesc::Func(0),
         },
-    ],
+    ].into(),
 });
 
 test_file!(stuff, "tests/stuff.wasm", Module {
     types: vec![
         FuncType {
-            args: vec![ValType::I32],
-            results: vec![ValType::I32],
+            args: vec![ValType::I32].into(),
+            results: vec![ValType::I32].into(),
         },
         FuncType {
-            args: vec![ValType::F32],
-            results: vec![],
+            args: vec![ValType::F32].into(),
+            results: vec![].into(),
         },
         FuncType {
-            args: vec![],
-            results: vec![],
+            args: vec![].into(),
+            results: vec![].into(),
         },
-    ],
+    ].into(),
     funcs: vec![
         Func {
             type_: 2,
-            locals: vec![],
+            locals: vec![].into(),
             body: Expr {
                 body: vec![
                 ]
@@ -135,7 +129,7 @@ test_file!(stuff, "tests/stuff.wasm", Module {
         },
         Func {
             type_: 1,
-            locals: vec![],
+            locals: vec![].into(),
             body: Expr {
                 body: vec![
                     I32Const(42),
@@ -143,7 +137,7 @@ test_file!(stuff, "tests/stuff.wasm", Module {
                 ]
             },
         },
-    ],
+    ].into(),
     tables: vec![
         Table {
             type_: TableType {
@@ -154,7 +148,7 @@ test_file!(stuff, "tests/stuff.wasm", Module {
                 elemtype: ElemType::AnyFunc,
             }
         },
-    ],
+    ].into(),
     mems: vec![
         Mem {
             type_: MemType {
@@ -164,11 +158,9 @@ test_file!(stuff, "tests/stuff.wasm", Module {
                 }
             }
         }
-    ],
-    globals: vec![
-    ],
-    elem: vec![
-    ],
+    ].into(),
+    globals: vec![].into(),
+    elem: vec![].into(),
     data: vec![
         Data {
             data: 0,
@@ -180,9 +172,9 @@ test_file!(stuff, "tests/stuff.wasm", Module {
             init: vec![
                 b'h',
                 b'i',
-            ],
+            ].into(),
         },
-    ],
+    ].into(),
     start: Some(Start{ func: 1 }),
     imports: vec![
         Import {
@@ -190,13 +182,13 @@ test_file!(stuff, "tests/stuff.wasm", Module {
             name: "bar".to_string(),
             desc: ImportDesc::Func(1),
         },
-    ],
+    ].into(),
     exports: vec![
         Export {
             name: "e".to_string(),
             desc: ExportDesc::Func(1),
         },
-    ],
+    ].into(),
 });
 
 test_file!(fuzz0, "tests/fuzz0.wasm");
