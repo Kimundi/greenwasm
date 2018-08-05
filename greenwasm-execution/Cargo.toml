@@ -1,0 +1,12 @@
+[package]
+name = "greenwasm-execution"
+version = "0.1.0"
+authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
+license = "MIT/Apache-2.0"
+
+readme = "README.md"
+
+workspace = ".."
+
+[dependencies]
+greenwasm-structure = { path = "../greenwasm-structure" }

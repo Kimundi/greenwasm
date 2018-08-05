@@ -11,3 +11,4 @@ readme = "README.md"
 greenwasm-structure = { path = "greenwasm-structure" }
 greenwasm-validation = { path = "greenwasm-validation" }
 greenwasm-binary-format = { path = "greenwasm-binary-format" }
+greenwasm-Execution = { path = "greenwasm-execution" }
