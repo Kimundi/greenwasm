@@ -620,13 +620,13 @@ use structure::modules::MemIdx;
 use structure::modules::GlobalIdx;
 use structure::modules::LocalIdx;
 use structure::modules::LabelIdx;
-named!(parse_typeidx <Inp, TypeIdx>, call!(parse_u32));
-named!(parse_funcidx <Inp, FuncIdx>, call!(parse_u32));
-named!(parse_tableidx <Inp, TableIdx>, call!(parse_u32));
-named!(parse_memidx <Inp, MemIdx>, call!(parse_u32));
-named!(parse_globalidx <Inp, GlobalIdx>, call!(parse_u32));
-named!(parse_localidx <Inp, LocalIdx>, call!(parse_u32));
-named!(parse_labelidx <Inp, LabelIdx>, call!(parse_u32));
+named!(parse_typeidx <Inp, TypeIdx>,     map!(parse_u32, TypeIdx));
+named!(parse_funcidx <Inp, FuncIdx>,     map!(parse_u32, FuncIdx));
+named!(parse_tableidx <Inp, TableIdx>,   map!(parse_u32, TableIdx));
+named!(parse_memidx <Inp, MemIdx>,       map!(parse_u32, MemIdx));
+named!(parse_globalidx <Inp, GlobalIdx>, map!(parse_u32, GlobalIdx));
+named!(parse_localidx <Inp, LocalIdx>,   map!(parse_u32, LocalIdx));
+named!(parse_labelidx <Inp, LabelIdx>,   map!(parse_u32, LabelIdx));
 
 // 5.5.1. Sections
 fn parse_section<'a, F, B>(input: Inp<'a>, N: u8, parse_B: F) -> IResult<Inp<'a>, B>

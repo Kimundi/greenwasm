@@ -24,13 +24,20 @@ pub struct Module {
     pub exports: Wec<Export>,
 }
 
-pub type TypeIdx = U32;
-pub type FuncIdx = U32;
-pub type TableIdx = U32;
-pub type MemIdx = U32;
-pub type GlobalIdx = U32;
-pub type LocalIdx = U32;
-pub type LabelIdx = U32;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub struct TypeIdx(pub U32);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub struct FuncIdx(pub U32);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub struct TableIdx(pub U32);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub struct MemIdx(pub U32);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub struct GlobalIdx(pub U32);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub struct LocalIdx(pub U32);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub struct LabelIdx(pub U32);
 
 #[derive(Debug, PartialEq)]
 pub struct Func {

@@ -29,6 +29,13 @@ use structure::modules::ExportDesc;
 use structure::modules::Import;
 use structure::modules::ImportDesc;
 use structure::modules::Module;
+use structure::modules::LocalIdx;
+use structure::modules::FuncIdx;
+use structure::modules::GlobalIdx;
+use structure::modules::MemIdx;
+use structure::modules::TableIdx;
+use structure::modules::TypeIdx;
+use structure::modules::LabelIdx;
 
 pub type VResult<T> = Result<T, ValidationError>;
 #[derive(Debug)]
@@ -101,8 +108,8 @@ macro_rules! ctx_set {
 }
 
 macro_rules! ctx_idx {
-    ($self:ident, $name:ident: $type:ty, $err:ident, $f:expr, $g:expr) => (
-        fn $name(&$self, mut x: u32) -> VResult<$type> {
+    ($self:ident, $name:ident: $type:ty, $idxty:ty, $err:ident, $f:expr, $g:expr) => (
+        fn $name(&$self, mut x: $idxty) -> VResult<$type> {
             use self::CtxMember::*;
 
             let len = $f;
@@ -115,14 +122,14 @@ macro_rules! ctx_idx {
                     Delegated(next) => {
                         cursor = next;
                     }
-                    Set(v) if (x as usize) < len(v) => {
-                        return Ok(get(v, x as usize));
+                    Set(v) if (x.0 as usize) < len(v) => {
+                        return Ok(get(v, x.0 as usize));
                     }
-                    Prepended(v, _) if (x as usize) < len(v) => {
-                        return Ok(get(v, x as usize));
+                    Prepended(v, _) if (x.0 as usize) < len(v) => {
+                        return Ok(get(v, x.0 as usize));
                     }
-                    Prepended(v, next) if (x as usize) >= len(v) => {
-                        x -= len(v) as u32;
+                    Prepended(v, next) if (x.0 as usize) >= len(v) => {
+                        x.0 -= len(v) as u32;
                         cursor = next;
                     }
                     _ => $self.error($err)?,
@@ -156,14 +163,14 @@ impl<'a> Ctx<'a> {
     fn _index_clone<T: Clone>(v: &[T], x: usize) -> T { v[x].clone() }
     fn _unwrap<T: Copy>(v: &T, _: usize) -> T { *v }
 
-    ctx_idx!(self, locals: ValType,     CtxLocalsIdxDoesNotExist,  <[_]>::len, Self::_index);
-    ctx_idx!(self, globals: GlobalType, CtxGlobalsIdxDoesNotExist, <[_]>::len, Self::_index);
-    ctx_idx!(self, mems: MemType,       CtxMemsIdxDoesNotExist,    <[_]>::len, Self::_index);
-    ctx_idx!(self, funcs: FuncType,     CtxFuncsIdxDoesNotExist,   <[_]>::len, Self::_index_clone);
-    ctx_idx!(self, tables: TableType,   CtxTablesIdxDoesNotExist,  <[_]>::len, Self::_index);
-    ctx_idx!(self, types: FuncType,     CtxTypesIdxDoesNotExist,   <[_]>::len, Self::_index_clone);
-    ctx_idx!(self, labels: ResultType,  CtxLabelsIdxDoesNotExist,   |_| 1,     Self::_unwrap);
-    ctx_idx!(self, return_: ResultType, CtxReturnDoesNotExist,      |_| 1,     Self::_unwrap);
+    ctx_idx!(self, locals: ValType,     LocalIdx, CtxLocalsIdxDoesNotExist,  <[_]>::len, Self::_index);
+    ctx_idx!(self, globals: GlobalType, GlobalIdx, CtxGlobalsIdxDoesNotExist, <[_]>::len, Self::_index);
+    ctx_idx!(self, mems: MemType,       MemIdx, CtxMemsIdxDoesNotExist,    <[_]>::len, Self::_index);
+    ctx_idx!(self, funcs: FuncType,     FuncIdx, CtxFuncsIdxDoesNotExist,   <[_]>::len, Self::_index_clone);
+    ctx_idx!(self, tables: TableType,   TableIdx, CtxTablesIdxDoesNotExist,  <[_]>::len, Self::_index);
+    ctx_idx!(self, types: FuncType,     TypeIdx, CtxTypesIdxDoesNotExist,   <[_]>::len, Self::_index_clone);
+    ctx_idx!(self, labels: ResultType,  LabelIdx, CtxLabelsIdxDoesNotExist,   |_| 1,     Self::_unwrap);
+    ctx_idx!(self, return_: ResultType, LabelIdx, CtxReturnDoesNotExist,      |_| 1,     Self::_unwrap);
 
     fn with(&'a self) -> Ctx<'a> {
         Ctx {
@@ -696,7 +703,7 @@ pub mod validate {
             ref load_store_instr @ I64Store16(..) |
             ref load_store_instr @ I64Store32(..) => {
                 let validate = |memarg: Memarg, bit_width: u32, e, r| {
-                    c.mems(0)?;
+                    c.mems(MemIdx(0))?;
                     let align = 1u32 << memarg.align;
                     if align > (bit_width / 8) {
                         c.error(e)?;
@@ -745,8 +752,8 @@ pub mod validate {
                     _ => unreachable!(),
                 }
             }
-            CurrentMemory => { c.mems(0)?; ity![    ; I32] }
-            GrowMemory    => { c.mems(0)?; ity![I32 ; I32] }
+            CurrentMemory => { c.mems(MemIdx(0))?; ity![    ; I32] }
+            GrowMemory    => { c.mems(MemIdx(0))?; ity![I32 ; I32] }
 
             // control instructions
             Nop => ity![ ; ],
@@ -809,7 +816,7 @@ pub mod validate {
             Br(labelidx) => {
                 let resulttype = c.labels(labelidx)?;
 
-                let n = labelidx;
+                let n = labelidx.0;
                 if ic.ctrls.size() < n {
                     ic.error()?;
                 }
@@ -826,7 +833,7 @@ pub mod validate {
             BrIf(labelidx) => {
                 let resulttype = c.labels(labelidx)?;
 
-                let n = labelidx;
+                let n = labelidx.0;
                 if ic.ctrls.size() < n {
                     ic.error()?;
                 }
@@ -845,12 +852,12 @@ pub mod validate {
                 let resulttype = c.labels(labelidx_n)?;
 
                 let ns = labelindices;
-                let m = labelidx_n;
+                let m = labelidx_n.0;
 
                 if ic.ctrls.size() < m {
                     ic.error()?;
                 }
-                for &n in ns {
+                for &LabelIdx(n) in ns {
                     if ic.ctrls.size() < n
                     || ic.ctrls.at(n).label_types != ic.ctrls.at(m).label_types
                     {
@@ -873,7 +880,7 @@ pub mod validate {
                 // Empty result != missing result
                 // See note on 3.3.5.9 in spec
 
-                let resulttype = c.return_(0)?;
+                let resulttype = c.return_(LabelIdx(0))?;
 
                 // TODO: Not sure if implemented correctly
                 // Following the wording on 2.4.5., returns is equivalent
@@ -901,7 +908,7 @@ pub mod validate {
                 let TableType {
                     limits: _,
                     elemtype,
-                } = c.tables(0)?;
+                } = c.tables(TableIdx(0))?;
                 if elemtype != ElemType::AnyFunc {
                     c.error(InstrCallIndirectElemTypeNotAnyFunc)?;
                 }
@@ -1124,7 +1131,7 @@ pub mod validate {
         let imports = &module_prepass.imports;
         for import in imports {
             if let ImportDesc::Func(x) = import.desc {
-                if types.get(x as usize).is_none() {
+                if types.get(x.0 as usize).is_none() {
                     empty_c.error(ModulePrepassImportFuncTypeIdxDoesNotExist)?;
                 }
             }
@@ -1139,7 +1146,7 @@ pub mod validate {
             match import.desc {
                 ImportDesc::Func(x) => {
                     // TODO: Catch None case early in validation
-                    types.get(x as usize)
+                    types.get(x.0 as usize)
                 }
                 _ => None,
             }
@@ -1211,7 +1218,7 @@ pub mod validate {
 
             // TODO: Catch None case early in validation
             let fts = funcs.iter().flat_map(|x| {
-                functypes.get(x.type_ as usize)
+                functypes.get(x.type_.0 as usize)
             });
             let tts = tables.iter() .map(|x| &x.type_);
             let mts = mems.iter()   .map(|x| &x.type_);

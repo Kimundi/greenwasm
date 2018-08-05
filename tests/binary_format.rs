@@ -67,21 +67,21 @@ test_file!(factorial, "tests/factorial.wasm", Module {
     ].into(),
     funcs: vec![
         Func {
-            type_: 0,
+            type_: TypeIdx(0),
             locals: vec![].into(),
             body: Expr {
                 body: vec![
-                    GetLocal(0),
+                    GetLocal(LocalIdx(0)),
                     F64Const(1.0),
                     F64Lt,
                     IfElse(Some(ValType::F64), vec![
                         F64Const(1.0),
                     ], vec![
-                        GetLocal(0),
-                        GetLocal(0),
+                        GetLocal(LocalIdx(0)),
+                        GetLocal(LocalIdx(0)),
                         F64Const(1.0),
                         F64Sub,
-                        Call(0),
+                        Call(FuncIdx(0)),
                         F64Mul,
                     ])
                 ]
@@ -98,7 +98,7 @@ test_file!(factorial, "tests/factorial.wasm", Module {
     exports: vec![
         Export {
             name: "fac".into(),
-            desc: ExportDesc::Func(0),
+            desc: ExportDesc::Func(FuncIdx(0)),
         },
     ].into(),
 });
@@ -120,7 +120,7 @@ test_file!(stuff, "tests/stuff.wasm", Module {
     ].into(),
     funcs: vec![
         Func {
-            type_: 2,
+            type_: TypeIdx(2),
             locals: vec![].into(),
             body: Expr {
                 body: vec![
@@ -128,7 +128,7 @@ test_file!(stuff, "tests/stuff.wasm", Module {
             },
         },
         Func {
-            type_: 1,
+            type_: TypeIdx(1),
             locals: vec![].into(),
             body: Expr {
                 body: vec![
@@ -163,7 +163,7 @@ test_file!(stuff, "tests/stuff.wasm", Module {
     elem: vec![].into(),
     data: vec![
         Data {
-            data: 0,
+            data: MemIdx(0),
             offset: Expr {
                 body: vec![
                     I32Const(0),
@@ -175,18 +175,18 @@ test_file!(stuff, "tests/stuff.wasm", Module {
             ].into(),
         },
     ].into(),
-    start: Some(Start{ func: 1 }),
+    start: Some(Start{ func: FuncIdx(1) }),
     imports: vec![
         Import {
             module: "foo".into(),
             name: "bar".into(),
-            desc: ImportDesc::Func(1),
+            desc: ImportDesc::Func(TypeIdx(1)),
         },
     ].into(),
     exports: vec![
         Export {
             name: "e".into(),
-            desc: ExportDesc::Func(1),
+            desc: ExportDesc::Func(FuncIdx(1)),
         },
     ].into(),
 });
