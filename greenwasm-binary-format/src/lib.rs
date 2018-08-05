@@ -148,11 +148,11 @@ named!(parse_name <Inp, Name>, do_parse!(
         verify_ref!(
             map!(
                 call!(parse_vec, parse_byte),
-                |v| Name::from_utf8(v.into())
+                |v| String::from_utf8(v.into())
             ),
             |res: &Result<_, _>| res.is_ok()
         ),
-        |res| res.unwrap()
+        |res| res.unwrap().into()
     )
     >> (bs)
 ));

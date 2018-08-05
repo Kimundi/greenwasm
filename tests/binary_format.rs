@@ -97,7 +97,7 @@ test_file!(factorial, "tests/factorial.wasm", Module {
     imports: vec![].into(),
     exports: vec![
         Export {
-            name: "fac".to_string(),
+            name: "fac".into(),
             desc: ExportDesc::Func(0),
         },
     ].into(),
@@ -178,14 +178,14 @@ test_file!(stuff, "tests/stuff.wasm", Module {
     start: Some(Start{ func: 1 }),
     imports: vec![
         Import {
-            module: "foo".to_string(),
-            name: "bar".to_string(),
+            module: "foo".into(),
+            name: "bar".into(),
             desc: ImportDesc::Func(1),
         },
     ].into(),
     exports: vec![
         Export {
-            name: "e".to_string(),
+            name: "e".into(),
             desc: ExportDesc::Func(1),
         },
     ].into(),

@@ -10,27 +10,30 @@ pub const WEC_MAX_SIZE: usize = ::std::u32::MAX as usize;
 
 /// A vec(A) according to the spec.
 ///
+/// Constructing this type checks the invariant that it has
+/// a size <= WEC_MAX_SIZE.
+///
 /// Called Wec to prevent confusion with Rusts Vec type.
 #[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Wec<A> {
-    vec: Vec<A>
+    inner: Vec<A>
 }
 impl<A> From<Vec<A>> for Wec<A> {
-    fn from(vec: Vec<A>) -> Self {
-        assert!(vec.len() <= WEC_MAX_SIZE);
-        Wec { vec }
+    fn from(inner: Vec<A>) -> Self {
+        assert!(inner.len() <= WEC_MAX_SIZE);
+        Wec { inner }
     }
 }
 impl<A> Into<Vec<A>> for Wec<A> {
     fn into(self) -> Vec<A> {
-        self.vec
+        self.inner
     }
 }
 impl<A> ::std::ops::Deref for Wec<A> {
     type Target = Vec<A>;
 
     fn deref(&self) -> &Self::Target {
-        &self.vec
+        &self.inner
     }
 }
 impl<'a, A> IntoIterator for &'a Wec<A> {
@@ -38,7 +41,7 @@ impl<'a, A> IntoIterator for &'a Wec<A> {
     type IntoIter = <&'a Vec<A> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.vec.iter()
+        self.inner.iter()
     }
 }
 impl<A> IntoIterator for Wec<A> {
@@ -46,7 +49,7 @@ impl<A> IntoIterator for Wec<A> {
     type IntoIter = <Vec<A> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.vec.into_iter()
+        self.inner.into_iter()
     }
 }
 impl<A> ::std::iter::FromIterator<A> for Wec<A> {
@@ -85,13 +88,41 @@ pub type U64 = u64;
 pub type S64 = i64;
 pub type I64 = U64;
 
-// TODO: Make sure the native types behaves according to the standard
-// in regard to rounding, subnormal values, NaNs, etc.
 pub type F32 = f32;
 pub type F64 = f64;
 
-// TODO: Ensure size < 2^32-1
-pub type Name = String;
+/// A Name according to the spec.
+///
+/// Constructing this type checks the invariant that it has
+/// a size <= WEC_MAX_SIZE.
+#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub struct Name {
+    inner: String
+}
+impl From<String> for Name {
+    fn from(inner: String) -> Self {
+        assert!(inner.len() <= WEC_MAX_SIZE);
+        Name { inner }
+    }
+}
+impl<'a> From<&'a str> for Name {
+    fn from(inner: &'a str) -> Self {
+        assert!(inner.len() <= WEC_MAX_SIZE);
+        Name { inner: inner.into() }
+    }
+}
+impl Into<String> for Name {
+    fn into(self) -> String {
+        self.inner
+    }
+}
+impl ::std::ops::Deref for Name {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
 pub type Codepoint = char;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -104,6 +135,9 @@ pub enum ValType {
 
 // TODO. What does the [] notation in the grammar spec mean exactly?
 // Eg, `resulttype​::=​[valtype?]​`
+// ...
+// Later answer: Obviously that it is a list with 0 or 1 element,
+// as opposed to a missing or not missing element.
 
 pub type ResultType = Option<ValType>;
 
