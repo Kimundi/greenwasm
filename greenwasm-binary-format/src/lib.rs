@@ -1,9 +1,11 @@
-#![allow(non_snake_case, unused_imports)]
+#![feature(int_to_from_bytes)]
+
 #![recursion_limit="256"]
+
+#![allow(non_snake_case, unused_imports)]
 
 #[macro_use]
 extern crate nom;
-extern crate greenwasm_structure as structure;
 
 // TODO: Open PR in nom for where applicable
 macro_rules! verify_ref (

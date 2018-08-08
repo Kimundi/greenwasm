@@ -1,11 +1,9 @@
-extern crate greenwasm;
-
-use greenwasm::structure::types::*;
-use greenwasm::structure::modules::*;
-use greenwasm::structure::instructions::Instr::*;
-use greenwasm::structure::instructions::*;
-use greenwasm::binary_format::parse_binary_format;
-use greenwasm::validation::*;
+use structure::types::*;
+use structure::modules::*;
+use structure::instructions::Instr::*;
+use structure::instructions::*;
+use binary_format::parse_binary_format;
+use validation::*;
 
 fn diff_print<T: ::std::fmt::Debug>(value_is: &T, value_should: &T) -> String {
     let value_is = format!("{:#?}", value_is);

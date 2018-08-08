@@ -1,7 +1,5 @@
 #![feature(macro_at_most_once_rep)]
 
-extern crate greenwasm_structure as structure;
-
 use structure::types::FuncType;
 use structure::types::TableType;
 use structure::types::MemType;
@@ -478,14 +476,15 @@ pub mod validate {
         use self::ValType::*;
 
         macro_rules! ity {
-            ($(:$ci:expr;)? $($arg:expr),* ; $($result:expr),*) => (
+            (:$ci:expr; $($arg:expr),* ; $($result:expr),*) => (
                 {
-                    $(
-                        let ic = $ci;
-                    )?
+                    let ic = $ci;
                     ic.simple_instr(&[$($arg),*], &[$($result),*])?;
                     Valid
                 }
+            );
+            ($($arg:expr),* ; $($result:expr),*) => (
+                ity![:ic; $($arg),* ; $($result),*]
             )
         }
 

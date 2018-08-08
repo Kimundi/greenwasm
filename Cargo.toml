@@ -1,4 +1,4 @@
-cargo-features = ["edition"]
+cargo-features = ["edition", "rename-dependency"]
 
 [package]
 edition = '2018'
@@ -11,7 +11,7 @@ description = "An implementation of the Webassembly spec in Rust."
 readme = "README.md"
 
 [dependencies]
-greenwasm-structure = { path = "greenwasm-structure" }
-greenwasm-validation = { path = "greenwasm-validation" }
-greenwasm-binary-format = { path = "greenwasm-binary-format" }
-greenwasm-execution = { path = "greenwasm-execution" }
+structure = { package = "greenwasm-structure", path = "greenwasm-structure" }
+validation = { package = "greenwasm-validation", path = "greenwasm-validation" }
+binary_format = { package = "greenwasm-binary-format", path = "greenwasm-binary-format" }
+execution = { package = "greenwasm-execution", path = "greenwasm-execution" }

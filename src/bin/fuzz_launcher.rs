@@ -1,8 +1,6 @@
-extern crate greenwasm;
-
-use greenwasm::binary_format::parse_binary_format;
-use greenwasm::validation::validate;
-use greenwasm::validation::Ctx;
+use binary_format::parse_binary_format;
+use validation::validate;
+use validation::Ctx;
 
 fn main() {
     if let Some(path) = ::std::env::args().nth(1) {
