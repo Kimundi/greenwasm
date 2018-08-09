@@ -69,6 +69,9 @@ macro_rules! generate_refs {
             use super::*;
 
             $(
+                // TODO: If Module itself had configurable subelement types,
+                // we could delegate inner Arc references without
+                // indirection.
                 #[derive(Clone)]
                 pub struct $refty {
                     pub(super) module: Arc<Module>,
