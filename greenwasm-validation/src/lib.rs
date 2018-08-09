@@ -95,12 +95,13 @@ pub struct Ctx<'a> {
 
 macro_rules! ctx_set {
     ($fn_name:ident($self:ident, $var_name:ident: $var_type:ty)) => (
-        ctx_set!($fn_name($self, $var_name: $var_type) -> $var_name);
+        ctx_set!($fn_name($self, $var_name: $var_type)
+            -> |_| CtxMember::Set($var_name));
     );
     ($fn_name:ident($self:ident, $var_name:ident: $var_type:ty) -> $mapped:expr) => (
         fn $fn_name(mut $self, $var_name: $var_type) -> Self {
-            if let CtxMember::Delegated(_) = $self.$var_name {
-                $self.$var_name = CtxMember::Set($mapped);
+            if let CtxMember::Delegated(r) = $self.$var_name {
+                $self.$var_name = $mapped(r);
             } else {
                 panic!("can only overwrite Delegated()");
             }
@@ -179,23 +180,22 @@ impl<'a> Ctx<'a> {
             return_: CtxMember::Delegated(&self.return_),
         }
     }
-    fn prepend_label(mut self, label: ResultType) -> Ctx<'a> {
-        if let CtxMember::Delegated(r) = self.labels {
-            self.labels = CtxMember::Prepended(vec![label], r);
-        } else {
-            panic!("can only overwrite Delegated()");
-        }
-        self
-    }
 
-    ctx_set!(set_locals(self,  locals:  Vec<ValType>));
-    ctx_set!(set_label(self,   labels:  Vec<ResultType>));
-    ctx_set!(set_return_(self, return_: Vec<ResultType>));
-    ctx_set!(set_types(self,   types:   Vec<FuncType>));
-    ctx_set!(set_funcs(self,   funcs:   Vec<FuncType>));
-    ctx_set!(set_tables(self,  tables:  Vec<TableType>));
-    ctx_set!(set_mems(self,    mems:    Vec<MemType>));
-    ctx_set!(set_globals(self, globals: Vec<GlobalType>));
+    ctx_set!(set_locals(self,    locals:  Vec<ValType>));
+    ctx_set!(set_types(self,     types:   Vec<FuncType>));
+    ctx_set!(set_funcs(self,     funcs:   Vec<FuncType>));
+    ctx_set!(set_tables(self,    tables:  Vec<TableType>));
+    ctx_set!(set_mems(self,      mems:    Vec<MemType>));
+    ctx_set!(set_globals(self,   globals: Vec<GlobalType>));
+
+    ctx_set!(set_label(self, labels: ResultType)
+        -> |_| CtxMember::Set(vec![labels]));
+
+    ctx_set!(prepend_label(self, labels: ResultType)
+        -> |r| CtxMember::Prepended(vec![labels], r));
+
+    ctx_set!(set_return_(self, return_: ResultType)
+        -> |_| CtxMember::Set(vec![return_]));
 
     fn length_mems(&self) -> u32 {
         use self::CtxMember::*;
@@ -960,8 +960,8 @@ pub mod validate {
 
         let c_ = c.with()
             .set_locals(locals)
-            .set_label(vec![result])
-            .set_return_(vec![result]);
+            .set_label(result)
+            .set_return_(result);
 
         // TODO: The wording for function validation and expression
         // validation conflict in wether
