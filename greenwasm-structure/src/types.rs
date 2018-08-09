@@ -62,6 +62,15 @@ impl<A> Default for Wec<A> {
         Vec::default().into()
     }
 }
+impl<A> Wec<A> {
+    pub fn safe_append<F: FnMut() -> A>(&mut self, n: usize, mut f: F) {
+        let l = self.len();
+        self.inner.reserve(l + n);
+        for _ in 0..n {
+            self.inner.push(f());
+        }
+    }
+}
 
 // 2.2 Values
 // 2.2.1 Bytes

@@ -97,7 +97,14 @@ pub mod import_matching {
 pub mod allocation {
     use super::*;
 
-    pub fn function(s: &mut Store, func: &Func, moduleinst: &ModuleInst) -> FuncAddr {
+    pub enum AllocError {
+        AllocatingTableBeyondMaxLimit,
+        AllocatingMemBeyondMaxLimit,
+    }
+    use self::AllocError::*;
+    pub type AResult = ::std::result::Result<(), AllocError>;
+
+    pub fn alloc_function(s: &mut Store, func: &Func, moduleinst: &ModuleInst) -> FuncAddr {
         let a = s.funcs.len();
         let functype = &moduleinst.types[func.type_.0 as usize];
         let funcinst = FuncInst::Internal {
@@ -109,7 +116,7 @@ pub mod allocation {
 
         FuncAddr(a)
     }
-    pub fn host_function(s: &mut Store, hostfunc: HostFunc, functype: FuncType) -> FuncAddr {
+    pub fn alloc_host_function(s: &mut Store, hostfunc: HostFunc, functype: FuncType) -> FuncAddr {
         let a = s.funcs.len();
         let funcinst = FuncInst::Host {
             type_: functype,
@@ -119,7 +126,7 @@ pub mod allocation {
 
         FuncAddr(a)
     }
-    pub fn table(s: &mut Store, tabletype: &TableType) -> TableAddr {
+    pub fn alloc_table(s: &mut Store, tabletype: &TableType) -> TableAddr {
         let TableType {
             limits: Limits { min: n, max: m },
             elemtype: _ // TODO: Why does the spec ignore this here?
@@ -133,7 +140,7 @@ pub mod allocation {
 
         TableAddr(a)
     }
-    pub fn mem(s: &mut Store, memtype: &MemType) -> MemAddr {
+    pub fn alloc_mem(s: &mut Store, memtype: &MemType) -> MemAddr {
         let MemType {
             limits: Limits { min: n, max: m },
         } = *memtype;
@@ -146,7 +153,7 @@ pub mod allocation {
 
         MemAddr(a)
     }
-    pub fn global(s: &mut Store, globaltype: &GlobalType, val: Val) -> GlobalAddr {
+    pub fn alloc_global(s: &mut Store, globaltype: &GlobalType, val: Val) -> GlobalAddr {
         let GlobalType {
             mutability,
             valtype: t,
@@ -160,6 +167,112 @@ pub mod allocation {
         s.globals.push(globalinst);
 
         GlobalAddr(a)
+    }
+    pub fn grow_table_by(tableinst: &mut TableInst, n: usize) -> AResult {
+        if let Some(max) = tableinst.max {
+            if (max as usize) < (tableinst.elem.len() as usize + n) {
+                Err(AllocatingTableBeyondMaxLimit)?;
+            }
+        }
+
+        tableinst.elem.safe_append(n, || FuncElem(None));
+
+        Ok(())
+    }
+    pub fn grow_memory_by(meminst: &mut MemInst, n: usize) -> AResult {
+        let len = n * WASM_PAGE_SIZE;
+        if let Some(max) = meminst.max {
+            if (max as usize * WASM_PAGE_SIZE) < (meminst.data.len() as usize + len) {
+                Err(AllocatingMemBeyondMaxLimit)?;
+            }
+        }
+
+        meminst.data.safe_append(len, || 0x00);
+
+        Ok(())
+    }
+    pub fn alloc_module(s: &mut Store,
+                        module: &Module,
+                        externvals_im: &[ExternVal],
+                        vals: &[Val]) -> ModuleInst
+    {
+
+        // TODO: resolve this recursion here
+        let moduleinst_below = unimplemented!();
+
+        let mut funcaddrs = vec![];
+        for funci in &module.funcs {
+            let funcaddri = alloc_function(s, &funci, &moduleinst_below);
+            funcaddrs.push(funcaddri);
+        }
+
+        let mut tableaddrs = vec![];
+        for tablei in &module.tables {
+            let tableaddri = alloc_table(s, &tablei.type_);
+            tableaddrs.push(tableaddri);
+        }
+
+        let mut memaddrs = vec![];
+        for memi in &module.mems {
+            let memaddri = alloc_mem(s, &memi.type_);
+            memaddrs.push(memaddri);
+        }
+
+        let mut globaladdrs = vec![];
+        for (i, globali) in module.globals.iter().enumerate() {
+            let globaladdri = alloc_global(s, &globali.type_, vals[i]);
+            globaladdrs.push(globaladdri);
+        }
+
+        let funcaddrs_mod = externvals_im.iter().filter_map(|e| match e {
+            ExternVal::Func(f) => Some(*f),
+            _ => None,
+        }).chain(funcaddrs).collect::<Vec<_>>();
+
+        let tableaddrs_mod = externvals_im.iter().filter_map(|e| match e {
+            ExternVal::Table(f) => Some(*f),
+            _ => None,
+        }).chain(tableaddrs).collect::<Vec<_>>();
+
+        let memaddrs_mod = externvals_im.iter().filter_map(|e| match e {
+            ExternVal::Mem(f) => Some(*f),
+            _ => None,
+        }).chain(memaddrs).collect::<Vec<_>>();
+
+        let globaladdrs_mod = externvals_im.iter().filter_map(|e| match e {
+            ExternVal::Global(f) => Some(*f),
+            _ => None,
+        }).chain(globaladdrs).collect::<Vec<_>>();
+
+        let mut exportinsts = vec![];
+        for exporti in &module.exports {
+            let externvali = match exporti.desc {
+                ExportDesc::Func(funcidx)
+                    => ExternVal::Func(funcaddrs_mod[funcidx.0 as usize]),
+                ExportDesc::Table(tableidx)
+                    => ExternVal::Table(tableaddrs_mod[tableidx.0 as usize]),
+                ExportDesc::Mem(memidx)
+                    => ExternVal::Mem(memaddrs_mod[memidx.0 as usize]),
+                ExportDesc::Global(globalidx)
+                    => ExternVal::Global(globaladdrs_mod[globalidx.0 as usize]),
+            };
+            let exportinsti = ExportInst {
+                name: exporti.name,
+                value: externvali,
+            };
+            exportinsts.push(exportinsti);
+        }
+
+        let moduleinst = ModuleInst {
+            types: module.types.into(),
+            funcaddrs: funcaddrs_mod,
+            tableaddrs: tableaddrs_mod,
+            memaddrs: memaddrs_mod,
+            globaladdrs: globaladdrs_mod,
+            exports: exportinsts,
+        };
+
+        moduleinst
     }
 }
 
