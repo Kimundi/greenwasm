@@ -1,7 +1,5 @@
 //! Types according to the _structure_ section of the spec
 
-pub mod conventions;
-
 // 2.1.3 Vectors
 
 /// Vectors may have at most 2^32 - 1 elements, presumably
