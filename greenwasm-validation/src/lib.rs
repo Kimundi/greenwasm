@@ -181,12 +181,12 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    ctx_set!(set_locals(self,    locals:  Vec<ValType>));
-    ctx_set!(set_types(self,     types:   Vec<FuncType>));
-    ctx_set!(set_funcs(self,     funcs:   Vec<FuncType>));
-    ctx_set!(set_tables(self,    tables:  Vec<TableType>));
-    ctx_set!(set_mems(self,      mems:    Vec<MemType>));
-    ctx_set!(set_globals(self,   globals: Vec<GlobalType>));
+    ctx_set!(set_locals(self,  locals:  Vec<ValType>));
+    ctx_set!(set_types(self,   types:   Vec<FuncType>));
+    ctx_set!(set_funcs(self,   funcs:   Vec<FuncType>));
+    ctx_set!(set_tables(self,  tables:  Vec<TableType>));
+    ctx_set!(set_mems(self,    mems:    Vec<MemType>));
+    ctx_set!(set_globals(self, globals: Vec<GlobalType>));
 
     ctx_set!(set_label(self, labels: ResultType)
         -> |_| CtxMember::Set(vec![labels]));
