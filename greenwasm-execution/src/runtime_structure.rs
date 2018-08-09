@@ -77,12 +77,12 @@ pub enum FuncInst<Refs>
     where Refs: StructureReference
 {
     Internal {
-        type_: FuncType,
+        type_: Refs::FuncTypeRef,
         module: ModuleAddr,
         code: Refs::FuncRef,
     },
     Host {
-        type_: FuncType,
+        type_: Refs::FuncTypeRef,
         hostcode: HostFunc
     },
 }
@@ -114,7 +114,7 @@ pub struct GlobalInst {
 pub struct ExportInst<Refs>
     where Refs: StructureReference
 {
-    pub name: Refs::NameRef, // TODO: change implementation to something more sane
+    pub name: Refs::NameRef,
     pub value: ExternVal,
 }
 

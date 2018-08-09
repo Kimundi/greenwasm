@@ -15,7 +15,7 @@ pub mod external_typing {
             | FuncInst::Host { type_, .. }
             => type_
         };
-        ExternType::Func(functype.clone()) // TODO: bad copy
+        ExternType::Func((**functype).clone()) // TODO: bad copy
     }
 
     pub fn tables(s: &Store, a: usize) -> ExternType {
@@ -107,14 +107,14 @@ pub mod allocation {
 
     pub fn alloc_function<Refs>(s: &mut Store<Refs>,
                                 func: Refs::FuncRef,
-                                types: &[FuncType],
+                                module: &Refs,
                                 moduleaddr: ModuleAddr) -> FuncAddr
         where Refs: StructureReference
     {
         let a = s.funcs.len();
-        let functype = &types[func.type_.0 as usize];
+        let functype = module.functype_ref(func.type_.0 as usize);
         let funcinst = FuncInst::Internal {
-            type_: functype.clone(), // TODO: bad copy
+            type_: functype,
             module: moduleaddr,
             code: func,
         };
@@ -124,7 +124,7 @@ pub mod allocation {
     }
     pub fn alloc_host_function<Refs>(s: &mut Store<Refs>,
                                      hostfunc: HostFunc,
-                                     functype: FuncType) -> FuncAddr
+                                     functype: Refs::FuncTypeRef) -> FuncAddr
         where Refs: StructureReference
     {
         let a = s.funcs.len();
@@ -227,7 +227,7 @@ pub mod allocation {
         let mut funcaddrs = vec![];
         for (i, _) in module.funcs.iter().enumerate() {
             let funci = module.func_ref(i);
-            let funcaddri = alloc_function(s, funci, &module.types, moduleaddr);
+            let funcaddri = alloc_function(s, funci, &module, moduleaddr);
             funcaddrs.push(funcaddri);
         }
 
