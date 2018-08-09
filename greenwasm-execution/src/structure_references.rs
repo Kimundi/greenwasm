@@ -46,6 +46,7 @@ macro_rules! generate_refs {
                 }
             )*
         }
+        pub type ModuleCloneRef = SelfDeref<Module, Module>;
     };
     (REF: $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
@@ -59,6 +60,7 @@ macro_rules! generate_refs {
                 }
             )*
         }
+        pub type ModuleRefRef<'a> = SelfDeref<Module, &'a Module>;
     };
     (ARC: $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
@@ -100,6 +102,7 @@ macro_rules! generate_refs {
                 }
             )*
         }
+        pub type ModuleArcRef = SelfDeref<Module, Arc<Module>>;
     }
 }
 
@@ -109,7 +112,3 @@ generate_refs! {
     Name, NameRef, name_ref(export_idx: usize), |s| s.exports[export_idx].name;
     Func, FuncRef, func_ref(func_idx: usize),   |s| s.funcs[func_idx];
 }
-
-pub type ModuleCloneRef = SelfDeref<Module, Module>;
-pub type ModuleRefRef<'a> = SelfDeref<Module, &'a Module>;
-pub type ModuleArcRef = SelfDeref<Module, Arc<Module>>;
