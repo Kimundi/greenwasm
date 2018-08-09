@@ -110,5 +110,7 @@ generate_refs! {
     ALL: self;
 
     Name, NameRef, name_ref(export_idx: usize), |s| s.exports[export_idx].name;
-    Func, FuncRef, func_ref(func_idx: usize),   |s| s.funcs[func_idx];
+    Func, FuncRef, func_ref(func_idx: usize), |s| s.funcs[func_idx];
+    FuncType, FuncTypeRef, functype_ref(type_idx: usize), |s| s.types[type_idx];
+    Wec<FuncType>, FuncTypesRef, functypes_ref(), |s| s.types;
 }

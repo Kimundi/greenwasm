@@ -289,7 +289,7 @@ pub mod allocation {
         }
 
         let moduleinst = ModuleInst {
-            types: module.types.clone().into(), // TODO: bad copy
+            types: module.functypes_ref(),
             funcaddrs: funcaddrs_mod,
             tableaddrs: tableaddrs_mod,
             memaddrs: memaddrs_mod,

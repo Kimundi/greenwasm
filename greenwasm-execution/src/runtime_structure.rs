@@ -64,7 +64,7 @@ pub struct ModuleAddr(pub usize);
 pub struct ModuleInst<Refs>
     where Refs: StructureReference
 {
-    pub types: Vec<FuncType>, // TODO: replace with reference to Module
+    pub types: Refs::FuncTypesRef,
     pub funcaddrs: Vec<FuncAddr>,
     pub tableaddrs: Vec<TableAddr>,
     pub memaddrs: Vec<MemAddr>,
