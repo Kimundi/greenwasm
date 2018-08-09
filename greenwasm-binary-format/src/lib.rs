@@ -171,8 +171,8 @@ named!(parse_valtype <Inp, ValType>, alt!(
 // 5.3.2 Result Types
 use structure::types::ResultType;
 named!(parse_blocktype <Inp, ResultType>, alt!(
-    btagmap!(0x40, None)
-    | map!(parse_valtype, |v| Some(v))
+    btagmap!(0x40, None.into())
+    | map!(parse_valtype, |v| Some(v).into())
 ));
 
 // 5.3.3 Function Types

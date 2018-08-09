@@ -137,7 +137,32 @@ pub enum ValType {
 // Later answer: Obviously that it is a list with 0 or 1 element,
 // as opposed to a missing or not missing element.
 
-pub type ResultType = Option<ValType>;
+/// A ResultType is a list of 0 or 1 elements
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct ResultType {
+    results: Option<ValType>
+}
+impl ::std::ops::Deref for ResultType {
+    type Target = [ValType];
+
+    fn deref(&self) -> &Self::Target {
+        self.results.as_ref().map(::std::slice::from_ref).unwrap_or(&[])
+    }
+}
+impl From<ValType> for ResultType {
+    fn from(t: ValType) -> Self {
+        ResultType {
+            results: Some(t)
+        }
+    }
+}
+impl From<Option<ValType>> for ResultType {
+    fn from(t: Option<ValType>) -> Self {
+        ResultType {
+            results: t
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FuncType {

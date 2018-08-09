@@ -12,3 +12,4 @@ readme = "README.md"
 workspace = ".."
 
 [dependencies]
+smallvec = { version = "0.6.4", features = ["union"] }

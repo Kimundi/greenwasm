@@ -220,11 +220,11 @@ fn test_parse_name() {
 
 #[test]
 fn test_parse_result_valtype() {
-    check(&parse_blocktype, &[0x7f], OkWith(Some(ValType::I32)));
-    check(&parse_blocktype, &[0x7e], OkWith(Some(ValType::I64)));
-    check(&parse_blocktype, &[0x7d], OkWith(Some(ValType::F32)));
-    check(&parse_blocktype, &[0x7c], OkWith(Some(ValType::F64)));
-    check(&parse_blocktype, &[0x40], OkWith(None));
+    check(&parse_blocktype, &[0x7f], OkWith(ValType::I32.into()));
+    check(&parse_blocktype, &[0x7e], OkWith(ValType::I64.into()));
+    check(&parse_blocktype, &[0x7d], OkWith(ValType::F32.into()));
+    check(&parse_blocktype, &[0x7c], OkWith(ValType::F64.into()));
+    check(&parse_blocktype, &[0x40], OkWith(None.into()));
 }
 
 #[test]

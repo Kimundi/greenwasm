@@ -72,7 +72,7 @@ test_file!(factorial, "tests/factorial.wasm", Module {
                     GetLocal(LocalIdx(0)),
                     F64Const(1.0),
                     F64Lt,
-                    IfElse(Some(ValType::F64), vec![
+                    IfElse(ValType::F64.into(), vec![
                         F64Const(1.0),
                     ], vec![
                         GetLocal(LocalIdx(0)),
