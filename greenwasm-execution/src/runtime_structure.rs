@@ -8,6 +8,16 @@ pub enum Val {
     F32(F32),
     F64(F64),
 }
+impl Val {
+    pub fn ty(&self) -> ValType {
+        match *self {
+            Val::I32(_) => ValType::I32,
+            Val::I64(_) => ValType::I64,
+            Val::F32(_) => ValType::F32,
+            Val::F64(_) => ValType::F64,
+        }
+    }
+}
 
 pub enum Result {
     Vals(Vec<Val>),
