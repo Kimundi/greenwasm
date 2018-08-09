@@ -1,6 +1,7 @@
 use structure::types::*;
 use structure::modules::*;
 use crate::runtime_structure::*;
+use crate::structure_references::*;
 
 // TODO: more central definition
 const WASM_PAGE_SIZE: usize = 65536;
@@ -104,19 +105,28 @@ pub mod allocation {
     use self::AllocError::*;
     pub type AResult = ::std::result::Result<(), AllocError>;
 
-    pub fn alloc_function(s: &mut Store, func: &Func, types: &[FuncType], moduleaddr: ModuleAddr) -> FuncAddr {
+    pub fn alloc_function<Refs>(s: &mut Store<Refs>,
+                                func: Refs::FuncRef,
+                                types: &[FuncType],
+                                moduleaddr: ModuleAddr) -> FuncAddr
+        where Refs: StructureReference
+    {
         let a = s.funcs.len();
         let functype = &types[func.type_.0 as usize];
         let funcinst = FuncInst::Internal {
             type_: functype.clone(), // TODO: bad copy
             module: moduleaddr,
-            code: func.clone() // TODO: bad copy
+            code: func,
         };
         s.funcs.push(funcinst);
 
         FuncAddr(a)
     }
-    pub fn alloc_host_function(s: &mut Store, hostfunc: HostFunc, functype: FuncType) -> FuncAddr {
+    pub fn alloc_host_function<Refs>(s: &mut Store<Refs>,
+                                     hostfunc: HostFunc,
+                                     functype: FuncType) -> FuncAddr
+        where Refs: StructureReference
+    {
         let a = s.funcs.len();
         let funcinst = FuncInst::Host {
             type_: functype,
@@ -126,7 +136,10 @@ pub mod allocation {
 
         FuncAddr(a)
     }
-    pub fn alloc_table(s: &mut Store, tabletype: &TableType) -> TableAddr {
+    pub fn alloc_table<Refs>(s: &mut Store<Refs>,
+                             tabletype: &TableType) -> TableAddr
+        where Refs: StructureReference
+    {
         let TableType {
             limits: Limits { min: n, max: m },
             elemtype: _ // TODO: Why does the spec ignore this here?
@@ -140,7 +153,10 @@ pub mod allocation {
 
         TableAddr(a)
     }
-    pub fn alloc_mem(s: &mut Store, memtype: &MemType) -> MemAddr {
+    pub fn alloc_mem<Refs>(s: &mut Store<Refs>,
+                           memtype: &MemType) -> MemAddr
+        where Refs: StructureReference
+    {
         let MemType {
             limits: Limits { min: n, max: m },
         } = *memtype;
@@ -153,7 +169,11 @@ pub mod allocation {
 
         MemAddr(a)
     }
-    pub fn alloc_global(s: &mut Store, globaltype: &GlobalType, val: Val) -> GlobalAddr {
+    pub fn alloc_global<Refs>(s: &mut Store<Refs>,
+                              globaltype: &GlobalType,
+                              val: Val) -> GlobalAddr
+        where Refs: StructureReference
+    {
         let GlobalType {
             mutability,
             valtype: t,
@@ -168,7 +188,8 @@ pub mod allocation {
 
         GlobalAddr(a)
     }
-    pub fn grow_table_by(tableinst: &mut TableInst, n: usize) -> AResult {
+    pub fn grow_table_by(tableinst: &mut TableInst,
+                         n: usize) -> AResult {
         if let Some(max) = tableinst.max {
             if (max as usize) < (tableinst.elem.len() as usize + n) {
                 Err(AllocatingTableBeyondMaxLimit)?;
@@ -179,7 +200,8 @@ pub mod allocation {
 
         Ok(())
     }
-    pub fn grow_memory_by(meminst: &mut MemInst, n: usize) -> AResult {
+    pub fn grow_memory_by(meminst: &mut MemInst,
+                          n: usize) -> AResult {
         let len = n * WASM_PAGE_SIZE;
         if let Some(max) = meminst.max {
             if (max as usize * WASM_PAGE_SIZE) < (meminst.data.len() as usize + len) {
@@ -191,10 +213,11 @@ pub mod allocation {
 
         Ok(())
     }
-    pub fn alloc_module(s: &mut Store,
-                        module: &Module,
-                        externvals_im: &[ExternVal],
-                        vals: &[Val]) -> ModuleAddr
+    pub fn alloc_module<Refs>(s: &mut Store<Refs>,
+                              module: &Refs,
+                              externvals_im: &[ExternVal],
+                              vals: &[Val]) -> ModuleAddr
+        where Refs: StructureReference
     {
         // NB: This is a modification to the spec to allow cycles between
         // function instances and module instances
@@ -202,8 +225,9 @@ pub mod allocation {
         let moduleaddr = ModuleAddr(a);
 
         let mut funcaddrs = vec![];
-        for funci in &module.funcs {
-            let funcaddri = alloc_function(s, &funci, &module.types, moduleaddr);
+        for (i, _) in module.funcs.iter().enumerate() {
+            let funci = module.func_ref(i);
+            let funcaddri = alloc_function(s, funci, &module.types, moduleaddr);
             funcaddrs.push(funcaddri);
         }
 
@@ -246,7 +270,7 @@ pub mod allocation {
         }).chain(globaladdrs).collect::<Vec<_>>();
 
         let mut exportinsts = vec![];
-        for exporti in &module.exports {
+        for (i, exporti) in module.exports.iter().enumerate() {
             let externvali = match exporti.desc {
                 ExportDesc::Func(funcidx)
                     => ExternVal::Func(funcaddrs_mod[funcidx.0 as usize]),
@@ -258,7 +282,7 @@ pub mod allocation {
                     => ExternVal::Global(globaladdrs_mod[globalidx.0 as usize]),
             };
             let exportinsti = ExportInst {
-                name: exporti.name.clone(), // TODO: bad copy
+                name: module.name_ref(i),
                 value: externvali,
             };
             exportinsts.push(exportinsti);

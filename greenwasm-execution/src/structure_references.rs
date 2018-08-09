@@ -1,15 +1,30 @@
 use std::borrow::Borrow;
 use std::sync::Arc;
+use std::ops::Deref;
+use std::marker::PhantomData;
 
 use structure::modules::*;
 use structure::types::*;
 use crate::runtime_structure::*;
 
-pub trait StructureReference {
-    type NameRef: Borrow<Name> + Clone;
+#[derive(Clone)]
+pub struct SelfDeref<U, T>(pub T, PhantomData<U>);
+impl<T, U> Deref for SelfDeref<U, T>
+    where T: Borrow<U>
+{
+    type Target = U;
+    fn deref(&self) -> &Self::Target {
+        self.0.borrow()
+    }
+}
+
+pub trait StructureReference:
+    Deref<Target=Module>
+{
+    type NameRef: Deref<Target=Name> + Clone;
     fn name_ref(&self, export_idx: usize) -> Self::NameRef;
 
-    type FuncRef: Borrow<Func> + Clone;
+    type FuncRef: Deref<Target=Func> + Clone;
     fn func_ref(&self, func_idx: usize) -> Self::FuncRef;
 
 }
@@ -20,33 +35,33 @@ macro_rules! generate_refs {
         generate_refs!(ARC: $($t)*);
         generate_refs!(REF: $($t)*);
     );
-    (CLONE: $modty:ty, $self:ident; $(
+    (CLONE: $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
-        impl StructureReference for $modty {
+        impl StructureReference for SelfDeref<Module, Module> {
             $(
-                type $refty = $t;
+                type $refty = SelfDeref<$t, $t>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
                     let $s = $self;
-                    $map.clone()
+                    SelfDeref($map.clone(), PhantomData)
                 }
             )*
         }
     };
-    (REF: $modty:ty, $self:ident; $(
+    (REF: $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
-        impl<'a> StructureReference for &'a $modty {
+        impl<'a> StructureReference for SelfDeref<Module, &'a Module> {
             $(
-                type $refty = &'a $t;
+                type $refty = SelfDeref<$t, &'a $t>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
-                    let $s = $self;
-                    &$map
+                    let $s = &$self.0;
+                    SelfDeref(&$map, PhantomData)
                 }
             )*
         }
     };
-    (ARC: $modty:ty, $self:ident; $(
+    (ARC: $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
         pub mod arc {
@@ -71,16 +86,18 @@ macro_rules! generate_refs {
                 }
             )*
         }
-        impl StructureReference for Arc<$modty> {
+        impl StructureReference for SelfDeref<Module, Arc<Module>> {
             $(
-                type $refty = self::arc::$refty;
+                type $refty = SelfDeref<$t, self::arc::$refty>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
-                    self::arc::$refty {
-                        module: $self.clone(),
+                    let module: &Arc<Module> = &$self.0;
+
+                    SelfDeref(self::arc::$refty {
+                        module: module.clone(),
                         $(
                             $argname
                         ),*
-                    }
+                    }, PhantomData)
                 }
             )*
         }
@@ -88,7 +105,7 @@ macro_rules! generate_refs {
 }
 
 generate_refs! {
-    ALL: Module, self;
+    ALL: self;
     Name, NameRef, name_ref(export_idx: usize), |s| s.exports[export_idx].name;
     Func, FuncRef, func_ref(func_idx: usize),   |s| s.funcs[func_idx];
 }
