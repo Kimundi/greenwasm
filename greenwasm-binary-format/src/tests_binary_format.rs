@@ -270,7 +270,7 @@ fn test_parse_customsecs() {
     check(&parse_customsec, &[
         0, 6, 3, 97, 98, 99, 0xff, 0xee,
     ], OkWith(
-        Custom { name: "abc".into(), bytes: vec![0xff, 0xee] }
+        CustomSection { name: "abc".into(), bytes: vec![0xff, 0xee] }
     ));
 
     check(&parse_customsec, &[
@@ -284,15 +284,15 @@ fn test_parse_customsecs() {
     check(&parse_customsecs, &[
         0, 6, 3, b'a', b'b', b'c', 0xff, 0xee,
     ], OkWith(vec![
-        Custom { name: "abc".into(), bytes: vec![0xff, 0xee] },
+        CustomSection { name: "abc".into(), bytes: vec![0xff, 0xee] },
     ]));
 
     check(&parse_customsecs, &[
         0, 6, 3, b'a', b'b', b'c', 0xff, 0xee,
         0, 8, 4, b'd', b'e', b'f', b'g', 0xa0, 0xb1, 0xc2
     ], OkWith(vec![
-        Custom { name: "abc".into(), bytes: vec![0xff, 0xee] },
-        Custom { name: "defg".into(), bytes: vec![0xa0, 0xb1, 0xc2] },
+        CustomSection { name: "abc".into(), bytes: vec![0xff, 0xee] },
+        CustomSection { name: "defg".into(), bytes: vec![0xa0, 0xb1, 0xc2] },
     ]));
 }
 
