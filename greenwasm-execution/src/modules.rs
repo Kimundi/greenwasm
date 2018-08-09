@@ -196,8 +196,8 @@ pub mod allocation {
                         externvals_im: &[ExternVal],
                         vals: &[Val]) -> ModuleAddr
     {
-
-        // TODO: resolve this recursion here
+        // NB: This is a modification to the spec to allow cycles between
+        // function instances and module instances
         let a = s.modules.len();
         let moduleaddr = ModuleAddr(a);
 
@@ -277,6 +277,12 @@ pub mod allocation {
 
         moduleaddr
     }
+}
+
+mod instantiation {
+    use super::*;
+
+
 }
 
 

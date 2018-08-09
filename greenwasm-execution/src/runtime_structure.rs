@@ -1,6 +1,7 @@
 use structure::types::*;
 use structure::modules::*;
 use structure::instructions::*;
+use crate::structure_references::*;
 
 #[derive(Copy, Clone)]
 pub enum Val {
@@ -25,8 +26,10 @@ pub enum Result {
     Trap,
 }
 
-pub struct Store {
-    pub funcs: Vec<FuncInst>,
+pub struct Store<Refs = Module>
+    where Refs: StructureReference
+{
+    pub funcs: Vec<FuncInst<Refs>>,
     pub tables: Vec<TableInst>,
     pub mems: Vec<MemInst>,
     pub globals: Vec<GlobalInst>,
@@ -35,7 +38,7 @@ pub struct Store {
     ///
     /// This is a modification of the spec to make it easier to resolve cycles
     /// between data structures.
-    pub modules: Vec<ModuleInst>,
+    pub modules: Vec<ModuleInst<Refs>>,
 }
 
 #[derive(Clone, Copy)]
@@ -58,21 +61,25 @@ pub struct GlobalAddr(pub usize);
 pub struct ModuleAddr(pub usize);
 
 #[derive(Clone)]
-pub struct ModuleInst {
+pub struct ModuleInst<Refs>
+    where Refs: StructureReference
+{
     pub types: Vec<FuncType>, // TODO: replace with reference to Module
     pub funcaddrs: Vec<FuncAddr>,
     pub tableaddrs: Vec<TableAddr>,
     pub memaddrs: Vec<MemAddr>,
     pub globaladdrs: Vec<GlobalAddr>,
-    pub exports: Vec<ExportInst>,
+    pub exports: Vec<ExportInst<Refs>>,
 }
 
 #[derive(Clone)]
-pub enum FuncInst {
+pub enum FuncInst<Refs>
+    where Refs: StructureReference
+{
     Internal {
         type_: FuncType,
         module: ModuleAddr,
-        code: Func
+        code: Refs::FuncRef,
     },
     Host {
         type_: FuncType,
@@ -104,8 +111,10 @@ pub struct GlobalInst {
 }
 
 #[derive(Clone)]
-pub struct ExportInst {
-    pub name: Name, // TODO: change implementation to something more sane
+pub struct ExportInst<Refs>
+    where Refs: StructureReference
+{
+    pub name: Refs::NameRef, // TODO: change implementation to something more sane
     pub value: ExternVal,
 }
 
