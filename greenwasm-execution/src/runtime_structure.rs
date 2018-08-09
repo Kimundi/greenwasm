@@ -26,7 +26,7 @@ pub enum Result {
     Trap,
 }
 
-pub struct Store<Refs = SelfDeref<Module, Module>>
+pub struct Store<Refs = ModuleCloneRef>
     where Refs: StructureReference
 {
     pub funcs: Vec<FuncInst<Refs>>,

@@ -5,7 +5,6 @@ use std::marker::PhantomData;
 
 use structure::modules::*;
 use structure::types::*;
-use crate::runtime_structure::*;
 
 #[derive(Clone)]
 pub struct SelfDeref<U, T>(pub T, PhantomData<U>);
@@ -109,3 +108,7 @@ generate_refs! {
     Name, NameRef, name_ref(export_idx: usize), |s| s.exports[export_idx].name;
     Func, FuncRef, func_ref(func_idx: usize),   |s| s.funcs[func_idx];
 }
+
+pub type ModuleCloneRef = SelfDeref<Module, Module>;
+pub type ModuleRefRef<'a> = SelfDeref<Module, &'a Module>;
+pub type ModuleArcRef = SelfDeref<Module, Arc<Module>>;
