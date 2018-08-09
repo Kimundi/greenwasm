@@ -39,7 +39,7 @@ pub struct LocalIdx(pub U32);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct LabelIdx(pub U32);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Func {
     pub type_: TypeIdx,
     pub locals: Wec<ValType>,

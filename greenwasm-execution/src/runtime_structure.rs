@@ -31,14 +31,19 @@ pub struct Store {
     pub globals: Vec<GlobalInst>,
 }
 
+#[derive(Clone, Copy)]
 pub struct FuncAddr(pub usize);
 
+#[derive(Clone, Copy)]
 pub struct TableAddr(pub usize);
 
+#[derive(Clone, Copy)]
 pub struct MemAddr(pub usize);
 
+#[derive(Clone, Copy)]
 pub struct GlobalAddr(pub usize);
 
+#[derive(Clone)]
 pub struct ModuleInst {
     pub types: Vec<FuncType>,
     pub funcaddrs: Vec<FuncAddr>,
@@ -48,10 +53,11 @@ pub struct ModuleInst {
     pub exports: Vec<ExportInst>,
 }
 
+#[derive(Clone)]
 pub enum FuncInst {
     Internal {
         type_: FuncType,
-        module: ModuleInst,
+        module: ModuleInst, // TODO: change implementation to something more sane
         code: Func
     },
     Host {
@@ -60,8 +66,9 @@ pub enum FuncInst {
     },
 }
 
+#[derive(Clone, Copy)]
 pub struct HostFunc {
-    pub id: usize
+    pub id: u32
 }
 
 pub struct TableInst {
@@ -69,6 +76,7 @@ pub struct TableInst {
     pub max: Option<u32>
 }
 
+#[derive(Clone, Copy)]
 pub struct FuncElem(pub Option<FuncAddr>);
 
 pub struct MemInst {
@@ -81,11 +89,13 @@ pub struct GlobalInst {
     pub mutability: Mut,
 }
 
+#[derive(Clone)]
 pub struct ExportInst {
     pub name: Name,
     pub value: ExternVal,
 }
 
+#[derive(Clone)]
 pub enum ExternVal {
     Func(FuncAddr),
     Table(TableAddr),

@@ -2,7 +2,10 @@ use structure::types::*;
 use structure::modules::*;
 use crate::runtime_structure::*;
 
-mod external_typing {
+// TODO: more central definition
+const WASM_PAGE_SIZE: usize = 65536;
+
+pub mod external_typing {
     use super::*;
 
     pub fn func(s: &Store, a: usize) -> ExternType {
@@ -32,9 +35,6 @@ mod external_typing {
     }
 
     pub fn mem(s: &Store, a: usize) -> ExternType {
-        // TODO: more central definition
-        const WASM_PAGE_SIZE: usize = 65536;
-
         let MemInst { data, max } = &s.mems[a];
         let n = data.len() / WASM_PAGE_SIZE;
         let m = *max;
@@ -61,7 +61,7 @@ mod external_typing {
     }
 }
 
-mod import_matching {
+pub mod import_matching {
     use super::*;
 
     pub fn limits(a: &Limits, b: &Limits) -> bool {
@@ -69,7 +69,9 @@ mod import_matching {
         let Limits { min: n2, max: m2 } = b;
 
         (n1 >= n2) && (
-            (m2.is_none()) || (m1.is_some() && m2.is_some() && m1 <= m2)
+            (m2.is_none()) || (
+                m1.is_some() && m2.is_some() && m1.unwrap() <= m2.unwrap()
+            )
         )
     }
 
@@ -91,3 +93,74 @@ mod import_matching {
         }
     }
 }
+
+pub mod allocation {
+    use super::*;
+
+    pub fn function(s: &mut Store, func: &Func, moduleinst: &ModuleInst) -> FuncAddr {
+        let a = s.funcs.len();
+        let functype = &moduleinst.types[func.type_.0 as usize];
+        let funcinst = FuncInst::Internal {
+            type_: functype.clone(), // TODO: bad copy
+            module: moduleinst.clone(), // TODO: bad copy
+            code: func.clone() // TODO: bad copy
+        };
+        s.funcs.push(funcinst);
+
+        FuncAddr(a)
+    }
+    pub fn host_function(s: &mut Store, hostfunc: HostFunc, functype: FuncType) -> FuncAddr {
+        let a = s.funcs.len();
+        let funcinst = FuncInst::Host {
+            type_: functype,
+            hostcode: hostfunc,
+        };
+        s.funcs.push(funcinst);
+
+        FuncAddr(a)
+    }
+    pub fn table(s: &mut Store, tabletype: &TableType) -> TableAddr {
+        let TableType {
+            limits: Limits { min: n, max: m },
+            elemtype: _ // TODO: Why does the spec ignore this here?
+        } = *tabletype;
+        let a = s.tables.len();
+        let tableinst = TableInst {
+            elem: ::std::iter::repeat(FuncElem(None)).take(n as usize).collect(),
+            max: m,
+        };
+        s.tables.push(tableinst);
+
+        TableAddr(a)
+    }
+    pub fn mem(s: &mut Store, memtype: &MemType) -> MemAddr {
+        let MemType {
+            limits: Limits { min: n, max: m },
+        } = *memtype;
+        let a = s.mems.len();
+        let meminst = MemInst {
+            data: vec![0x00; (n as usize) * WASM_PAGE_SIZE].into(),
+            max: m,
+        };
+        s.mems.push(meminst);
+
+        MemAddr(a)
+    }
+    pub fn global(s: &mut Store, globaltype: &GlobalType, val: Val) -> GlobalAddr {
+        let GlobalType {
+            mutability,
+            valtype: t,
+        } = *globaltype;
+        assert!(t == val.ty());
+        let a = s.globals.len();
+        let globalinst = GlobalInst {
+            value: val,
+            mutability,
+        };
+        s.globals.push(globalinst);
+
+        GlobalAddr(a)
+    }
+}
+
+
