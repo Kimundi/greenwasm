@@ -1,6 +1,5 @@
 use binary_format::parse_binary_format;
-use validation::validate;
-use validation::Ctx;
+use validation::validate_module;
 
 fn main() {
     if let Some(path) = ::std::env::args().nth(1) {
@@ -10,7 +9,7 @@ fn main() {
         let (module, _custom_sections) = parse_binary_format(&file).unwrap();
 
         println!("Validation:");
-        validate::module(&Ctx::new(), &module).unwrap();
+        validate_module(module).unwrap();
     } else {
         println!("Usage: prog <wasmfile>")
     }

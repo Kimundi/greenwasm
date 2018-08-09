@@ -3,7 +3,7 @@ use structure::modules::*;
 use structure::instructions::Instr::*;
 use structure::instructions::*;
 use binary_format::parse_binary_format;
-use validation::*;
+use validation::validate_module;
 
 fn diff_print<T: ::std::fmt::Debug>(value_is: &T, value_should: &T) -> String {
     let value_is = format!("{:#?}", value_is);
@@ -43,9 +43,9 @@ macro_rules! test_file {
                 assert!(module == ref_module, "{}", diff_print(&module, &ref_module));
             }
 
-            let validation_result = validate::module(&Ctx::new(), &module).unwrap();
+            let validated_module = validate_module(module).unwrap();
 
-            println!("Is valid with {:?}", validation_result);
+            println!("Is valid with {:?}", validated_module.import_export_mapping());
         }
     );
     ($name:ident, $path:expr) => (

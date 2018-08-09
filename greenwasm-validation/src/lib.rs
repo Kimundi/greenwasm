@@ -1294,3 +1294,27 @@ pub mod validate {
         }
     });
 }
+
+pub struct ValidatedModule {
+    module: Module,
+    import_export_mapping: ImportExportMapping
+}
+impl ::std::ops::Deref for ValidatedModule {
+    type Target = Module;
+    fn deref(&self) -> &Self::Target {
+        &self.module
+    }
+}
+impl ValidatedModule {
+    pub fn import_export_mapping(&self) -> &ImportExportMapping {
+        &self.import_export_mapping
+    }
+}
+
+pub fn validate_module(module: Module) -> VResult<ValidatedModule> {
+    let import_export_mapping = validate::module(&Ctx::new(), &module)?;
+    Ok(ValidatedModule {
+        module,
+        import_export_mapping,
+    })
+}
