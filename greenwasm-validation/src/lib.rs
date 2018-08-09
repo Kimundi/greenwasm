@@ -153,6 +153,19 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    fn with(&'a self) -> Ctx<'a> {
+        Ctx {
+            types:   CtxMember::Delegated(&self.types),
+            funcs:   CtxMember::Delegated(&self.funcs),
+            tables:  CtxMember::Delegated(&self.tables),
+            mems:    CtxMember::Delegated(&self.mems),
+            globals: CtxMember::Delegated(&self.globals),
+            locals:  CtxMember::Delegated(&self.locals),
+            labels:  CtxMember::Delegated(&self.labels),
+            return_: CtxMember::Delegated(&self.return_),
+        }
+    }
+
     fn error(&self, error: ValidationErrorEnum) -> VResult<()> {
         Err(ValidationError {
             kind: error
@@ -167,19 +180,6 @@ impl<'a> Ctx<'a> {
     ctx_idx!(self, types: FuncType,     TypeIdx,   CtxTypesIdxDoesNotExist  );
     ctx_idx!(self, labels: ResultType,  LabelIdx,  CtxLabelsIdxDoesNotExist );
     ctx_idx!(self, return_: ResultType, LabelIdx,  CtxReturnDoesNotExist    );
-
-    fn with(&'a self) -> Ctx<'a> {
-        Ctx {
-            types:   CtxMember::Delegated(&self.types),
-            funcs:   CtxMember::Delegated(&self.funcs),
-            tables:  CtxMember::Delegated(&self.tables),
-            mems:    CtxMember::Delegated(&self.mems),
-            globals: CtxMember::Delegated(&self.globals),
-            locals:  CtxMember::Delegated(&self.locals),
-            labels:  CtxMember::Delegated(&self.labels),
-            return_: CtxMember::Delegated(&self.return_),
-        }
-    }
 
     ctx_set!(set_locals(self,  locals:  Vec<ValType>));
     ctx_set!(set_types(self,   types:   Vec<FuncType>));
