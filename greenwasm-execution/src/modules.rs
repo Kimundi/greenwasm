@@ -60,3 +60,34 @@ mod external_typing {
         })
     }
 }
+
+mod import_matching {
+    use super::*;
+
+    pub fn limits(a: &Limits, b: &Limits) -> bool {
+        let Limits { min: n1, max: m1 } = a;
+        let Limits { min: n2, max: m2 } = b;
+
+        (n1 >= n2) && (
+            (m2.is_none()) || (m1.is_some() && m2.is_some() && m1 <= m2)
+        )
+    }
+
+    pub fn extern_type(a: &ExternType, b: &ExternType) -> bool {
+        match (a, b) {
+            (ExternType::Func(a), ExternType::Func(b)) => {
+                a == b
+            }
+            (ExternType::Table(a), ExternType::Table(b)) => {
+                limits(&a.limits, &b.limits) && a.elemtype == b.elemtype
+            }
+            (ExternType::Mem(a), ExternType::Mem(b)) => {
+                limits(&a.limits, &b.limits)
+            }
+            (ExternType::Global(a), ExternType::Global(b)) => {
+                a == b
+            }
+            _ => false
+        }
+    }
+}
