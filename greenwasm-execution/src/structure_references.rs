@@ -17,23 +17,23 @@ impl<T, U> Deref for SelfDeref<U, T>
     }
 }
 
-pub trait StructureReference:
-    Deref<Target=Module>
-{
-    type NameRef: Deref<Target=Name> + Clone;
-    fn name_ref(&self, export_idx: usize) -> Self::NameRef;
-
-    type FuncRef: Deref<Target=Func> + Clone;
-    fn func_ref(&self, func_idx: usize) -> Self::FuncRef;
-
-}
-
 macro_rules! generate_refs {
     (ALL: $($t:tt)*) => (
+        generate_refs!(TRAIT: $($t)*);
         generate_refs!(CLONE: $($t)*);
         generate_refs!(ARC: $($t)*);
         generate_refs!(REF: $($t)*);
     );
+    (TRAIT: $self:ident; $(
+        $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
+    ;)*) => {
+        pub trait StructureReference: Deref<Target=Module> {
+            $(
+                type $refty: Deref<Target=$t> + Clone;
+                fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty;
+            )*
+        }
+    };
     (CLONE: $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
@@ -105,6 +105,7 @@ macro_rules! generate_refs {
 
 generate_refs! {
     ALL: self;
+
     Name, NameRef, name_ref(export_idx: usize), |s| s.exports[export_idx].name;
     Func, FuncRef, func_ref(func_idx: usize),   |s| s.funcs[func_idx];
 }
