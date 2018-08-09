@@ -104,12 +104,12 @@ pub mod allocation {
     use self::AllocError::*;
     pub type AResult = ::std::result::Result<(), AllocError>;
 
-    pub fn alloc_function(s: &mut Store, func: &Func, moduleinst: &ModuleInst) -> FuncAddr {
+    pub fn alloc_function(s: &mut Store, func: &Func, types: &[FuncType], moduleaddr: ModuleAddr) -> FuncAddr {
         let a = s.funcs.len();
-        let functype = &moduleinst.types[func.type_.0 as usize];
+        let functype = &types[func.type_.0 as usize];
         let funcinst = FuncInst::Internal {
             type_: functype.clone(), // TODO: bad copy
-            module: moduleinst.clone(), // TODO: bad copy
+            module: moduleaddr,
             code: func.clone() // TODO: bad copy
         };
         s.funcs.push(funcinst);
@@ -194,15 +194,16 @@ pub mod allocation {
     pub fn alloc_module(s: &mut Store,
                         module: &Module,
                         externvals_im: &[ExternVal],
-                        vals: &[Val]) -> ModuleInst
+                        vals: &[Val]) -> ModuleAddr
     {
 
         // TODO: resolve this recursion here
-        let moduleinst_below = unimplemented!();
+        let a = s.modules.len();
+        let moduleaddr = ModuleAddr(a);
 
         let mut funcaddrs = vec![];
         for funci in &module.funcs {
-            let funcaddri = alloc_function(s, &funci, &moduleinst_below);
+            let funcaddri = alloc_function(s, &funci, &module.types, moduleaddr);
             funcaddrs.push(funcaddri);
         }
 
@@ -257,14 +258,14 @@ pub mod allocation {
                     => ExternVal::Global(globaladdrs_mod[globalidx.0 as usize]),
             };
             let exportinsti = ExportInst {
-                name: exporti.name,
+                name: exporti.name.clone(), // TODO: bad copy
                 value: externvali,
             };
             exportinsts.push(exportinsti);
         }
 
         let moduleinst = ModuleInst {
-            types: module.types.into(),
+            types: module.types.clone().into(), // TODO: bad copy
             funcaddrs: funcaddrs_mod,
             tableaddrs: tableaddrs_mod,
             memaddrs: memaddrs_mod,
@@ -272,7 +273,9 @@ pub mod allocation {
             exports: exportinsts,
         };
 
-        moduleinst
+        s.modules.push(moduleinst);
+
+        moduleaddr
     }
 }
 

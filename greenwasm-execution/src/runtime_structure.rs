@@ -2,6 +2,7 @@ use structure::types::*;
 use structure::modules::*;
 use structure::instructions::*;
 
+#[derive(Copy, Clone)]
 pub enum Val {
     I32(I32),
     I64(I64),
@@ -29,6 +30,12 @@ pub struct Store {
     pub tables: Vec<TableInst>,
     pub mems: Vec<MemInst>,
     pub globals: Vec<GlobalInst>,
+
+    /// All instanced modules in the `Store`
+    ///
+    /// This is a modification of the spec to make it easier to resolve cycles
+    /// between data structures.
+    pub modules: Vec<ModuleInst>,
 }
 
 #[derive(Clone, Copy)]
@@ -43,9 +50,16 @@ pub struct MemAddr(pub usize);
 #[derive(Clone, Copy)]
 pub struct GlobalAddr(pub usize);
 
+/// Address of a `ModuleInst` in the `Store`
+///
+/// This is a modification of the spec to make it easier to resolve cycles
+/// between data structures.
+#[derive(Clone, Copy)]
+pub struct ModuleAddr(pub usize);
+
 #[derive(Clone)]
 pub struct ModuleInst {
-    pub types: Vec<FuncType>,
+    pub types: Vec<FuncType>, // TODO: replace with reference to Module
     pub funcaddrs: Vec<FuncAddr>,
     pub tableaddrs: Vec<TableAddr>,
     pub memaddrs: Vec<MemAddr>,
@@ -57,7 +71,7 @@ pub struct ModuleInst {
 pub enum FuncInst {
     Internal {
         type_: FuncType,
-        module: ModuleInst, // TODO: change implementation to something more sane
+        module: ModuleAddr,
         code: Func
     },
     Host {
@@ -91,7 +105,7 @@ pub struct GlobalInst {
 
 #[derive(Clone)]
 pub struct ExportInst {
-    pub name: Name,
+    pub name: Name, // TODO: change implementation to something more sane
     pub value: ExternVal,
 }
 
@@ -119,5 +133,5 @@ pub enum StackElem {
 
 pub struct Frame {
     pub locals: Vec<Val>,
-    pub module: ModuleInst, // TODO: change implementation to something more sane
+    pub module: ModuleAddr,
 }
