@@ -152,6 +152,17 @@ pub enum FuncInst<Refs>
         hostcode: HostFunc
     },
 }
+impl<Refs> FuncInst<Refs> where Refs: StructureReference {
+    pub fn type_(&self) -> &Refs::FuncTypeRef {
+        match self {
+            | FuncInst::Internal { type_, .. }
+            | FuncInst::Host { type_, .. }
+            => {
+                type_
+            }
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct HostFunc {

@@ -13,11 +13,7 @@ pub mod external_typing {
     pub fn func<Refs>(s: &Store<Refs>, a: FuncAddr) -> ExternType
         where Refs: StructureReference
     {
-        let functype = match &s.funcs[a] {
-            | FuncInst::Internal { type_, ..}
-            | FuncInst::Host { type_, .. }
-            => type_
-        };
+        let functype = s.funcs[a].type_();
         ExternType::Func((**functype).clone()) // TODO: bad copy
     }
 
@@ -524,4 +520,56 @@ pub mod instantiation {
     }
 }
 
+pub mod invocation {
+    use super::*;
 
+    #[derive(Debug)]
+    pub enum InvokeError {
+        MismatchedArgumentCount,
+        MismatchedArgumentType,
+    }
+    use self::InvokeError::*;
+
+    pub type CResult = ::std::result::Result<Result, InvokeError>;
+
+    pub fn invoke<Refs>(s: &mut Store<Refs>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
+        where Refs: StructureReference
+    {
+        let funcinst = &s.funcs[funcaddr];
+        let ty = funcinst.type_();
+        let t1n = &ty.args;
+        let m = ty.results.len();
+
+        if vals.len() != t1n.len() {
+            Err(MismatchedArgumentCount)?;
+        }
+
+        for (ti, vali) in t1n.iter().zip(vals.iter()) {
+            if vali.ty() != *ti {
+                Err(MismatchedArgumentType)?;
+            }
+        }
+
+        let mut stack = Stack::new();
+
+        for val in vals {
+            stack.push(StackElem::Val(*val));
+        }
+
+        // TODO: implement invoke
+        let invoke = |_| unimplemented!();
+
+        invoke(funcaddr);
+
+        let mut results = vec![];
+        for _ in 0..m {
+            if let StackElem::Val(v) = stack.pop().unwrap() {
+                results.push(v);
+            } else {
+                panic!("Should not happen due to validation");
+            }
+        }
+
+        Ok(Result::Vals(results))
+    }
+}
