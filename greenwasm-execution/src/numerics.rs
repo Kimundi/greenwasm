@@ -99,10 +99,8 @@ define_trait! {
     type U = { U32, U64, };
 
     fn signed(i: Self) -> Self::S { i as Self::S }
-    fn unsigned(i: Self) -> Self::U { i as Self::U }
-
     fn rsigned(i: Self::S) -> Self { i as Self }
-    fn runsigned(i: Self::U) -> Self { i as Self }
+    fn n() -> Self { ::std::mem::size_of::<Self>() as Self * 8 }
 
     fn bool(v: bool) -> Self { if v { 1 } else { 0 } }
     fn iadd(i1: Self, i2: Self) -> Self {
@@ -115,7 +113,7 @@ define_trait! {
         i1.wrapping_mul(i2)
     }
     fn idiv_u(i1: Self, i2: Self) -> Partial<Self> {
-        Self::unsigned(i1).checked_div(Self::unsigned(i2)).into()
+        i1.checked_div(i2).into()
     }
     fn idiv_s(i1: Self, i2: Self) -> Partial<Self> {
         let j1 = Self::signed(i1);
@@ -124,12 +122,80 @@ define_trait! {
         j1.checked_div(j2).map(Self::rsigned).into()
     }
     fn irem_u(i1: Self, i2: Self) -> Partial<Self> {
-        Self::unsigned(i1).checked_rem(Self::unsigned(i2)).into()
+        i1.checked_rem(i2).into()
     }
     fn irem_s(i1: Self, i2: Self) -> Partial<Self> {
         let j1 = Self::signed(i1);
         let j2 = Self::signed(i2);
 
         j1.checked_rem(j2).map(Self::rsigned).into()
+    }
+    fn iand(i1: Self, i2: Self) -> Self {
+        i1 & i2
+    }
+    fn ior(i1: Self, i2: Self) -> Self {
+        i1 | i2
+    }
+    fn ixor(i1: Self, i2: Self) -> Self {
+        i1 ^ i2
+    }
+    fn ishl(i1: Self, i2: Self) -> Self {
+        let k = i2 % Self::n();
+        i1 << k
+    }
+    fn ishr_u(i1: Self, i2: Self) -> Self {
+        let k = i2 % Self::n();
+        i1 >> k
+    }
+    fn ishr_s(i1: Self, i2: Self) -> Self {
+        let k = i2 % Self::n();
+        Self::rsigned(Self::signed(i1) >> Self::signed(k))
+    }
+    fn irotl(i1: Self, i2: Self) -> Self {
+        let k = i2 % Self::n();
+        i1.rotate_left(k as u32)
+    }
+    fn irotr(i1: Self, i2: Self) -> Self {
+        let k = i2 % Self::n();
+        i1.rotate_right(k as u32)
+    }
+    fn iclz(i: Self) -> Self {
+        i.leading_zeros() as Self
+    }
+    fn ipopcnt(i: Self) -> Self {
+        i.count_ones() as Self
+    }
+    fn ieqz(i: Self) -> Self {
+        Self::bool(i == 0)
+    }
+    fn ieq(i1: Self, i2: Self) -> Self {
+        Self::bool(i1 == i2)
+    }
+    fn ine(i1: Self, i2: Self) -> Self {
+        Self::bool(i1 != i2)
+    }
+    fn ilt_u(i1: Self, i2: Self) -> Self {
+        Self::bool(i1 < i2)
+    }
+    fn ilt_s(i1: Self, i2: Self) -> Self {
+        Self::bool(Self::signed(i1) < Self::signed(i2))
+    }
+    fn igt_u(i1: Self, i2: Self) -> Self {
+        Self::bool(i1 > i2)
+    }
+    fn igt_s(i1: Self, i2: Self) -> Self {
+        Self::bool(Self::signed(i1) > Self::signed(i2))
+    }
+    fn ile_u(i1: Self, i2: Self) -> Self {
+        Self::bool(i1 <= i2)
+    }
+    fn ile_s(i1: Self, i2: Self) -> Self {
+        Self::bool(Self::signed(i1) <= Self::signed(i2))
+    }
+    fn ige_u(i1: Self, i2: Self) -> Self {
+        Self::bool(i1 >= i2)
+    }
+    fn ige_s(i1: Self, i2: Self) -> Self {
+        Self::bool(Self::signed(i1) >= Self::signed(i2))
     }
 }
