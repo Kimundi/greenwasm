@@ -512,10 +512,15 @@ pub mod instantiation {
         }
 
         if let Some(start) = &module.start {
-            // TODO
+            let funcaddr = s.modules[moduleaddr].funcaddrs[start.func];
+
+            // TODO: implement invoke
+            let invoke = |_| unimplemented!();
+
+            invoke(funcaddr);
         }
 
-        unimplemented!()
+        Ok(moduleaddr)
     }
 }
 
