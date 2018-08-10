@@ -1,4 +1,5 @@
 #![feature(macro_at_most_once_rep)]
+#![feature(core_intrinsics)]
 
 pub mod runtime_structure;
 pub mod modules;

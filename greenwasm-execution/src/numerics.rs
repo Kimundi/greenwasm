@@ -1,31 +1,5 @@
 use structure::types::*;
 
-/*
-struct N32;
-struct N64;
-
-trait Numerics {
-    type S;
-    type I;
-    type U;
-    type F;
-}
-
-impl Numerics for N32 {
-    type S = S32;
-    type I = I32;
-    type U = U32;
-    type F = F32;
-}
-
-impl Numerics for N64 {
-    type S = S64;
-    type I = I64;
-    type U = U64;
-    type F = F64;
-}
-*/
-
 macro_rules! define_trait {
     (
         trait $traitname:ident for {$implty:ty, $($t:tt)*};
@@ -165,37 +139,275 @@ define_trait! {
     fn ipopcnt(i: Self) -> Self {
         i.count_ones() as Self
     }
-    fn ieqz(i: Self) -> Self {
-        Self::bool(i == 0)
+    fn ieqz(i: Self) -> I32 {
+        I32::bool(i == 0)
     }
-    fn ieq(i1: Self, i2: Self) -> Self {
-        Self::bool(i1 == i2)
+    fn ieq(i1: Self, i2: Self) -> I32 {
+        I32::bool(i1 == i2)
     }
-    fn ine(i1: Self, i2: Self) -> Self {
-        Self::bool(i1 != i2)
+    fn ine(i1: Self, i2: Self) -> I32 {
+        I32::bool(i1 != i2)
     }
-    fn ilt_u(i1: Self, i2: Self) -> Self {
-        Self::bool(i1 < i2)
+    fn ilt_u(i1: Self, i2: Self) -> I32 {
+        I32::bool(i1 < i2)
     }
-    fn ilt_s(i1: Self, i2: Self) -> Self {
-        Self::bool(Self::signed(i1) < Self::signed(i2))
+    fn ilt_s(i1: Self, i2: Self) -> I32 {
+        I32::bool(Self::signed(i1) < Self::signed(i2))
     }
-    fn igt_u(i1: Self, i2: Self) -> Self {
-        Self::bool(i1 > i2)
+    fn igt_u(i1: Self, i2: Self) -> I32 {
+        I32::bool(i1 > i2)
     }
-    fn igt_s(i1: Self, i2: Self) -> Self {
-        Self::bool(Self::signed(i1) > Self::signed(i2))
+    fn igt_s(i1: Self, i2: Self) -> I32 {
+        I32::bool(Self::signed(i1) > Self::signed(i2))
     }
-    fn ile_u(i1: Self, i2: Self) -> Self {
-        Self::bool(i1 <= i2)
+    fn ile_u(i1: Self, i2: Self) -> I32 {
+        I32::bool(i1 <= i2)
     }
-    fn ile_s(i1: Self, i2: Self) -> Self {
-        Self::bool(Self::signed(i1) <= Self::signed(i2))
+    fn ile_s(i1: Self, i2: Self) -> I32 {
+        I32::bool(Self::signed(i1) <= Self::signed(i2))
     }
-    fn ige_u(i1: Self, i2: Self) -> Self {
-        Self::bool(i1 >= i2)
+    fn ige_u(i1: Self, i2: Self) -> I32 {
+        I32::bool(i1 >= i2)
     }
-    fn ige_s(i1: Self, i2: Self) -> Self {
-        Self::bool(Self::signed(i1) >= Self::signed(i2))
+    fn ige_s(i1: Self, i2: Self) -> I32 {
+        I32::bool(Self::signed(i1) >= Self::signed(i2))
     }
+}
+
+trait Copysign {
+    fn copysign(z1: Self, z2: Self) -> Self;
+}
+impl Copysign for f32 {
+    fn copysign(z1: Self, z2: Self) -> Self {
+        unsafe { std::intrinsics::copysignf32(z1, z2) }
+    }
+}
+impl Copysign for f64 {
+    fn copysign(z1: Self, z2: Self) -> Self {
+        unsafe { std::intrinsics::copysignf64(z1, z2) }
+    }
+}
+
+// NB: These operations hold under the assumptions from the WA spec
+// regarding the rounding and tie breaking modes of the hardware.
+//
+// TODO: Figure out how to enforce/check/set them for Rust
+define_trait! {
+    trait FloatingPointOperations for { F32, F64, };
+
+    fn fadd(z1: Self, z2: Self) -> Self {
+        z1 + z2
+    }
+    fn fsub(z1: Self, z2: Self) -> Self {
+        z1 - z2
+    }
+    fn fmul(z1: Self, z2: Self) -> Self {
+        z1 * z2
+    }
+    fn fdiv(z1: Self, z2: Self) -> Self {
+        z1 / z2
+    }
+    fn fmin(z1: Self, z2: Self) -> Self {
+        z1.min(z2)
+    }
+    fn fmax(z1: Self, z2: Self) -> Self {
+        z1.max(z2)
+    }
+    fn fcopysign(z1: Self, z2: Self) -> Self {
+        Copysign::copysign(z1, z2)
+    }
+    fn fabs(z: Self) -> Self {
+        z.abs()
+    }
+    fn fneg(z: Self) -> Self {
+        -z
+    }
+    fn fsqrt(z: Self) -> Self {
+        z.sqrt() // TODO: figure out how deterministic this is
+    }
+    fn fceil(z: Self) -> Self {
+        z.ceil()
+    }
+    fn ffloor(z: Self) -> Self {
+        z.floor()
+    }
+    fn ftrunc(z: Self) -> Self {
+        z.trunc()
+    }
+    fn fnearest(z: Self) -> Self {
+        z.round() // TODO: Depends on rounding modes
+    }
+    fn feq(z1: Self, z2: Self) -> I32 {
+        I32::bool(z1 == z2)
+    }
+    fn fne(z1: Self, z2: Self) -> I32 {
+        I32::bool(z1 != z2)
+    }
+    fn flt(z1: Self, z2: Self) -> I32 {
+        I32::bool(z1 < z2)
+    }
+    fn fgt(z1: Self, z2: Self) -> I32 {
+        I32::bool(z1 > z2)
+    }
+    fn fle(z1: Self, z2: Self) -> I32 {
+        I32::bool(z1 <= z2)
+    }
+    fn fge(z1: Self, z2: Self) -> I32 {
+        I32::bool(z1 >= z2)
+    }
+}
+
+// Conversion
+
+#[inline(always)]
+pub fn extend_u(i: I32) -> I64 {
+    i as I64
+}
+#[inline(always)]
+pub fn extend_s(i: I32) -> I64 {
+    I64::rsigned(I32::signed(i) as S64)
+}
+#[inline(always)]
+pub fn wrap(i: I64) -> I32 {
+    i as I32
+}
+#[inline(always)]
+pub fn trunc_u_f32_i32(z: F32) -> Partial<I32> {
+    if z.is_finite() {
+        let z = z.trunc();
+        if (z >= 0.0) && z <= (::std::u32::MAX as F32) {
+            return Partial::Val(z as I32);
+        }
+    }
+    Partial::None
+}
+#[inline(always)]
+pub fn trunc_u_f32_i64(z: F32) -> Partial<I64> {
+    if z.is_finite() {
+        let z = z.trunc();
+        if (z >= 0.0) && z <= (::std::u64::MAX as F32) {
+            return Partial::Val(z as I64);
+        }
+    }
+    Partial::None
+}
+#[inline(always)]
+pub fn trunc_u_f64_i32(z: F64) -> Partial<I32> {
+    if z.is_finite() {
+        let z = z.trunc();
+        if (z >= 0.0) && z <= (::std::u32::MAX as F64) {
+            return Partial::Val(z as I32);
+        }
+    }
+    Partial::None
+}
+#[inline(always)]
+pub fn trunc_u_f64_i64(z: F64) -> Partial<I64> {
+    if z.is_finite() {
+        let z = z.trunc();
+        if (z >= 0.0) && z <= (::std::u64::MAX as F64) {
+            return Partial::Val(z as I64);
+        }
+    }
+    Partial::None
+}
+#[inline(always)]
+pub fn trunc_s_f32_i32(z: F32) -> Partial<I32> {
+    if z.is_finite() {
+        let z = z.trunc();
+        if (::std::i32::MIN as F32 <= z) && (z <= ::std::i32::MAX as F32) {
+            return Partial::Val(z as S32 as I32);
+        }
+    }
+    Partial::None
+}
+#[inline(always)]
+pub fn trunc_s_f32_i64(z: F32) -> Partial<I64> {
+    if z.is_finite() {
+        let z = z.trunc();
+        if (::std::i64::MIN as F32 <= z) && (z <= ::std::i64::MAX as F32) {
+            return Partial::Val(z as S64 as I64);
+        }
+    }
+    Partial::None
+}
+#[inline(always)]
+pub fn trunc_s_f64_i32(z: F64) -> Partial<I32> {
+    if z.is_finite() {
+        let z = z.trunc();
+        if (::std::i32::MIN as F64 <= z) && (z <= ::std::i32::MAX as F64) {
+            return Partial::Val(z as S32 as I32);
+        }
+    }
+    Partial::None
+}
+#[inline(always)]
+pub fn trunc_s_f64_i64(z: F64) -> Partial<I64> {
+    if z.is_finite() {
+        let z = z.trunc();
+        if (::std::i64::MIN as F64 <= z) && (z <= ::std::i64::MAX as F64) {
+            return Partial::Val(z as S64 as I64);
+        }
+    }
+    Partial::None
+}
+
+#[inline(always)]
+pub fn promote(z: F32) -> F64 {
+    z as F64
+}
+
+#[inline(always)]
+pub fn demote(z: F64) -> F32 {
+    z as F32
+}
+
+#[inline(always)]
+pub fn convert_u_i32_f32(i: I32) -> F32 {
+    i as F32
+}
+#[inline(always)]
+pub fn convert_u_i32_f64(i: I32) -> F64 {
+    i as F64
+}
+#[inline(always)]
+pub fn convert_u_i64_f32(i: I64) -> F32 {
+    i as F32
+}
+#[inline(always)]
+pub fn convert_u_i64_f64(i: I64) -> F64 {
+    i as F64
+}
+#[inline(always)]
+pub fn convert_s_i32_f32(i: I32) -> F32 {
+    IntegerOperations::signed(i) as F32
+}
+#[inline(always)]
+pub fn convert_s_i32_f64(i: I32) -> F64 {
+    IntegerOperations::signed(i) as F64
+}
+#[inline(always)]
+pub fn convert_s_i64_f32(i: I64) -> F32 {
+    IntegerOperations::signed(i) as F32
+}
+#[inline(always)]
+pub fn convert_s_i64_f64(i: I64) -> F64 {
+    IntegerOperations::signed(i) as F64
+}
+
+#[inline(always)]
+pub fn reinterpret_i32_f32(i: I32) -> F32 {
+    F32::from_bits(i)
+}
+#[inline(always)]
+pub fn reinterpret_i64_f64(i: I64) -> F64 {
+    F64::from_bits(i)
+}
+#[inline(always)]
+pub fn reinterpret_f32_i32(z: F32) -> I32 {
+    z.to_bits()
+}
+#[inline(always)]
+pub fn reinterpret_f64_i64(z: F64) -> I64 {
+    z.to_bits()
 }
