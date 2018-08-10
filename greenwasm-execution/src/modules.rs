@@ -1,5 +1,6 @@
 use structure::types::*;
 use structure::modules::*;
+
 use crate::runtime_structure::*;
 use crate::structure_references::*;
 
@@ -9,7 +10,9 @@ const WASM_PAGE_SIZE: usize = 65536;
 pub mod external_typing {
     use super::*;
 
-    pub fn func(s: &Store, a: usize) -> ExternType {
+    pub fn func<Refs>(s: &Store<Refs>, a: FuncAddr) -> ExternType
+        where Refs: StructureReference
+    {
         let functype = match &s.funcs[a] {
             | FuncInst::Internal { type_, ..}
             | FuncInst::Host { type_, .. }
@@ -18,7 +21,9 @@ pub mod external_typing {
         ExternType::Func((**functype).clone()) // TODO: bad copy
     }
 
-    pub fn tables(s: &Store, a: usize) -> ExternType {
+    pub fn table<Refs>(s: &Store<Refs>, a: TableAddr) -> ExternType
+        where Refs: StructureReference
+    {
         let TableInst { elem, max } = &s.tables[a];
         let n = elem.len();
         let m = *max;
@@ -35,7 +40,9 @@ pub mod external_typing {
         })
     }
 
-    pub fn mem(s: &Store, a: usize) -> ExternType {
+    pub fn mem<Refs>(s: &Store<Refs>, a: MemAddr) -> ExternType
+        where Refs: StructureReference
+    {
         let MemInst { data, max } = &s.mems[a];
         let n = data.len() / WASM_PAGE_SIZE;
         let m = *max;
@@ -51,7 +58,9 @@ pub mod external_typing {
         })
     }
 
-    pub fn global(s: &Store, a: usize) -> ExternType {
+    pub fn global<Refs>(s: &Store<Refs>, a: GlobalAddr) -> ExternType
+        where Refs: StructureReference
+    {
         let GlobalInst { ref value, mutability } = s.globals[a];
         let t = value.ty();
 
@@ -111,7 +120,7 @@ pub mod allocation {
                                 moduleaddr: ModuleAddr) -> FuncAddr
         where Refs: StructureReference
     {
-        let a = s.funcs.len();
+        let a = s.funcs.next_addr();
         let functype = module.functype_ref(func.type_.0 as usize);
         let funcinst = FuncInst::Internal {
             type_: functype,
@@ -120,21 +129,21 @@ pub mod allocation {
         };
         s.funcs.push(funcinst);
 
-        FuncAddr(a)
+        a
     }
     pub fn alloc_host_function<Refs>(s: &mut Store<Refs>,
                                      hostfunc: HostFunc,
                                      functype: Refs::FuncTypeRef) -> FuncAddr
         where Refs: StructureReference
     {
-        let a = s.funcs.len();
+        let a = s.funcs.next_addr();
         let funcinst = FuncInst::Host {
             type_: functype,
             hostcode: hostfunc,
         };
         s.funcs.push(funcinst);
 
-        FuncAddr(a)
+        a
     }
     pub fn alloc_table<Refs>(s: &mut Store<Refs>,
                              tabletype: &TableType) -> TableAddr
@@ -144,14 +153,14 @@ pub mod allocation {
             limits: Limits { min: n, max: m },
             elemtype: _ // TODO: Why does the spec ignore this here?
         } = *tabletype;
-        let a = s.tables.len();
+        let a = s.tables.next_addr();
         let tableinst = TableInst {
             elem: ::std::iter::repeat(FuncElem(None)).take(n as usize).collect(),
             max: m,
         };
         s.tables.push(tableinst);
 
-        TableAddr(a)
+        a
     }
     pub fn alloc_mem<Refs>(s: &mut Store<Refs>,
                            memtype: &MemType) -> MemAddr
@@ -160,14 +169,14 @@ pub mod allocation {
         let MemType {
             limits: Limits { min: n, max: m },
         } = *memtype;
-        let a = s.mems.len();
+        let a = s.mems.next_addr();
         let meminst = MemInst {
             data: vec![0x00; (n as usize) * WASM_PAGE_SIZE].into(),
             max: m,
         };
         s.mems.push(meminst);
 
-        MemAddr(a)
+        a
     }
     pub fn alloc_global<Refs>(s: &mut Store<Refs>,
                               globaltype: &GlobalType,
@@ -179,14 +188,14 @@ pub mod allocation {
             valtype: t,
         } = *globaltype;
         assert!(t == val.ty());
-        let a = s.globals.len();
+        let a = s.globals.next_addr();
         let globalinst = GlobalInst {
             value: val,
             mutability,
         };
         s.globals.push(globalinst);
 
-        GlobalAddr(a)
+        a
     }
     pub fn grow_table_by(tableinst: &mut TableInst,
                          n: usize) -> AResult {
@@ -221,8 +230,8 @@ pub mod allocation {
     {
         // NB: This is a modification to the spec to allow cycles between
         // function instances and module instances
-        let a = s.modules.len();
-        let moduleaddr = ModuleAddr(a);
+        let a = s.modules.next_addr();
+        let moduleaddr = a;
 
         let mut funcaddrs = vec![];
         for (i, _) in module.funcs.iter().enumerate() {
@@ -249,37 +258,41 @@ pub mod allocation {
             globaladdrs.push(globaladdri);
         }
 
-        let funcaddrs_mod = externvals_im.iter().filter_map(|e| match e {
-            ExternVal::Func(f) => Some(*f),
-            _ => None,
-        }).chain(funcaddrs).collect::<Vec<_>>();
+        let funcaddrs_mod: TypedIndexVec<_, _> = externvals_im.iter()
+            .filter_map(|e| match e {
+                ExternVal::Func(f) => Some(*f),
+                _ => None,
+            }).chain(funcaddrs).collect::<Vec<_>>().into();
 
-        let tableaddrs_mod = externvals_im.iter().filter_map(|e| match e {
-            ExternVal::Table(f) => Some(*f),
-            _ => None,
-        }).chain(tableaddrs).collect::<Vec<_>>();
+        let tableaddrs_mod: TypedIndexVec<_, _>  = externvals_im.iter()
+            .filter_map(|e| match e {
+                ExternVal::Table(f) => Some(*f),
+                _ => None,
+            }).chain(tableaddrs).collect::<Vec<_>>().into();
 
-        let memaddrs_mod = externvals_im.iter().filter_map(|e| match e {
-            ExternVal::Mem(f) => Some(*f),
-            _ => None,
-        }).chain(memaddrs).collect::<Vec<_>>();
+        let memaddrs_mod: TypedIndexVec<_, _>  = externvals_im.iter()
+            .filter_map(|e| match e {
+                ExternVal::Mem(f) => Some(*f),
+                _ => None,
+            }).chain(memaddrs).collect::<Vec<_>>().into();
 
-        let globaladdrs_mod = externvals_im.iter().filter_map(|e| match e {
-            ExternVal::Global(f) => Some(*f),
-            _ => None,
-        }).chain(globaladdrs).collect::<Vec<_>>();
+        let globaladdrs_mod: TypedIndexVec<_, _>  = externvals_im.iter()
+            .filter_map(|e| match e {
+                ExternVal::Global(f) => Some(*f),
+                _ => None,
+            }).chain(globaladdrs).collect::<Vec<_>>().into();
 
         let mut exportinsts = vec![];
         for (i, exporti) in module.exports.iter().enumerate() {
             let externvali = match exporti.desc {
                 ExportDesc::Func(funcidx)
-                    => ExternVal::Func(funcaddrs_mod[funcidx.0 as usize]),
+                    => ExternVal::Func(funcaddrs_mod[funcidx]),
                 ExportDesc::Table(tableidx)
-                    => ExternVal::Table(tableaddrs_mod[tableidx.0 as usize]),
+                    => ExternVal::Table(tableaddrs_mod[tableidx]),
                 ExportDesc::Mem(memidx)
-                    => ExternVal::Mem(memaddrs_mod[memidx.0 as usize]),
+                    => ExternVal::Mem(memaddrs_mod[memidx]),
                 ExportDesc::Global(globalidx)
-                    => ExternVal::Global(globaladdrs_mod[globalidx.0 as usize]),
+                    => ExternVal::Global(globaladdrs_mod[globalidx]),
             };
             let exportinsti = ExportInst {
                 name: module.name_ref(i),
@@ -303,10 +316,206 @@ pub mod allocation {
     }
 }
 
-mod instantiation {
+pub mod instantiation {
     use super::*;
 
+    #[derive(Debug)]
+    pub enum InstantiationError {
+        ModuleNotValid,
+        MismatchedNumberOfProvidedImports,
+        WrongExternTypeInImport,
+        ElemIdxOutOfBounds,
+        DataIdxOutOfBounds,
+    }
+    use self::InstantiationError::*;
 
+    pub type IResult = std::result::Result<ModuleAddr, InstantiationError>;
+
+    pub fn instantiate_module<Ref>(s: &mut Store<Ref>,
+                                   module: &Ref,
+                                   externvals: &[ExternVal]) -> IResult
+        where Ref: StructureReference
+    {
+        let n = externvals.len();
+
+        // module is valid per definition
+        // ... return Err(ModuleNotValid);
+
+        // TODO: not sure what to assert here
+        // "Assert: module is valid with external types
+        //  externtype^m_im classifying its imports."
+
+        let externtypes_im = &module.import_export_mapping().imports;
+        let m = externtypes_im.len();
+        if m != n {
+            Err(MismatchedNumberOfProvidedImports)?;
+        }
+
+        for (externvali, externtypei_) in externvals.iter().zip(externtypes_im.iter()) {
+            // TODO: Verify that validation can never fail here
+
+            let externtypei = match externvali {
+                ExternVal::Func(x) => {
+                    external_typing::func(s, *x)
+                }
+                ExternVal::Table(x) => {
+                    external_typing::table(s, *x)
+                }
+                ExternVal::Mem(x) => {
+                    external_typing::mem(s, *x)
+                }
+                ExternVal::Global(x) => {
+                    external_typing::global(s, *x)
+                }
+            };
+
+            if !import_matching::extern_type(&externtypei, &externtypei_) {
+                Err(WrongExternTypeInImport)?;
+            }
+        }
+
+        // TODO: implement evaluation
+        let evaluate = |_| unimplemented!();
+
+        let mut vals = vec![];
+        {
+            let moduleinst_im = ModuleInst {
+                globaladdrs: externvals.iter().filter_map(|e| match e {
+                    ExternVal::Global(f) => Some(*f),
+                    _ => None,
+                }).collect::<Vec<_>>().into(),
+                exports: vec![],
+                funcaddrs: vec![].into(),
+                memaddrs: vec![].into(),
+                tableaddrs: vec![].into(),
+                types: module.functypes_ref(), // TODO: this should be empty
+            };
+
+            // NB: Because our Frame stores a ModuleAddr,
+            // we need to temporarily allocate the auxilary
+            // module instance in the store
+
+            let aux_moduleaddr = s.modules.next_addr();
+            s.modules.push(moduleinst_im);
+
+            let f_im = Frame {
+                locals: vec![],
+                module: aux_moduleaddr,
+            };
+
+            let mut stack = Stack::new();
+            stack.push(StackElem::Activation {
+                // TODO: What value to pick for n here?
+                // assuming n = 1 due to needing the result
+                n: 1,
+                frame: f_im,
+            });
+
+            for globali in &module.globals {
+                let vali = evaluate(&globali.init);
+
+                vals.push(vali);
+            }
+
+            assert!(stack.last() == Some(&StackElem::Activation {
+                n: 1,
+                frame: Frame {
+                    locals: vec![],
+                    module: aux_moduleaddr,
+                },
+            }));
+
+            stack.pop();
+            s.modules.pop_aux();
+        }
+
+        let moduleaddr = allocation::alloc_module(s, module, &externvals, &vals);
+
+        let f = Frame {
+            locals: vec![],
+            module: moduleaddr,
+        };
+
+        let mut stack = Stack::new();
+        stack.push(StackElem::Activation {
+            // TODO: What value to pick for n here?
+            // assuming n = 1 due to needing the result
+            n: 1,
+            frame: f,
+        });
+
+        for elemi in &module.elem {
+            let eovali = evaluate(&elemi.offset);
+            let eoi = if let Val::I32(eoi) = eovali {
+                eoi
+            } else {
+                panic!("Due to validation, this should be a I32")
+            };
+            let tableidxi = elemi.table;
+            let tableaddri = s.modules[moduleaddr].tableaddrs[tableidxi];
+            let tableinsti = &s.tables[tableaddri];
+
+            let eendi = eoi as usize + elemi.init.len();
+            if eendi > tableinsti.elem.len() {
+                Err(ElemIdxOutOfBounds)?;
+            }
+        }
+
+        for datai in &module.data {
+            let dovali = evaluate(&datai.offset);
+            let doi = if let Val::I32(doi) = dovali {
+                doi
+            } else {
+                panic!("Due to validation, this should be a I32")
+            };
+            let memidxi = datai.data;
+            let memaddri = s.modules[moduleaddr].memaddrs[memidxi];
+            let meminsti = &s.mems[memaddri];
+
+            let dendi = doi as usize + datai.init.len();
+            if dendi > meminsti.data.len() {
+                Err(DataIdxOutOfBounds)?;
+            }
+        }
+
+        assert!(stack.last() == Some(&StackElem::Activation {
+            n: 1,
+            frame: Frame {
+                locals: vec![],
+                module: moduleaddr,
+            },
+        }));
+
+        stack.pop();
+
+        for elemi in &module.elem {
+            // TODO: Do not evaluate twice
+            let eovali = evaluate(&elemi.offset);
+            let eoi = if let Val::I32(eoi) = eovali {
+                eoi
+            } else {
+                panic!("Due to validation, this should be a I32")
+            } as usize;
+            let tableidxi = elemi.table;
+            let tableaddri = s.modules[moduleaddr].tableaddrs[tableidxi];
+            let tableinsti = &mut s.tables[tableaddri];
+
+            for (j, &funcidxij) in elemi.init.iter().enumerate() {
+                let funcaddrij = s.modules[moduleaddr].funcaddrs[funcidxij];
+                tableinsti.elem[eoi + j] = FuncElem(Some(funcaddrij));
+            }
+        }
+
+        for datai in &module.data {
+            // TODO
+        }
+
+        if let Some(start) = &module.start {
+            // TODO
+        }
+
+        unimplemented!()
+    }
 }
 
 

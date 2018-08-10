@@ -5,7 +5,9 @@ use std::marker::PhantomData;
 
 use structure::modules::*;
 use structure::types::*;
+use validation::*;
 
+// TODO: util module
 #[derive(Clone)]
 pub struct SelfDeref<U, T>(pub T, PhantomData<U>);
 impl<T, U> Deref for SelfDeref<U, T>
@@ -24,20 +26,20 @@ macro_rules! generate_refs {
         generate_refs!(ARC: $($t)*);
         generate_refs!(REF: $($t)*);
     );
-    (TRAIT: $self:ident; $(
+    (TRAIT: $modty:ty, $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
-        pub trait StructureReference: Deref<Target=Module> {
+        pub trait StructureReference: Deref<Target=$modty> {
             $(
                 type $refty: Deref<Target=$t> + Clone;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty;
             )*
         }
     };
-    (CLONE: $self:ident; $(
+    (CLONE: $modty:ty, $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
-        impl StructureReference for SelfDeref<Module, Module> {
+        impl StructureReference for SelfDeref<$modty, $modty> {
             $(
                 type $refty = SelfDeref<$t, $t>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
@@ -46,12 +48,12 @@ macro_rules! generate_refs {
                 }
             )*
         }
-        pub type ModuleCloneRef = SelfDeref<Module, Module>;
+        pub type ModuleCloneRef = SelfDeref<$modty, $modty>;
     };
-    (REF: $self:ident; $(
+    (REF: $modty:ty, $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
-        impl<'a> StructureReference for SelfDeref<Module, &'a Module> {
+        impl<'a> StructureReference for SelfDeref<$modty, &'a $modty> {
             $(
                 type $refty = SelfDeref<$t, &'a $t>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
@@ -60,9 +62,9 @@ macro_rules! generate_refs {
                 }
             )*
         }
-        pub type ModuleRefRef<'a> = SelfDeref<Module, &'a Module>;
+        pub type ModuleRefRef<'a> = SelfDeref<$modty, &'a $modty>;
     };
-    (ARC: $self:ident; $(
+    (ARC: $modty:ty, $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
         pub mod arc {
@@ -74,7 +76,7 @@ macro_rules! generate_refs {
                 // indirection.
                 #[derive(Clone)]
                 pub struct $refty {
-                    pub(super) module: Arc<Module>,
+                    pub(super) module: Arc<$modty>,
                     $(
                         pub(super) $argname: $argty
                     ),*
@@ -90,11 +92,11 @@ macro_rules! generate_refs {
                 }
             )*
         }
-        impl StructureReference for SelfDeref<Module, Arc<Module>> {
+        impl StructureReference for SelfDeref<$modty, Arc<$modty>> {
             $(
                 type $refty = SelfDeref<$t, self::arc::$refty>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
-                    let module: &Arc<Module> = &$self.0;
+                    let module: &Arc<$modty> = &$self.0;
 
                     SelfDeref(self::arc::$refty {
                         module: module.clone(),
@@ -105,12 +107,12 @@ macro_rules! generate_refs {
                 }
             )*
         }
-        pub type ModuleArcRef = SelfDeref<Module, Arc<Module>>;
+        pub type ModuleArcRef = SelfDeref<$modty, Arc<$modty>>;
     }
 }
 
 generate_refs! {
-    ALL: self;
+    ALL: ValidatedModule, self;
 
     Name, NameRef, name_ref(export_idx: usize), |s| s.exports[export_idx].name;
     Func, FuncRef, func_ref(func_idx: usize), |s| s.funcs[func_idx];

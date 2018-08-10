@@ -258,8 +258,8 @@ macro_rules! valid_with {
 
 #[derive(Debug, PartialEq)]
 pub struct ImportExportMapping {
-    pub from: Vec<ExternType>,
-    pub to: Vec<ExternType>,
+    pub imports: Vec<ExternType>,
+    pub exports: Vec<ExternType>,
 }
 
 pub struct Valid;
@@ -1289,8 +1289,8 @@ pub mod validate {
         }
 
         ImportExportMapping {
-            from: its,
-            to: ets,
+            imports: its,
+            exports: ets,
         }
     });
 }

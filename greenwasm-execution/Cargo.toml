@@ -13,3 +13,4 @@ workspace = ".."
 
 [dependencies]
 structure = { package = "greenwasm-structure", path = "../greenwasm-structure" }
+validation = { package = "greenwasm-validation", path = "../greenwasm-validation" }

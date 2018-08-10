@@ -28,10 +28,15 @@ impl<A> Into<Vec<A>> for Wec<A> {
     }
 }
 impl<A> ::std::ops::Deref for Wec<A> {
-    type Target = Vec<A>;
+    type Target = [A];
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+impl<A> ::std::ops::DerefMut for Wec<A> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 impl<'a, A> IntoIterator for &'a Wec<A> {

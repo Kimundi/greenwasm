@@ -1,9 +1,65 @@
 use structure::types::*;
-use structure::modules::*;
 use structure::instructions::*;
+use structure::modules::*;
 use crate::structure_references::*;
+use std::marker::PhantomData;
+use std::ops::{Index, IndexMut};
 
-#[derive(Copy, Clone)]
+// TODO: util module
+#[derive(Clone, Debug)]
+pub struct TypedIndexVec<T, IndexT> {
+    data: Vec<T>,
+    _marker: PhantomData<IndexT>,
+}
+
+impl<T, IndexT> TypedIndexVec<T, IndexT>
+    where IndexT: Into<usize> + From<usize>
+{
+    pub fn get(&self, addr: IndexT) -> Option<&T> {
+        self.data.get(addr.into())
+    }
+    pub fn get_mut(&mut self, addr: IndexT) -> Option<&mut T> {
+        self.data.get_mut(addr.into())
+    }
+    pub fn next_addr(&self) -> IndexT {
+        self.data.len().into()
+    }
+    pub fn push(&mut self, inst: T) -> IndexT {
+        let addr = self.next_addr();
+        self.data.push(inst);
+        addr
+    }
+
+    /// This should only be called for temporary data
+    pub fn pop_aux(&mut self) {
+        self.data.pop();
+    }
+}
+impl<T, IndexT> From<Vec<T>> for TypedIndexVec<T, IndexT> {
+    fn from(v: Vec<T>) -> Self {
+        Self {
+            data: v,
+            _marker: PhantomData,
+        }
+    }
+}
+impl<T, IndexT> Index<IndexT> for TypedIndexVec<T, IndexT>
+    where IndexT: Into<usize> + From<usize>
+{
+    type Output = T;
+    fn index(&self, addr: IndexT) -> &T {
+        &self.data[addr.into()]
+    }
+}
+impl<T, IndexT> IndexMut<IndexT> for TypedIndexVec<T, IndexT>
+    where IndexT: Into<usize> + From<usize>
+{
+    fn index_mut(&mut self, addr: IndexT) -> &mut T {
+        &mut self.data[addr.into()]
+    }
+}
+
+#[derive(Copy, Clone, PartialEq)]
 pub enum Val {
     I32(I32),
     I64(I64),
@@ -29,46 +85,56 @@ pub enum Result {
 pub struct Store<Refs = ModuleCloneRef>
     where Refs: StructureReference
 {
-    pub funcs: Vec<FuncInst<Refs>>,
-    pub tables: Vec<TableInst>,
-    pub mems: Vec<MemInst>,
-    pub globals: Vec<GlobalInst>,
+    pub funcs: TypedIndexVec<FuncInst<Refs>, FuncAddr>,
+    pub tables: TypedIndexVec<TableInst, TableAddr>,
+    pub mems: TypedIndexVec<MemInst, MemAddr>,
+    pub globals: TypedIndexVec<GlobalInst, GlobalAddr>,
 
     /// All instanced modules in the `Store`
     ///
     /// This is a modification of the spec to make it easier to resolve cycles
     /// between data structures.
-    pub modules: Vec<ModuleInst<Refs>>,
+    pub modules: TypedIndexVec<ModuleInst<Refs>, ModuleAddr>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct FuncAddr(pub usize);
+impl Into<usize> for FuncAddr { fn into(self) -> usize { self.0 } }
+impl From<usize> for FuncAddr { fn from(a: usize) -> Self { FuncAddr(a) } }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct TableAddr(pub usize);
+impl Into<usize> for TableAddr { fn into(self) -> usize { self.0 } }
+impl From<usize> for TableAddr { fn from(a: usize) -> Self { TableAddr(a) } }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct MemAddr(pub usize);
+impl Into<usize> for MemAddr { fn into(self) -> usize { self.0 } }
+impl From<usize> for MemAddr { fn from(a: usize) -> Self { MemAddr(a) } }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct GlobalAddr(pub usize);
+impl Into<usize> for GlobalAddr { fn into(self) -> usize { self.0 } }
+impl From<usize> for GlobalAddr { fn from(a: usize) -> Self { GlobalAddr(a) } }
 
 /// Address of a `ModuleInst` in the `Store`
 ///
 /// This is a modification of the spec to make it easier to resolve cycles
 /// between data structures.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct ModuleAddr(pub usize);
+impl Into<usize> for ModuleAddr { fn into(self) -> usize { self.0 } }
+impl From<usize> for ModuleAddr { fn from(a: usize) -> Self { ModuleAddr(a) } }
 
 #[derive(Clone)]
 pub struct ModuleInst<Refs>
     where Refs: StructureReference
 {
     pub types: Refs::FuncTypesRef,
-    pub funcaddrs: Vec<FuncAddr>,
-    pub tableaddrs: Vec<TableAddr>,
-    pub memaddrs: Vec<MemAddr>,
-    pub globaladdrs: Vec<GlobalAddr>,
+    pub funcaddrs: TypedIndexVec<FuncAddr, FuncIdx>,
+    pub tableaddrs: TypedIndexVec<TableAddr, TableIdx>,
+    pub memaddrs: TypedIndexVec<MemAddr, MemIdx>,
+    pub globaladdrs: TypedIndexVec<GlobalAddr, GlobalIdx>,
     pub exports: Vec<ExportInst<Refs>>,
 }
 
@@ -128,6 +194,7 @@ pub enum ExternVal {
 
 pub type Stack = Vec<StackElem>;
 
+#[derive(PartialEq)]
 pub enum StackElem {
     Val(Val),
     Label {
@@ -140,6 +207,7 @@ pub enum StackElem {
     },
 }
 
+#[derive(PartialEq)]
 pub struct Frame {
     pub locals: Vec<Val>,
     pub module: ModuleAddr,

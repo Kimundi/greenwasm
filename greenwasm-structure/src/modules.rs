@@ -26,18 +26,39 @@ pub struct Module {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct TypeIdx(pub U32);
+impl Into<usize> for TypeIdx { fn into(self) -> usize { self.0 as usize } }
+impl From<usize> for TypeIdx { fn from(a: usize) -> Self { TypeIdx(a as u32) } }
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct FuncIdx(pub U32);
+impl Into<usize> for FuncIdx { fn into(self) -> usize { self.0 as usize } }
+impl From<usize> for FuncIdx { fn from(a: usize) -> Self { FuncIdx(a as u32) } }
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct TableIdx(pub U32);
+impl Into<usize> for TableIdx { fn into(self) -> usize { self.0 as usize } }
+impl From<usize> for TableIdx { fn from(a: usize) -> Self { TableIdx(a as u32) } }
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct MemIdx(pub U32);
+impl Into<usize> for MemIdx { fn into(self) -> usize { self.0 as usize } }
+impl From<usize> for MemIdx { fn from(a: usize) -> Self { MemIdx(a as u32) } }
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct GlobalIdx(pub U32);
+impl Into<usize> for GlobalIdx { fn into(self) -> usize { self.0 as usize } }
+impl From<usize> for GlobalIdx { fn from(a: usize) -> Self { GlobalIdx(a as u32) } }
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct LocalIdx(pub U32);
+impl Into<usize> for LocalIdx { fn into(self) -> usize { self.0 as usize } }
+impl From<usize> for LocalIdx { fn from(a: usize) -> Self { LocalIdx(a as u32) } }
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub struct LabelIdx(pub U32);
+impl Into<usize> for LabelIdx { fn into(self) -> usize { self.0 as usize } }
+impl From<usize> for LabelIdx { fn from(a: usize) -> Self { LabelIdx(a as u32) } }
+
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Func {
