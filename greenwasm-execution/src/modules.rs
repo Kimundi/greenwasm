@@ -444,38 +444,44 @@ pub mod instantiation {
             frame: f,
         });
 
+        let mut eoi_tabeladdri = vec![];
         for elemi in &module.elem {
             let eovali = evaluate(&elemi.offset);
             let eoi = if let Val::I32(eoi) = eovali {
                 eoi
             } else {
                 panic!("Due to validation, this should be a I32")
-            };
+            } as usize;
             let tableidxi = elemi.table;
             let tableaddri = s.modules[moduleaddr].tableaddrs[tableidxi];
             let tableinsti = &s.tables[tableaddri];
 
-            let eendi = eoi as usize + elemi.init.len();
+            let eendi = eoi + elemi.init.len();
             if eendi > tableinsti.elem.len() {
                 Err(ElemIdxOutOfBounds)?;
             }
+
+            eoi_tabeladdri.push((eoi, tableaddri));
         }
 
+        let mut doi_memaddri = vec![];
         for datai in &module.data {
             let dovali = evaluate(&datai.offset);
             let doi = if let Val::I32(doi) = dovali {
                 doi
             } else {
                 panic!("Due to validation, this should be a I32")
-            };
+            } as usize;
             let memidxi = datai.data;
             let memaddri = s.modules[moduleaddr].memaddrs[memidxi];
             let meminsti = &s.mems[memaddri];
 
-            let dendi = doi as usize + datai.init.len();
+            let dendi = doi + datai.init.len();
             if dendi > meminsti.data.len() {
                 Err(DataIdxOutOfBounds)?;
             }
+
+            doi_memaddri.push((doi, memaddri));
         }
 
         assert!(stack.last() == Some(&StackElem::Activation {
@@ -488,16 +494,7 @@ pub mod instantiation {
 
         stack.pop();
 
-        for elemi in &module.elem {
-            // TODO: Do not evaluate twice
-            let eovali = evaluate(&elemi.offset);
-            let eoi = if let Val::I32(eoi) = eovali {
-                eoi
-            } else {
-                panic!("Due to validation, this should be a I32")
-            } as usize;
-            let tableidxi = elemi.table;
-            let tableaddri = s.modules[moduleaddr].tableaddrs[tableidxi];
+        for ((eoi, tableaddri), elemi) in eoi_tabeladdri.into_iter().zip(&module.elem) {
             let tableinsti = &mut s.tables[tableaddri];
 
             for (j, &funcidxij) in elemi.init.iter().enumerate() {
@@ -506,8 +503,12 @@ pub mod instantiation {
             }
         }
 
-        for datai in &module.data {
-            // TODO
+        for ((doi, memaddri), datai) in doi_memaddri.into_iter().zip(&module.data) {
+            let meminsti = &mut s.mems[memaddri];
+
+            for (j, &bij) in datai.init.iter().enumerate() {
+                meminsti.data[doi + j] = bij;
+            }
         }
 
         if let Some(start) = &module.start {
