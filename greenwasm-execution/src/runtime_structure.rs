@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
 // TODO: util module
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TypedIndexVec<T, IndexT> {
     data: Vec<T>,
     _marker: PhantomData<IndexT>,
@@ -206,6 +206,7 @@ pub enum ExternVal {
 #[derive(Default)]
 pub struct Stack {
     data: Vec<StackElem>,
+    frame_indices: Vec<usize>,
 }
 
 impl Stack {
@@ -221,6 +222,7 @@ impl Stack {
         });
     }
     pub fn push_frame(&mut self, n: usize, frame: Frame) {
+        self.frame_indices.push(self.data.len());
         self.data.push(StackElem::Activation {
             n,
             frame,
@@ -231,8 +233,13 @@ impl Stack {
         self.data.last()
     }
 
-    pub fn pop(&mut self) {
-        self.data.pop();
+    pub fn pop_frame(&mut self) -> (usize, Frame) {
+        self.frame_indices.pop();
+        if let Some(StackElem::Activation { n, frame }) = self.data.pop() {
+            (n, frame)
+        } else {
+            panic!("No Frame at top of stack")
+        }
     }
 
     pub fn pop_val(&mut self) -> Val {
@@ -240,6 +247,23 @@ impl Stack {
             val
         } else {
             panic!("No Val at top of stack")
+        }
+    }
+
+    pub fn peek_val(&mut self) -> Val {
+        if let Some(&StackElem::Val(val)) = self.data.last() {
+            val
+        } else {
+            panic!("No Val at top of stack")
+        }
+    }
+
+    pub fn current_frame(&mut self) -> &mut Frame {
+        let cfi = *self.frame_indices.last().expect("No Frame at top of stack");
+        if let StackElem::Activation { ref mut frame, .. } = self.data[cfi] {
+            frame
+        } else {
+            panic!("No Frame at top of stack")
         }
     }
 }
@@ -259,6 +283,6 @@ pub enum StackElem {
 
 #[derive(PartialEq)]
 pub struct Frame {
-    pub locals: Vec<Val>,
+    pub locals: TypedIndexVec<Val, LocalIdx>,
     pub module: ModuleAddr,
 }

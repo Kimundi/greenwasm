@@ -136,6 +136,9 @@ define_trait! {
     fn iclz(i: Self) -> Self {
         i.leading_zeros() as Self
     }
+    fn ictz(i: Self) -> Self {
+        i.trailing_zeros() as Self
+    }
     fn ipopcnt(i: Self) -> Self {
         i.count_ones() as Self
     }

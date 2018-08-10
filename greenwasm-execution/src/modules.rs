@@ -395,7 +395,7 @@ pub mod instantiation {
             ctx.store().modules.push(moduleinst_im);
 
             let f_im = Frame {
-                locals: vec![],
+                locals: vec![].into(),
                 module: aux_moduleaddr,
             };
 
@@ -411,22 +411,19 @@ pub mod instantiation {
                 vals.push(vali);
             }
 
-            assert!(stack.top() == Some(&StackElem::Activation {
-                n: 1,
-                frame: Frame {
-                    locals: vec![],
-                    module: aux_moduleaddr,
-                },
+            let top_frame = stack.pop_frame();
+            assert!(top_frame == (1, Frame {
+                locals: vec![].into(),
+                module: aux_moduleaddr,
             }));
 
-            stack.pop();
             ctx.store().modules.pop_aux();
         }
 
         let moduleaddr = allocation::alloc_module(ctx.store(), module, &externvals, &vals);
 
         let f = Frame {
-            locals: vec![],
+            locals: vec![].into(),
             module: moduleaddr,
         };
 
@@ -474,14 +471,11 @@ pub mod instantiation {
             doi_memaddri.push((doi, memaddri));
         }
 
-        assert!(ctx.stack.top() == Some(&StackElem::Activation {
-            n: 1,
-            frame: Frame {
-                locals: vec![],
-                module: moduleaddr,
-            },
+        let top_frame = ctx.stack().pop_frame();
+        assert!(top_frame == (1, Frame {
+            locals: vec![].into(),
+            module: moduleaddr,
         }));
-        ctx.stack.pop();
 
         for ((eoi, tableaddri), elemi) in eoi_tabeladdri.into_iter().zip(&module.elem) {
             for (j, &funcidxij) in elemi.init.iter().enumerate() {
