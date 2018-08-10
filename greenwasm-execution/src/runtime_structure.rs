@@ -203,7 +203,46 @@ pub enum ExternVal {
     Global(GlobalAddr),
 }
 
-pub type Stack = Vec<StackElem>;
+#[derive(Default)]
+pub struct Stack {
+    data: Vec<StackElem>,
+}
+
+impl Stack {
+    pub fn new() -> Self { Self::default() }
+
+    pub fn push_val(&mut self, val: Val) {
+        self.data.push(StackElem::Val(val));
+    }
+    pub fn push_label(&mut self, n: usize, branch_target: Vec<Instr>) {
+        self.data.push(StackElem::Label {
+            n,
+            branch_target,
+        });
+    }
+    pub fn push_frame(&mut self, n: usize, frame: Frame) {
+        self.data.push(StackElem::Activation {
+            n,
+            frame,
+        });
+    }
+
+    pub fn top(&self) -> Option<&StackElem> {
+        self.data.last()
+    }
+
+    pub fn pop(&mut self) {
+        self.data.pop();
+    }
+
+    pub fn pop_val(&mut self) -> Val {
+        if let Some(StackElem::Val(val)) = self.data.pop() {
+            val
+        } else {
+            panic!("No Val at top of stack")
+        }
+    }
+}
 
 #[derive(PartialEq)]
 pub enum StackElem {

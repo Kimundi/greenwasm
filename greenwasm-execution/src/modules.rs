@@ -3,6 +3,7 @@ use structure::modules::*;
 
 use crate::runtime_structure::*;
 use crate::structure_references::*;
+use crate::instructions::*;
 
 // TODO: more central definition
 const WASM_PAGE_SIZE: usize = 65536;
@@ -332,6 +333,8 @@ pub mod instantiation {
                                    externvals: &[ExternVal]) -> IResult
         where Ref: StructureReference
     {
+        let mut ctx = ExecCtx::new(s, Stack::new());
+
         let n = externvals.len();
 
         // module is valid per definition
@@ -352,16 +355,16 @@ pub mod instantiation {
 
             let externtypei = match externvali {
                 ExternVal::Func(x) => {
-                    external_typing::func(s, *x)
+                    external_typing::func(ctx.store(), *x)
                 }
                 ExternVal::Table(x) => {
-                    external_typing::table(s, *x)
+                    external_typing::table(ctx.store(), *x)
                 }
                 ExternVal::Mem(x) => {
-                    external_typing::mem(s, *x)
+                    external_typing::mem(ctx.store(), *x)
                 }
                 ExternVal::Global(x) => {
-                    external_typing::global(s, *x)
+                    external_typing::global(ctx.store(), *x)
                 }
             };
 
@@ -369,9 +372,6 @@ pub mod instantiation {
                 Err(WrongExternTypeInImport)?;
             }
         }
-
-        // TODO: implement evaluation
-        let evaluate = |_| unimplemented!();
 
         let mut vals = vec![];
         {
@@ -391,8 +391,8 @@ pub mod instantiation {
             // we need to temporarily allocate the auxilary
             // module instance in the store
 
-            let aux_moduleaddr = s.modules.next_addr();
-            s.modules.push(moduleinst_im);
+            let aux_moduleaddr = ctx.store().modules.next_addr();
+            ctx.store().modules.push(moduleinst_im);
 
             let f_im = Frame {
                 locals: vec![],
@@ -400,20 +400,18 @@ pub mod instantiation {
             };
 
             let mut stack = Stack::new();
-            stack.push(StackElem::Activation {
-                // TODO: What value to pick for n here?
-                // assuming n = 1 due to needing the result
-                n: 1,
-                frame: f_im,
-            });
+
+            // TODO: What value to pick for n here?
+            // assuming n = 1 due to needing the result
+            stack.push_frame(1, f_im);
 
             for globali in &module.globals {
-                let vali = evaluate(&globali.init);
+                let vali = ctx.evaluate_expr(&globali.init);
 
                 vals.push(vali);
             }
 
-            assert!(stack.last() == Some(&StackElem::Activation {
+            assert!(stack.top() == Some(&StackElem::Activation {
                 n: 1,
                 frame: Frame {
                     locals: vec![],
@@ -422,35 +420,31 @@ pub mod instantiation {
             }));
 
             stack.pop();
-            s.modules.pop_aux();
+            ctx.store().modules.pop_aux();
         }
 
-        let moduleaddr = allocation::alloc_module(s, module, &externvals, &vals);
+        let moduleaddr = allocation::alloc_module(ctx.store(), module, &externvals, &vals);
 
         let f = Frame {
             locals: vec![],
             module: moduleaddr,
         };
 
-        let mut stack = Stack::new();
-        stack.push(StackElem::Activation {
-            // TODO: What value to pick for n here?
-            // assuming n = 1 due to needing the result
-            n: 1,
-            frame: f,
-        });
+        // TODO: What value to pick for n here?
+        // assuming n = 1 due to needing the result
+        ctx.stack.push_frame(1, f);
 
         let mut eoi_tabeladdri = vec![];
         for elemi in &module.elem {
-            let eovali = evaluate(&elemi.offset);
+            let eovali = ctx.evaluate_expr(&elemi.offset);
             let eoi = if let Val::I32(eoi) = eovali {
                 eoi
             } else {
                 panic!("Due to validation, this should be a I32")
             } as usize;
             let tableidxi = elemi.table;
-            let tableaddri = s.modules[moduleaddr].tableaddrs[tableidxi];
-            let tableinsti = &s.tables[tableaddri];
+            let tableaddri = ctx.store().modules[moduleaddr].tableaddrs[tableidxi];
+            let tableinsti = &ctx.store().tables[tableaddri];
 
             let eendi = eoi + elemi.init.len();
             if eendi > tableinsti.elem.len() {
@@ -462,15 +456,15 @@ pub mod instantiation {
 
         let mut doi_memaddri = vec![];
         for datai in &module.data {
-            let dovali = evaluate(&datai.offset);
+            let dovali = ctx.evaluate_expr(&datai.offset);
             let doi = if let Val::I32(doi) = dovali {
                 doi
             } else {
                 panic!("Due to validation, this should be a I32")
             } as usize;
             let memidxi = datai.data;
-            let memaddri = s.modules[moduleaddr].memaddrs[memidxi];
-            let meminsti = &s.mems[memaddri];
+            let memaddri = ctx.store().modules[moduleaddr].memaddrs[memidxi];
+            let meminsti = &ctx.store().mems[memaddri];
 
             let dendi = doi + datai.init.len();
             if dendi > meminsti.data.len() {
@@ -480,27 +474,25 @@ pub mod instantiation {
             doi_memaddri.push((doi, memaddri));
         }
 
-        assert!(stack.last() == Some(&StackElem::Activation {
+        assert!(ctx.stack.top() == Some(&StackElem::Activation {
             n: 1,
             frame: Frame {
                 locals: vec![],
                 module: moduleaddr,
             },
         }));
-
-        stack.pop();
+        ctx.stack.pop();
 
         for ((eoi, tableaddri), elemi) in eoi_tabeladdri.into_iter().zip(&module.elem) {
-            let tableinsti = &mut s.tables[tableaddri];
-
             for (j, &funcidxij) in elemi.init.iter().enumerate() {
-                let funcaddrij = s.modules[moduleaddr].funcaddrs[funcidxij];
+                let funcaddrij = ctx.store().modules[moduleaddr].funcaddrs[funcidxij];
+                let tableinsti = &mut ctx.store().tables[tableaddri];
                 tableinsti.elem[eoi + j] = FuncElem(Some(funcaddrij));
             }
         }
 
         for ((doi, memaddri), datai) in doi_memaddri.into_iter().zip(&module.data) {
-            let meminsti = &mut s.mems[memaddri];
+            let meminsti = &mut ctx.store().mems[memaddri];
 
             for (j, &bij) in datai.init.iter().enumerate() {
                 meminsti.data[doi + j] = bij;
@@ -508,7 +500,7 @@ pub mod instantiation {
         }
 
         if let Some(start) = &module.start {
-            let funcaddr = s.modules[moduleaddr].funcaddrs[start.func];
+            let funcaddr = ctx.store().modules[moduleaddr].funcaddrs[start.func];
 
             // TODO: implement invoke
             let invoke = |_| unimplemented!();
@@ -553,7 +545,7 @@ pub mod invocation {
         let mut stack = Stack::new();
 
         for val in vals {
-            stack.push(StackElem::Val(*val));
+            stack.push_val(*val);
         }
 
         // TODO: implement invoke
@@ -563,11 +555,8 @@ pub mod invocation {
 
         let mut results = vec![];
         for _ in 0..m {
-            if let StackElem::Val(v) = stack.pop().unwrap() {
-                results.push(v);
-            } else {
-                panic!("Should not happen due to validation");
-            }
+            let v = stack.pop_val();
+            results.push(v);
         }
 
         Ok(Result::Vals(results))
