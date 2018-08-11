@@ -204,18 +204,20 @@ pub enum ExternVal {
 }
 
 #[derive(Default)]
-pub struct Stack {
-    data: Vec<StackElem>,
+pub struct Stack<'instrs> {
+    data: Vec<StackElem<'instrs>>,
     frame_indices: Vec<usize>,
+    label_indices: Vec<usize>,
 }
 
-impl Stack {
+impl Stack<'instrs> {
     pub fn new() -> Self { Self::default() }
 
     pub fn push_val(&mut self, val: Val) {
         self.data.push(StackElem::Val(val));
     }
-    pub fn push_label(&mut self, n: usize, branch_target: Vec<Instr>) {
+    pub fn push_label(&mut self, n: usize, branch_target: &'instrs [Instr]) {
+        self.label_indices.push(self.data.len());
         self.data.push(StackElem::Label {
             n,
             branch_target,
@@ -250,6 +252,26 @@ impl Stack {
         }
     }
 
+    pub fn pop_label(&mut self) -> (usize, &'instr [Instr]) {
+        self.label_indices.pop();
+        if let Some(StackElem::Label { n, branch_target }) = self.data.pop() {
+            (n, branch_target)
+        } else {
+            panic!("No Label at top of stack")
+        }
+    }
+
+    pub fn lth_label(&self, l: LabelIdx) -> (usize, &'instr [Instr]) {
+        let len = self.label_indices.len();
+        let pos = self.label_indices[len - 1 - (l.0 as usize)];
+        if let StackElem::Label { n, branch_target } = self.data[pos] {
+            (n, branch_target)
+        } else {
+            panic!("No Label l at position pos of stack")
+            // TODO: more useful debug messages
+        }
+    }
+
     pub fn peek_val(&mut self) -> Val {
         if let Some(&StackElem::Val(val)) = self.data.last() {
             val
@@ -266,14 +288,18 @@ impl Stack {
             panic!("No Frame at top of stack")
         }
     }
+
+    pub fn label_count(&self) -> usize {
+        self.label_indices.len()
+    }
 }
 
 #[derive(PartialEq)]
-pub enum StackElem {
+pub enum StackElem<'instrs> {
     Val(Val),
     Label {
         n: usize, // NB. Can only be 0 or 1
-        branch_target: Vec<Instr>, // TODO: change implementation to something more sane
+        branch_target: &'instrs [Instr],
     },
     Activation {
         n: usize, // NB. Can only be 0 or 1

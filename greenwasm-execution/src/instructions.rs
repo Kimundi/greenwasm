@@ -175,9 +175,9 @@ mem_op!(c: F32, u32, F32);
 mem_op!(c: F64, u64, F64);
 
 
-impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
+impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     where Sto: BorrowMut<Store<Ref>>,
-          Stk: BorrowMut<Stack>,
+          Stk: BorrowMut<Stack<'instrs>>,
           Ref: StructureReference,
 {
     #[inline(always)]
@@ -340,12 +340,30 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         Ok(())
     }
 
-    pub fn execute_instrs(&mut self, instrs: &[Instr]) -> EResult<()> {
+    pub fn enter_block<'instr>(stack: &mut Stack<'instr>,
+                               current_instrs: &mut &'instr [Instr],
+                               jump_target: &'instr [Instr],
+                               label_n: usize,
+                               label_cont: &'instr [Instr]) {
+        stack.push_label(label_n, label_cont);
+        *current_instrs = jump_target;
+    }
+
+    pub fn execute_instrs(&mut self, mut current_instrs: &[Instr]) -> EResult<()> {
         use self::Instr::*;
         let stack = self.stack.borrow_mut();
         let store = self.store.borrow_mut();
 
-        for instr in instrs {
+        let next_instr = |instrs: &mut &[Instr]| {
+            if let Some(instr) = instrs.get(0) {
+                *instrs = &instrs[1..];
+                Some(instr)
+            } else {
+                None
+            }
+        };
+
+        while let Some(instr) = next_instr(&mut current_instrs) {
             match *instr {
                 // consts
                 I32Const(v) => Self::constop(stack, v),
@@ -660,10 +678,46 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                 Unreachable => {
                     Err(Trap)?;
                 }
-                Block(resultt, instrs) => {
+                Block(resultt, jump_target) => {
                     let n = resultt.len();
-                    let cont = panic!(); // instructions after this block
-                    // Self::enter_block()
+                    let cont = &current_instrs[1..];
+
+                    Self::enter_block(stack, &mut current_instrs, &jump_target, n, cont);
+                }
+                Loop(resultt, jump_target) => {
+                    let n = 0;
+                    let cont = &current_instrs[..];
+
+                    Self::enter_block(stack, &mut current_instrs, &jump_target, n, cont);
+                }
+                IfElse(resultt, jump_target_if, jump_target_else) => {
+                    let c = I32::assert_val_type(stack.pop_val());
+                    let n = resultt.len();
+                    let cont = &current_instrs[1..];
+                    if c != 0 {
+                        Self::enter_block(stack, &mut current_instrs, &jump_target_if, n, cont);
+                    } else {
+                        Self::enter_block(stack, &mut current_instrs, &jump_target_else, n, cont);
+                    }
+                }
+                Br(l) => {
+                    assert!(stack.label_count() >= (l.0 as usize) + 1);
+                    let (n, cont) = stack.lth_label(l);
+                    assert!(n <= 1);
+                    let mut vals = None;
+                    if n == 1 {
+                        vals = Some(stack.pop_val());
+                    }
+                    for _ in 0..(l.0 as usize + 1) {
+                        while let Some(StackElem::Val(_)) = stack.top() {
+                            stack.pop_val();
+                        }
+                        stack.pop_label();
+                    }
+                    if let Some(val) = vals {
+                        stack.push_val(val);
+                    }
+                    current_instrs = cont;
                 }
 
             }
