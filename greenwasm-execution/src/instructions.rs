@@ -8,6 +8,7 @@ use structure::instructions::*;
 use crate::runtime_structure::*;
 use crate::numerics::*;
 use crate::structure_references::*;
+use crate::modules::*;
 
 // TODO: More central location
 pub struct ExecCtx<Ref, Sto, Stk> {
@@ -25,6 +26,7 @@ trait ValCast {
     fn to_val(self) -> Val;
 }
 impl ValCast for I32 {
+    #[inline(always)]
     fn assert_val_type(val: Val) -> Self {
         if let Val::I32(v) = val {
             v
@@ -32,9 +34,11 @@ impl ValCast for I32 {
             panic!("Expected a value of type I32");
         }
     }
+    #[inline(always)]
     fn to_val(self) -> Val { Val::I32(self) }
 }
 impl ValCast for I64 {
+    #[inline(always)]
     fn assert_val_type(val: Val) -> Self {
         if let Val::I64(v) = val {
             v
@@ -42,9 +46,11 @@ impl ValCast for I64 {
             panic!("Expected a value of type I64");
         }
     }
+    #[inline(always)]
     fn to_val(self) -> Val { Val::I64(self) }
 }
 impl ValCast for F32 {
+    #[inline(always)]
     fn assert_val_type(val: Val) -> Self {
         if let Val::F32(v) = val {
             v
@@ -52,9 +58,11 @@ impl ValCast for F32 {
             panic!("Expected a value of type F32");
         }
     }
+    #[inline(always)]
     fn to_val(self) -> Val { Val::F32(self) }
 }
 impl ValCast for F64 {
+    #[inline(always)]
     fn assert_val_type(val: Val) -> Self {
         if let Val::F64(v) = val {
             v
@@ -62,14 +70,117 @@ impl ValCast for F64 {
             panic!("Expected a value of type F64");
         }
     }
+    #[inline(always)]
     fn to_val(self) -> Val { Val::F64(self) }
 }
+trait MemOp<T>: Sized where T: ValCast {
+    const SIZE_OF: usize = ::std::mem::size_of::<Self>();
+
+    fn from_mem(b: &[u8]) -> Self;
+    fn extend(self) -> T;
+
+    fn to_mem(b: &mut [u8], v: Self);
+    fn wrap(t: T) -> Self;
+}
+
+// TODO: fix le/be mess once nightly is updated
+
+macro_rules! mem_op {
+    (a: $memty:ty, $castty:ty, $opty:ty) => {
+        impl MemOp<$opty> for $memty {
+            #[inline(always)]
+            fn from_mem(b: &[u8]) -> Self {
+                let mut arr = [0; <Self as MemOp<$opty>>::SIZE_OF];
+                arr.copy_from_slice(b);
+                Self::from_le(Self::from_bytes(arr))
+            }
+            #[inline(always)]
+            fn extend(self) -> $opty {
+                self as $castty as $opty
+            }
+            #[inline(always)]
+            fn to_mem(b: &mut [u8], v: Self) {
+                b.copy_from_slice(&v.to_le().to_bytes());
+            }
+            #[inline(always)]
+            fn wrap(t: $opty) -> Self {
+                t as $castty as $memty
+            }
+        }
+    };
+    (b: $memty:ty, $castty:ty, $opty:ty) => {
+        impl MemOp<$opty> for $memty {
+            #[inline(always)]
+            fn from_mem(b: &[u8]) -> Self {
+                let mut arr = [0; <Self as MemOp<$opty>>::SIZE_OF];
+                arr.copy_from_slice(b);
+                Self::from_le_bytes(arr)
+            }
+            #[inline(always)]
+            fn extend(self) -> $opty {
+                self as $castty as $opty
+            }
+            #[inline(always)]
+            fn to_mem(b: &mut [u8], v: Self) {
+                b.copy_from_slice(&v.to_le_bytes());
+            }
+            #[inline(always)]
+            fn wrap(t: $opty) -> Self {
+                t as $castty as $memty
+            }
+        }
+    };
+    (c: $memty:ty, $castty:ty, $opty:ty) => {
+        impl MemOp<$opty> for $memty {
+            #[inline(always)]
+            fn from_mem(b: &[u8]) -> Self {
+                let v = <$castty as MemOp<$castty>>::from_mem(b);
+                <$memty>::from_bits(v)
+            }
+            #[inline(always)]
+            fn extend(self) -> $opty {
+                self
+            }
+            #[inline(always)]
+            fn to_mem(b: &mut [u8], v: Self) {
+                <$castty as MemOp<$castty>>::to_mem(b, v.to_bits());
+            }
+            #[inline(always)]
+            fn wrap(t: $opty) -> Self {
+                t
+            }
+        }
+    }
+}
+
+mem_op!(a: I32, I32, I32);
+
+mem_op!(a: u8,  u32, I32);
+mem_op!(a: u16, u32, I32);
+
+mem_op!(b: i8,  i32, I32);
+mem_op!(b: i16, i32, I32);
+
+mem_op!(a: I64, I64, I64);
+
+mem_op!(a: u8,  u64, I64);
+mem_op!(a: u16, u64, I64);
+mem_op!(a: u32, u64, I64);
+
+mem_op!(b: i8,  i64, I64);
+mem_op!(b: i16, i64, I64);
+mem_op!(b: i32, i64, I64);
+
+mem_op!(c: F32, u32, F32);
+mem_op!(c: F64, u64, F64);
+
 
 impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     where Sto: BorrowMut<Store<Ref>>,
           Stk: BorrowMut<Stack>,
           Ref: StructureReference,
 {
+    #[inline(always)]
     pub fn new(store: Sto, stack: Stk) -> Self {
         ExecCtx {
             store,
@@ -78,10 +189,12 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         }
     }
 
+    #[inline(always)]
     pub fn store(&mut self) -> &mut Store<Ref> {
         self.store.borrow_mut()
     }
 
+    #[inline(always)]
     pub fn stack(&mut self) -> &mut Stack {
         self.stack.borrow_mut()
     }
@@ -92,6 +205,12 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         v
     }
 
+    #[inline(always)]
+    fn constop<T: ValCast>(stack: &mut Stack, v: T) {
+        stack.push_val(v.to_val());
+    }
+
+    #[inline(always)]
     fn unop<T: ValCast, F: FnOnce(T) -> T>(stack: &mut Stack, unop: F) {
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
@@ -99,6 +218,7 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         stack.push_val(c.to_val());
     }
 
+    #[inline(always)]
     fn binop<T: ValCast, F: FnOnce(T, T) -> T>(stack: &mut Stack, binop: F) {
         let val2 = stack.pop_val();
         let c2 = T::assert_val_type(val2);
@@ -110,6 +230,7 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         stack.push_val(c.to_val());
     }
 
+    #[inline(always)]
     fn partial_binop<T: ValCast, F: FnOnce(T, T) -> Partial<T>>(stack: &mut Stack, binop: F) -> EResult<()> {
         let val2 = stack.pop_val();
         let c2 = T::assert_val_type(val2);
@@ -127,6 +248,7 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         }
     }
 
+    #[inline(always)]
     fn testop<T: ValCast, F: FnOnce(T) -> I32>(stack: &mut Stack, testop: F) {
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
@@ -134,6 +256,7 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         stack.push_val(c.to_val());
     }
 
+    #[inline(always)]
     fn relop<T: ValCast, F: FnOnce(T, T) -> I32>(stack: &mut Stack, relop: F) {
         let val2 = stack.pop_val();
         let c2 = T::assert_val_type(val2);
@@ -145,6 +268,7 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         stack.push_val(c.to_val());
     }
 
+    #[inline(always)]
     fn cvtop<T: ValCast, U: ValCast, F: FnOnce(T) -> U>(stack: &mut Stack, cvtop: F) {
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
@@ -152,6 +276,7 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         stack.push_val(c.to_val());
     }
 
+    #[inline(always)]
     fn partial_cvtop<T: ValCast, U: ValCast, F: FnOnce(T) -> Partial<U>>(stack: &mut Stack, cvtop: F) -> EResult<()> {
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
@@ -165,6 +290,56 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         }
     }
 
+    #[inline(always)]
+    fn loadop<T: ValCast, M: MemOp<T>>(stack: &mut Stack,
+                                       store: &mut Store<Ref>,
+                                       memarg: Memarg) -> EResult<()> {
+        let a = stack.current_frame().module;
+        let a = store.modules[a].memaddrs[MemIdx(0)];
+        let mem = &store.mems[a];
+        let val = stack.pop_val();
+        let i = I32::assert_val_type(val);
+        // NB: Explicitly use u64 to make calculations correct under 32 bit systems
+        let ea = (i as u64) + (memarg.offset as u64);
+        if (ea + M::SIZE_OF as u64) > (mem.data.len() as u64) {
+            Err(Trap)?;
+        }
+        let ea = ea as usize;
+
+        let bs = &mem.data[ea..(ea + M::SIZE_OF)];
+        let v = M::from_mem(bs);
+        let c = M::extend(v);
+
+        stack.push_val(c.to_val());
+
+        Ok(())
+    }
+    #[inline(always)]
+    fn storeop<T: ValCast, M: MemOp<T>>(stack: &mut Stack,
+                                        store: &mut Store<Ref>,
+                                        memarg: Memarg) -> EResult<()> {
+        let a = stack.current_frame().module;
+        let a = store.modules[a].memaddrs[MemIdx(0)];
+        let mem = &mut store.mems[a];
+
+        let c = T::assert_val_type(stack.pop_val());
+        let i = I32::assert_val_type(stack.pop_val());
+
+        // NB: Explicitly use u64 to make calculations correct under 32 bit systems
+        let ea = (i as u64) + (memarg.offset as u64);
+        if (ea + M::SIZE_OF as u64) > (mem.data.len() as u64) {
+            Err(Trap)?;
+        }
+        let ea = ea as usize;
+
+        let bs = &mut mem.data[ea..(ea + M::SIZE_OF)];
+
+        let n = M::wrap(c);
+        M::to_mem(bs, n);
+
+        Ok(())
+    }
+
     pub fn execute_instrs(&mut self, instrs: &[Instr]) -> EResult<()> {
         use self::Instr::*;
         let stack = self.stack.borrow_mut();
@@ -173,10 +348,10 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         for instr in instrs {
             match *instr {
                 // consts
-                I32Const(v) => stack.push_val(Val::I32(v)),
-                I64Const(v) => stack.push_val(Val::I64(v)),
-                F32Const(v) => stack.push_val(Val::F32(v)),
-                F64Const(v) => stack.push_val(Val::F64(v)),
+                I32Const(v) => Self::constop(stack, v),
+                I64Const(v) => Self::constop(stack, v),
+                F32Const(v) => Self::constop(stack, v),
+                F64Const(v) => Self::constop(stack, v),
 
                 // unops
                 I32Clz => Self::unop(stack, I32::iclz),
@@ -368,7 +543,9 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                 F64ReinterpretI64 => Self::cvtop(stack, reinterpret_i64_f64),
 
                 // parametric instructions
-                Drop => { stack.pop_val(); },
+                Drop => {
+                    stack.pop_val();
+                }
                 Select => {
                     let c = stack.pop_val();
                     let c: I32 = ValCast::assert_val_type(c);
@@ -383,7 +560,7 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                     } else {
                         stack.push_val(val2);
                     }
-                },
+                }
 
                 // variable instructions
                 GetLocal(x) => {
@@ -412,6 +589,83 @@ impl<Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                     let val = stack.pop_val();
                     glob.value = val;
                 }
+
+                // memory instructions
+
+                // loads
+                I32Load8U(memarg) => Self::loadop::<I32, u8>(stack, store, memarg)?,
+                I32Load8S(memarg) => Self::loadop::<I32, i8>(stack, store, memarg)?,
+                I32Load16U(memarg) => Self::loadop::<I32, u16>(stack, store, memarg)?,
+                I32Load16S(memarg) => Self::loadop::<I32, i16>(stack, store, memarg)?,
+                I32Load(memarg) => Self::loadop::<I32, I32>(stack, store, memarg)?,
+
+                I64Load8U(memarg) => Self::loadop::<I64, u8>(stack, store, memarg)?,
+                I64Load8S(memarg) => Self::loadop::<I64, i8>(stack, store, memarg)?,
+                I64Load16U(memarg) => Self::loadop::<I64, u16>(stack, store, memarg)?,
+                I64Load16S(memarg) => Self::loadop::<I64, i16>(stack, store, memarg)?,
+                I64Load32U(memarg) => Self::loadop::<I64, u32>(stack, store, memarg)?,
+                I64Load32S(memarg) => Self::loadop::<I64, i32>(stack, store, memarg)?,
+                I64Load(memarg) => Self::loadop::<I64, I64>(stack, store, memarg)?,
+
+                F32Load(memarg) => Self::loadop::<F32, F32>(stack, store, memarg)?,
+                F64Load(memarg) => Self::loadop::<F64, F64>(stack, store, memarg)?,
+
+                // stores
+                I32Store8(memarg) => Self::storeop::<I32, u8>(stack, store, memarg)?,
+                I32Store16(memarg) => Self::storeop::<I32, u16>(stack, store, memarg)?,
+                I32Store(memarg) => Self::storeop::<I32, I32>(stack, store, memarg)?,
+
+                I64Store8(memarg) => Self::storeop::<I64, u8>(stack, store, memarg)?,
+                I64Store16(memarg) => Self::storeop::<I64, u16>(stack, store, memarg)?,
+                I64Store32(memarg) => Self::storeop::<I64, u32>(stack, store, memarg)?,
+                I64Store(memarg) => Self::storeop::<I64, I64>(stack, store, memarg)?,
+
+                F32Store(memarg) => Self::storeop::<F32, F32>(stack, store, memarg)?,
+                F64Store(memarg) => Self::storeop::<F64, F64>(stack, store, memarg)?,
+
+                // mem ctrl
+                CurrentMemory => {
+                    let a = stack.current_frame().module;
+                    let a = store.modules[a].memaddrs[MemIdx(0)];
+                    let mem = &store.mems[a];
+                    let sz = mem.data.len() / WASM_PAGE_SIZE;
+                    stack.push_val(Val::I32(sz as I32));
+                }
+                GrowMemory => {
+                    let a = stack.current_frame().module;
+                    let a = store.modules[a].memaddrs[MemIdx(0)];
+                    let mem = &mut store.mems[a];
+                    let sz = mem.data.len() / WASM_PAGE_SIZE;
+                    let n = I32::assert_val_type(stack.pop_val());
+
+                    // TODO: custom limits?
+                    // TODO: What with growth that exceeds 32 bits?
+
+                    // Either try alloc:
+                    let result = allocation::grow_memory_by(mem, n as usize);
+                    if result.is_ok() {
+                        stack.push_val(Val::I32(sz as I32));
+                    } else {
+                        stack.push_val(Val::I32(-1i32 as I32));
+                    }
+
+                    // Or don't:
+                    // stack.push_val(Val::I32(-1i32 as I32));
+                }
+
+                // control instructions
+                Nop => {
+                    /* nothing to see here, carry on */
+                }
+                Unreachable => {
+                    Err(Trap)?;
+                }
+                Block(resultt, instrs) => {
+                    let n = resultt.len();
+                    let cont = panic!(); // instructions after this block
+                    // Self::enter_block()
+                }
+
             }
         }
 

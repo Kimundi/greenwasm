@@ -6,7 +6,7 @@ use crate::structure_references::*;
 use crate::instructions::*;
 
 // TODO: more central definition
-const WASM_PAGE_SIZE: usize = 65536;
+pub const WASM_PAGE_SIZE: usize = 65536;
 
 pub mod external_typing {
     use super::*;
@@ -197,6 +197,7 @@ pub mod allocation {
     pub fn grow_table_by(tableinst: &mut TableInst,
                          n: usize) -> AResult {
         if let Some(max) = tableinst.max {
+            // TODO: check if size test is 32bit arch safe
             if (max as usize) < (tableinst.elem.len() as usize + n) {
                 Err(AllocatingTableBeyondMaxLimit)?;
             }
@@ -210,6 +211,7 @@ pub mod allocation {
                           n: usize) -> AResult {
         let len = n * WASM_PAGE_SIZE;
         if let Some(max) = meminst.max {
+            // TODO: check if size test is 32bit arch safe
             if (max as usize * WASM_PAGE_SIZE) < (meminst.data.len() as usize + len) {
                 Err(AllocatingMemBeyondMaxLimit)?;
             }

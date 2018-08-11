@@ -82,7 +82,7 @@ pub enum Result {
     Trap,
 }
 
-pub struct Store<Refs = ModuleCloneRef>
+pub struct Store<Refs>
     where Refs: StructureReference
 {
     pub funcs: TypedIndexVec<FuncInst<Refs>, FuncAddr>,
