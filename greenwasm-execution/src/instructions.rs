@@ -340,6 +340,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         Ok(())
     }
 
+    #[inline(always)]
     pub fn enter_block<'instr>(stack: &mut Stack<'instr>,
                                current_instrs: &mut &'instr [Instr],
                                jump_target: &'instr [Instr],
@@ -347,6 +348,30 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                                label_cont: &'instr [Instr]) {
         stack.push_label(label_n, label_cont);
         *current_instrs = jump_target;
+    }
+
+    #[inline(always)]
+    pub fn brop<'instr>(stack: &mut Stack<'instr>,
+                        current_instrs: &mut &'instr [Instr],
+                        l: LabelIdx)
+    {
+        assert!(stack.label_count() >= (l.0 as usize) + 1);
+        let (n, cont) = stack.lth_label(l);
+        assert!(n <= 1);
+        let mut vals = None;
+        if n == 1 {
+            vals = Some(stack.pop_val());
+        }
+        for _ in 0..(l.0 as usize + 1) {
+            while let Some(StackElem::Val(_)) = stack.top() {
+                stack.pop_val();
+            }
+            stack.pop_label();
+        }
+        if let Some(val) = vals {
+            stack.push_val(val);
+        }
+        *current_instrs = cont;
     }
 
     pub fn execute_instrs(&mut self, mut current_instrs: &[Instr]) -> EResult<()> {
@@ -701,23 +726,22 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                     }
                 }
                 Br(l) => {
-                    assert!(stack.label_count() >= (l.0 as usize) + 1);
-                    let (n, cont) = stack.lth_label(l);
-                    assert!(n <= 1);
-                    let mut vals = None;
-                    if n == 1 {
-                        vals = Some(stack.pop_val());
+                    Self::brop(stack, &mut current_instrs, l);
+                }
+                BrIf(l) => {
+                    let c = I32::assert_val_type(stack.pop_val());
+                    if c != 0 {
+                        Self::brop(stack, &mut current_instrs, l);
                     }
-                    for _ in 0..(l.0 as usize + 1) {
-                        while let Some(StackElem::Val(_)) = stack.top() {
-                            stack.pop_val();
-                        }
-                        stack.pop_label();
+                }
+                BrTable(ls, ln) => {
+                    let i = I32::assert_val_type(stack.pop_val()) as usize;
+                    if i < ls.len() {
+                        let li = ls[i];
+                        Self::brop(stack, &mut current_instrs, li);
+                    } else {
+                        Self::brop(stack, &mut current_instrs, ln);
                     }
-                    if let Some(val) = vals {
-                        stack.push_val(val);
-                    }
-                    current_instrs = cont;
                 }
 
             }
