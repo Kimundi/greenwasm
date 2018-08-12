@@ -445,392 +445,472 @@ impl ExecCtx<'instr, 'ctx>
         use self::Instr::*;
 
         loop {
-        while let Some(instr) = self.next_instr() {
-            match *instr {
-                // consts
-                I32Const(v) => self.constop(v),
-                I64Const(v) => self.constop(v),
-                F32Const(v) => self.constop(v),
-                F64Const(v) => self.constop(v),
+            while let Some(instr) = self.next_instr() {
+                match *instr {
+                    // consts
+                    I32Const(v) => self.constop(v),
+                    I64Const(v) => self.constop(v),
+                    F32Const(v) => self.constop(v),
+                    F64Const(v) => self.constop(v),
 
-                // unops
-                I32Clz => self.unop(I32::iclz),
-                I64Clz => self.unop(I64::iclz),
+                    // unops
+                    I32Clz => self.unop(I32::iclz),
+                    I64Clz => self.unop(I64::iclz),
 
-                I32Ctz => self.unop(I32::ictz),
-                I64Ctz => self.unop(I64::ictz),
+                    I32Ctz => self.unop(I32::ictz),
+                    I64Ctz => self.unop(I64::ictz),
 
-                I32Popcnt => self.unop(I32::ipopcnt),
-                I64Popcnt => self.unop(I64::ipopcnt),
+                    I32Popcnt => self.unop(I32::ipopcnt),
+                    I64Popcnt => self.unop(I64::ipopcnt),
 
-                F32Abs => self.unop(F32::fabs),
-                F64Abs => self.unop(F64::fabs),
+                    F32Abs => self.unop(F32::fabs),
+                    F64Abs => self.unop(F64::fabs),
 
-                F32Neg => self.unop(F32::fneg),
-                F64Neg => self.unop(F64::fneg),
+                    F32Neg => self.unop(F32::fneg),
+                    F64Neg => self.unop(F64::fneg),
 
-                F32Sqrt => self.unop(F32::fsqrt),
-                F64Sqrt => self.unop(F64::fsqrt),
+                    F32Sqrt => self.unop(F32::fsqrt),
+                    F64Sqrt => self.unop(F64::fsqrt),
 
-                F32Ceil => self.unop(F32::fceil),
-                F64Ceil => self.unop(F64::fceil),
+                    F32Ceil => self.unop(F32::fceil),
+                    F64Ceil => self.unop(F64::fceil),
 
-                F32Floor => self.unop(F32::ffloor),
-                F64Floor => self.unop(F64::ffloor),
+                    F32Floor => self.unop(F32::ffloor),
+                    F64Floor => self.unop(F64::ffloor),
 
-                F32Trunc => self.unop(F32::ftrunc),
-                F64Trunc => self.unop(F64::ftrunc),
+                    F32Trunc => self.unop(F32::ftrunc),
+                    F64Trunc => self.unop(F64::ftrunc),
 
-                F32Nearest => self.unop(F32::fnearest),
-                F64Nearest => self.unop(F64::fnearest),
+                    F32Nearest => self.unop(F32::fnearest),
+                    F64Nearest => self.unop(F64::fnearest),
 
-                // binops
-                I32Add => self.binop(I32::iadd),
-                I64Add => self.binop(I64::iadd),
+                    // binops
+                    I32Add => self.binop(I32::iadd),
+                    I64Add => self.binop(I64::iadd),
 
-                I32Sub => self.binop(I32::isub),
-                I64Sub => self.binop(I64::isub),
+                    I32Sub => self.binop(I32::isub),
+                    I64Sub => self.binop(I64::isub),
 
-                I32Mul => self.binop(I32::imul),
-                I64Mul => self.binop(I64::imul),
+                    I32Mul => self.binop(I32::imul),
+                    I64Mul => self.binop(I64::imul),
 
-                I32DivU => self.partial_binop(I32::idiv_u)?,
-                I64DivU => self.partial_binop(I64::idiv_u)?,
+                    I32DivU => self.partial_binop(I32::idiv_u)?,
+                    I64DivU => self.partial_binop(I64::idiv_u)?,
 
-                I32DivS => self.partial_binop(I32::idiv_s)?,
-                I64DivS => self.partial_binop(I64::idiv_s)?,
+                    I32DivS => self.partial_binop(I32::idiv_s)?,
+                    I64DivS => self.partial_binop(I64::idiv_s)?,
 
-                I32RemU => self.partial_binop(I32::irem_u)?,
-                I64RemU => self.partial_binop(I64::irem_u)?,
+                    I32RemU => self.partial_binop(I32::irem_u)?,
+                    I64RemU => self.partial_binop(I64::irem_u)?,
 
-                I32RemS => self.partial_binop(I32::irem_s)?,
-                I64RemS => self.partial_binop(I64::irem_s)?,
+                    I32RemS => self.partial_binop(I32::irem_s)?,
+                    I64RemS => self.partial_binop(I64::irem_s)?,
 
-                I32And => self.binop(I32::iand),
-                I64And => self.binop(I64::iand),
+                    I32And => self.binop(I32::iand),
+                    I64And => self.binop(I64::iand),
 
-                I32Or => self.binop(I32::ior),
-                I64Or => self.binop(I64::ior),
+                    I32Or => self.binop(I32::ior),
+                    I64Or => self.binop(I64::ior),
 
-                I32Xor => self.binop(I32::ixor),
-                I64Xor => self.binop(I64::ixor),
+                    I32Xor => self.binop(I32::ixor),
+                    I64Xor => self.binop(I64::ixor),
 
-                I32Shl => self.binop(I32::ishl),
-                I64Shl => self.binop(I64::ishl),
+                    I32Shl => self.binop(I32::ishl),
+                    I64Shl => self.binop(I64::ishl),
 
-                I32ShrU => self.binop(I32::ishr_u),
-                I64ShrU => self.binop(I64::ishr_u),
+                    I32ShrU => self.binop(I32::ishr_u),
+                    I64ShrU => self.binop(I64::ishr_u),
 
-                I32ShrS => self.binop(I32::ishr_s),
-                I64ShrS => self.binop(I64::ishr_s),
+                    I32ShrS => self.binop(I32::ishr_s),
+                    I64ShrS => self.binop(I64::ishr_s),
 
-                I32Rotl => self.binop(I32::irotl),
-                I64Rotl => self.binop(I64::irotl),
+                    I32Rotl => self.binop(I32::irotl),
+                    I64Rotl => self.binop(I64::irotl),
 
-                I32Rotr => self.binop(I32::irotr),
-                I64Rotr => self.binop(I64::irotr),
+                    I32Rotr => self.binop(I32::irotr),
+                    I64Rotr => self.binop(I64::irotr),
 
-                F32Add => self.binop(F32::fadd),
-                F64Add => self.binop(F64::fadd),
+                    F32Add => self.binop(F32::fadd),
+                    F64Add => self.binop(F64::fadd),
 
-                F32Sub => self.binop(F32::fsub),
-                F64Sub => self.binop(F64::fsub),
+                    F32Sub => self.binop(F32::fsub),
+                    F64Sub => self.binop(F64::fsub),
 
-                F32Mul => self.binop(F32::fmul),
-                F64Mul => self.binop(F64::fmul),
+                    F32Mul => self.binop(F32::fmul),
+                    F64Mul => self.binop(F64::fmul),
 
-                F32Div => self.binop(F32::fdiv),
-                F64Div => self.binop(F64::fdiv),
+                    F32Div => self.binop(F32::fdiv),
+                    F64Div => self.binop(F64::fdiv),
 
-                F32Min => self.binop(F32::fmin),
-                F64Min => self.binop(F64::fmin),
+                    F32Min => self.binop(F32::fmin),
+                    F64Min => self.binop(F64::fmin),
 
-                F32Max => self.binop(F32::fmax),
-                F64Max => self.binop(F64::fmax),
+                    F32Max => self.binop(F32::fmax),
+                    F64Max => self.binop(F64::fmax),
 
-                F32CopySign => self.binop(F32::fcopysign),
-                F64CopySign => self.binop(F64::fcopysign),
+                    F32CopySign => self.binop(F32::fcopysign),
+                    F64CopySign => self.binop(F64::fcopysign),
 
-                // testops
-                I32EqZ => self.testop(I32::ieqz),
-                I64EqZ => self.testop(I64::ieqz),
+                    // testops
+                    I32EqZ => self.testop(I32::ieqz),
+                    I64EqZ => self.testop(I64::ieqz),
 
-                // relops
-                I32Eq => self.relop(I32::ieq),
-                I64Eq => self.relop(I64::ieq),
+                    // relops
+                    I32Eq => self.relop(I32::ieq),
+                    I64Eq => self.relop(I64::ieq),
 
-                I32Ne => self.relop(I32::ine),
-                I64Ne => self.relop(I64::ine),
+                    I32Ne => self.relop(I32::ine),
+                    I64Ne => self.relop(I64::ine),
 
-                I32LtU => self.relop(I32::ilt_u),
-                I64LtU => self.relop(I64::ilt_u),
+                    I32LtU => self.relop(I32::ilt_u),
+                    I64LtU => self.relop(I64::ilt_u),
 
-                I32LtS => self.relop(I32::ilt_s),
-                I64LtS => self.relop(I64::ilt_s),
+                    I32LtS => self.relop(I32::ilt_s),
+                    I64LtS => self.relop(I64::ilt_s),
 
-                I32GtU => self.relop(I32::igt_u),
-                I64GtU => self.relop(I64::igt_u),
+                    I32GtU => self.relop(I32::igt_u),
+                    I64GtU => self.relop(I64::igt_u),
 
-                I32GtS => self.relop(I32::igt_s),
-                I64GtS => self.relop(I64::igt_s),
+                    I32GtS => self.relop(I32::igt_s),
+                    I64GtS => self.relop(I64::igt_s),
 
-                I32LeU => self.relop(I32::ile_u),
-                I64LeU => self.relop(I64::ile_u),
+                    I32LeU => self.relop(I32::ile_u),
+                    I64LeU => self.relop(I64::ile_u),
 
-                I32LeS => self.relop(I32::ile_s),
-                I64LeS => self.relop(I64::ile_s),
+                    I32LeS => self.relop(I32::ile_s),
+                    I64LeS => self.relop(I64::ile_s),
 
-                I32GeU => self.relop(I32::ige_u),
-                I64GeU => self.relop(I64::ige_u),
+                    I32GeU => self.relop(I32::ige_u),
+                    I64GeU => self.relop(I64::ige_u),
 
-                I32GeS => self.relop(I32::ige_s),
-                I64GeS => self.relop(I64::ige_s),
+                    I32GeS => self.relop(I32::ige_s),
+                    I64GeS => self.relop(I64::ige_s),
 
-                F32Eq => self.relop(F32::feq),
-                F64Eq => self.relop(F64::feq),
+                    F32Eq => self.relop(F32::feq),
+                    F64Eq => self.relop(F64::feq),
 
-                F32Ne => self.relop(F32::fne),
-                F64Ne => self.relop(F64::fne),
+                    F32Ne => self.relop(F32::fne),
+                    F64Ne => self.relop(F64::fne),
 
-                F32Lt => self.relop(F32::flt),
-                F64Lt => self.relop(F64::flt),
+                    F32Lt => self.relop(F32::flt),
+                    F64Lt => self.relop(F64::flt),
 
-                F32Gt => self.relop(F32::fgt),
-                F64Gt => self.relop(F64::fgt),
+                    F32Gt => self.relop(F32::fgt),
+                    F64Gt => self.relop(F64::fgt),
 
-                F32Le => self.relop(F32::fle),
-                F64Le => self.relop(F64::fle),
+                    F32Le => self.relop(F32::fle),
+                    F64Le => self.relop(F64::fle),
 
-                F32Ge => self.relop(F32::fge),
-                F64Ge => self.relop(F64::fge),
+                    F32Ge => self.relop(F32::fge),
+                    F64Ge => self.relop(F64::fge),
 
-                // cvtops
-                I32WrapI64 => self.cvtop(wrap),
+                    // cvtops
+                    I32WrapI64 => self.cvtop(wrap),
 
-                I64ExtendUI32 => self.cvtop(extend_u),
-                I64ExtendSI32 => self.cvtop(extend_s),
+                    I64ExtendUI32 => self.cvtop(extend_u),
+                    I64ExtendSI32 => self.cvtop(extend_s),
 
-                I32TruncUF32 => self.partial_cvtop(trunc_u_f32_i32)?,
-                I32TruncSF32 => self.partial_cvtop(trunc_s_f32_i32)?,
+                    I32TruncUF32 => self.partial_cvtop(trunc_u_f32_i32)?,
+                    I32TruncSF32 => self.partial_cvtop(trunc_s_f32_i32)?,
 
-                I32TruncUF64 => self.partial_cvtop(trunc_u_f64_i32)?,
-                I32TruncSF64 => self.partial_cvtop(trunc_s_f64_i32)?,
+                    I32TruncUF64 => self.partial_cvtop(trunc_u_f64_i32)?,
+                    I32TruncSF64 => self.partial_cvtop(trunc_s_f64_i32)?,
 
-                I64TruncUF32 => self.partial_cvtop(trunc_u_f32_i64)?,
-                I64TruncSF32 => self.partial_cvtop(trunc_s_f32_i64)?,
+                    I64TruncUF32 => self.partial_cvtop(trunc_u_f32_i64)?,
+                    I64TruncSF32 => self.partial_cvtop(trunc_s_f32_i64)?,
 
-                I64TruncUF64 => self.partial_cvtop(trunc_u_f64_i64)?,
-                I64TruncSF64 => self.partial_cvtop(trunc_s_f64_i64)?,
+                    I64TruncUF64 => self.partial_cvtop(trunc_u_f64_i64)?,
+                    I64TruncSF64 => self.partial_cvtop(trunc_s_f64_i64)?,
 
-                F32DemoteF64 => self.cvtop(demote),
-                F64PromoteF32 => self.cvtop(promote),
+                    F32DemoteF64 => self.cvtop(demote),
+                    F64PromoteF32 => self.cvtop(promote),
 
-                F32ConvertUI32 => self.cvtop(convert_u_i32_f32),
-                F32ConvertSI32 => self.cvtop(convert_s_i32_f32),
+                    F32ConvertUI32 => self.cvtop(convert_u_i32_f32),
+                    F32ConvertSI32 => self.cvtop(convert_s_i32_f32),
 
-                F32ConvertUI64 => self.cvtop(convert_u_i64_f32),
-                F32ConvertSI64 => self.cvtop(convert_s_i64_f32),
+                    F32ConvertUI64 => self.cvtop(convert_u_i64_f32),
+                    F32ConvertSI64 => self.cvtop(convert_s_i64_f32),
 
-                F64ConvertUI32 => self.cvtop(convert_u_i32_f64),
-                F64ConvertSI32 => self.cvtop(convert_s_i32_f64),
+                    F64ConvertUI32 => self.cvtop(convert_u_i32_f64),
+                    F64ConvertSI32 => self.cvtop(convert_s_i32_f64),
 
-                F64ConvertUI64 => self.cvtop(convert_u_i64_f64),
-                F64ConvertSI64 => self.cvtop(convert_s_i64_f64),
+                    F64ConvertUI64 => self.cvtop(convert_u_i64_f64),
+                    F64ConvertSI64 => self.cvtop(convert_s_i64_f64),
 
-                I32ReinterpretF32 => self.cvtop(reinterpret_f32_i32),
-                I64ReinterpretF64 => self.cvtop(reinterpret_f64_i64),
-                F32ReinterpretI32 => self.cvtop(reinterpret_i32_f32),
-                F64ReinterpretI64 => self.cvtop(reinterpret_i64_f64),
+                    I32ReinterpretF32 => self.cvtop(reinterpret_f32_i32),
+                    I64ReinterpretF64 => self.cvtop(reinterpret_f64_i64),
+                    F32ReinterpretI32 => self.cvtop(reinterpret_i32_f32),
+                    F64ReinterpretI64 => self.cvtop(reinterpret_i64_f64),
 
-                // parametric instructions
-                Drop => {
-                    let stack = &mut *self.stack;
+                    // parametric instructions
+                    Drop => {
+                        let stack = &mut *self.stack;
 
-                    stack.pop_val();
-                }
-                Select => {
-                    let stack = &mut *self.stack;
-
-                    let c = stack.pop_val();
-                    let c: I32 = ValCast::assert_val_type(c);
-
-                    let val2 = stack.pop_val();
-                    let val1 = stack.pop_val();
-
-                    assert!(val2.ty() == val1.ty());
-
-                    if c != 0 {
-                        stack.push_val(val1);
-                    } else {
-                        stack.push_val(val2);
+                        stack.pop_val();
                     }
-                }
+                    Select => {
+                        let stack = &mut *self.stack;
 
-                // variable instructions
-                GetLocal(x) => {
-                    let stack = &mut *self.stack;
+                        let c = stack.pop_val();
+                        let c: I32 = ValCast::assert_val_type(c);
 
-                    let val = stack.current_frame().locals[x];
-                    stack.push_val(val);
-                }
-                SetLocal(x) => {
-                    let stack = &mut *self.stack;
+                        let val2 = stack.pop_val();
+                        let val1 = stack.pop_val();
 
-                    let val = stack.pop_val();
-                    stack.current_frame().locals[x] = val;
-                }
-                TeeLocal(x) => {
-                    let stack = &mut *self.stack;
+                        assert!(val2.ty() == val1.ty());
 
-                    let val = stack.peek_val();
-                    stack.current_frame().locals[x] = val;
-                }
-                GetGlobal(x) => {
-                    let stack = &mut *self.stack;
-                    let store = &mut *self.store;
+                        if c != 0 {
+                            stack.push_val(val1);
+                        } else {
+                            stack.push_val(val2);
+                        }
+                    }
 
-                    let a = stack.current_frame().module;
-                    let a = store.modules[a].globaladdrs[x];
-                    let glob = &store.globals[a];
-                    let val = glob.value;
-                    stack.push_val(val);
-                }
-                SetGlobal(x) => {
-                    let stack = &mut *self.stack;
-                    let store = &mut *self.store;
+                    // variable instructions
+                    GetLocal(x) => {
+                        let stack = &mut *self.stack;
 
-                    let a = stack.current_frame().module;
-                    let a = store.modules[a].globaladdrs[x];
-                    let glob = &mut store.globals[a];
-                    let val = stack.pop_val();
-                    glob.value = val;
-                }
+                        let val = stack.current_frame().locals[x];
+                        stack.push_val(val);
+                    }
+                    SetLocal(x) => {
+                        let stack = &mut *self.stack;
 
-                // memory instructions
+                        let val = stack.pop_val();
+                        stack.current_frame().locals[x] = val;
+                    }
+                    TeeLocal(x) => {
+                        let stack = &mut *self.stack;
 
-                // loads
-                I32Load8U(memarg) => self.loadop::<I32, u8>(memarg)?,
-                I32Load8S(memarg) => self.loadop::<I32, i8>(memarg)?,
-                I32Load16U(memarg) => self.loadop::<I32, u16>(memarg)?,
-                I32Load16S(memarg) => self.loadop::<I32, i16>(memarg)?,
-                I32Load(memarg) => self.loadop::<I32, I32>(memarg)?,
+                        let val = stack.peek_val();
+                        stack.current_frame().locals[x] = val;
+                    }
+                    GetGlobal(x) => {
+                        let stack = &mut *self.stack;
+                        let store = &mut *self.store;
 
-                I64Load8U(memarg) => self.loadop::<I64, u8>(memarg)?,
-                I64Load8S(memarg) => self.loadop::<I64, i8>(memarg)?,
-                I64Load16U(memarg) => self.loadop::<I64, u16>(memarg)?,
-                I64Load16S(memarg) => self.loadop::<I64, i16>(memarg)?,
-                I64Load32U(memarg) => self.loadop::<I64, u32>(memarg)?,
-                I64Load32S(memarg) => self.loadop::<I64, i32>(memarg)?,
-                I64Load(memarg) => self.loadop::<I64, I64>(memarg)?,
+                        let a = stack.current_frame().module;
+                        let a = store.modules[a].globaladdrs[x];
+                        let glob = &store.globals[a];
+                        let val = glob.value;
+                        stack.push_val(val);
+                    }
+                    SetGlobal(x) => {
+                        let stack = &mut *self.stack;
+                        let store = &mut *self.store;
 
-                F32Load(memarg) => self.loadop::<F32, F32>(memarg)?,
-                F64Load(memarg) => self.loadop::<F64, F64>(memarg)?,
+                        let a = stack.current_frame().module;
+                        let a = store.modules[a].globaladdrs[x];
+                        let glob = &mut store.globals[a];
+                        let val = stack.pop_val();
+                        glob.value = val;
+                    }
 
-                // stores
-                I32Store8(memarg) => self.storeop::<I32, u8>(memarg)?,
-                I32Store16(memarg) => self.storeop::<I32, u16>(memarg)?,
-                I32Store(memarg) => self.storeop::<I32, I32>(memarg)?,
+                    // memory instructions
 
-                I64Store8(memarg) => self.storeop::<I64, u8>(memarg)?,
-                I64Store16(memarg) => self.storeop::<I64, u16>(memarg)?,
-                I64Store32(memarg) => self.storeop::<I64, u32>(memarg)?,
-                I64Store(memarg) => self.storeop::<I64, I64>(memarg)?,
+                    // loads
+                    I32Load8U(memarg) => self.loadop::<I32, u8>(memarg)?,
+                    I32Load8S(memarg) => self.loadop::<I32, i8>(memarg)?,
+                    I32Load16U(memarg) => self.loadop::<I32, u16>(memarg)?,
+                    I32Load16S(memarg) => self.loadop::<I32, i16>(memarg)?,
+                    I32Load(memarg) => self.loadop::<I32, I32>(memarg)?,
 
-                F32Store(memarg) => self.storeop::<F32, F32>(memarg)?,
-                F64Store(memarg) => self.storeop::<F64, F64>(memarg)?,
+                    I64Load8U(memarg) => self.loadop::<I64, u8>(memarg)?,
+                    I64Load8S(memarg) => self.loadop::<I64, i8>(memarg)?,
+                    I64Load16U(memarg) => self.loadop::<I64, u16>(memarg)?,
+                    I64Load16S(memarg) => self.loadop::<I64, i16>(memarg)?,
+                    I64Load32U(memarg) => self.loadop::<I64, u32>(memarg)?,
+                    I64Load32S(memarg) => self.loadop::<I64, i32>(memarg)?,
+                    I64Load(memarg) => self.loadop::<I64, I64>(memarg)?,
 
-                // mem ctrl
-                CurrentMemory => {
-                    let stack = &mut *self.stack;
-                    let store = &mut *self.store;
+                    F32Load(memarg) => self.loadop::<F32, F32>(memarg)?,
+                    F64Load(memarg) => self.loadop::<F64, F64>(memarg)?,
 
-                    let a = stack.current_frame().module;
-                    let a = store.modules[a].memaddrs[MemIdx(0)];
-                    let mem = &store.mems[a];
-                    let sz = mem.data.len() / WASM_PAGE_SIZE;
-                    stack.push_val(Val::I32(sz as I32));
-                }
-                GrowMemory => {
-                    let stack = &mut *self.stack;
-                    let store = &mut *self.store;
+                    // stores
+                    I32Store8(memarg) => self.storeop::<I32, u8>(memarg)?,
+                    I32Store16(memarg) => self.storeop::<I32, u16>(memarg)?,
+                    I32Store(memarg) => self.storeop::<I32, I32>(memarg)?,
 
-                    let a = stack.current_frame().module;
-                    let a = store.modules[a].memaddrs[MemIdx(0)];
-                    let mem = &mut store.mems[a];
-                    let sz = mem.data.len() / WASM_PAGE_SIZE;
-                    let n = I32::assert_val_type(stack.pop_val());
+                    I64Store8(memarg) => self.storeop::<I64, u8>(memarg)?,
+                    I64Store16(memarg) => self.storeop::<I64, u16>(memarg)?,
+                    I64Store32(memarg) => self.storeop::<I64, u32>(memarg)?,
+                    I64Store(memarg) => self.storeop::<I64, I64>(memarg)?,
 
-                    // TODO: custom limits?
-                    // TODO: What with growth that exceeds 32 bits?
+                    F32Store(memarg) => self.storeop::<F32, F32>(memarg)?,
+                    F64Store(memarg) => self.storeop::<F64, F64>(memarg)?,
 
-                    // Either try alloc:
-                    let result = allocation::grow_memory_by(mem, n as usize);
-                    if result.is_ok() {
+                    // mem ctrl
+                    CurrentMemory => {
+                        let stack = &mut *self.stack;
+                        let store = &mut *self.store;
+
+                        let a = stack.current_frame().module;
+                        let a = store.modules[a].memaddrs[MemIdx(0)];
+                        let mem = &store.mems[a];
+                        let sz = mem.data.len() / WASM_PAGE_SIZE;
                         stack.push_val(Val::I32(sz as I32));
-                    } else {
-                        stack.push_val(Val::I32(-1i32 as I32));
+                    }
+                    GrowMemory => {
+                        let stack = &mut *self.stack;
+                        let store = &mut *self.store;
+
+                        let a = stack.current_frame().module;
+                        let a = store.modules[a].memaddrs[MemIdx(0)];
+                        let mem = &mut store.mems[a];
+                        let sz = mem.data.len() / WASM_PAGE_SIZE;
+                        let n = I32::assert_val_type(stack.pop_val());
+
+                        // TODO: custom limits?
+                        // TODO: What with growth that exceeds 32 bits?
+
+                        // Either try alloc:
+                        let result = allocation::grow_memory_by(mem, n as usize);
+                        if result.is_ok() {
+                            stack.push_val(Val::I32(sz as I32));
+                        } else {
+                            stack.push_val(Val::I32(-1i32 as I32));
+                        }
+
+                        // Or don't:
+                        // stack.push_val(Val::I32(-1i32 as I32));
                     }
 
-                    // Or don't:
-                    // stack.push_val(Val::I32(-1i32 as I32));
-                }
+                    // control instructions
+                    Nop => {
+                        /* nothing to see here, carry on */
+                    }
+                    Unreachable => {
+                        Err(Trap)?;
+                    }
+                    Block(resultt, ref jump_target) => {
+                        let n = resultt.len();
+                        let cont = &self.ip[1..];
 
-                // control instructions
-                Nop => {
-                    /* nothing to see here, carry on */
-                }
-                Unreachable => {
-                    Err(Trap)?;
-                }
-                Block(resultt, ref jump_target) => {
-                    let n = resultt.len();
-                    let cont = &self.ip[1..];
+                        self.enter_block(&jump_target, n, cont);
+                    }
+                    Loop(_, ref jump_target) => {
+                        // TODO: Is it correct that result type is ignored here?
+                        let n = 0;
+                        let cont = &self.ip[..];
 
-                    self.enter_block(&jump_target, n, cont);
-                }
-                Loop(_, ref jump_target) => {
-                    // TODO: Is it correct that result type is ignored here?
-                    let n = 0;
-                    let cont = &self.ip[..];
+                        self.enter_block(&jump_target, n, cont);
+                    }
+                    IfElse(resultt, ref jump_target_if, ref jump_target_else) => {
+                        let stack = &mut *self.stack;
+                        let ip = &mut self.ip;
 
-                    self.enter_block(&jump_target, n, cont);
+                        let c = I32::assert_val_type(stack.pop_val());
+                        let n = resultt.len();
+                        let cont = &ip[1..];
+                        if c != 0 {
+                            self.enter_block(&jump_target_if, n, cont);
+                        } else {
+                            self.enter_block(&jump_target_else, n, cont);
+                        }
+                    }
+                    Br(l) => {
+                        self.brop(l);
+                    }
+                    BrIf(l) => {
+                        let stack = &mut *self.stack;
+
+                        let c = I32::assert_val_type(stack.pop_val());
+                        if c != 0 {
+                            self.brop(l);
+                        }
+                    }
+                    BrTable(ref ls, ln) => {
+                        let stack = &mut *self.stack;
+
+                        let i = I32::assert_val_type(stack.pop_val()) as usize;
+                        if i < ls.len() {
+                            let li = ls[i];
+                            self.brop(li);
+                        } else {
+                            self.brop(ln);
+                        }
+                    }
+                    Return => {
+                        let stack = &mut *self.stack;
+                        let ip = &mut self.ip;
+
+                        let n = stack.current_frame_arity();
+                        assert!(n <= 1);
+                        let mut vals = None;
+                        if n == 1 {
+                            vals = Some(stack.pop_val());
+                        }
+                        let next_instr;
+                        loop {
+                            match stack.top().unwrap() {
+                                StackElem::Val(_) => {
+                                    stack.pop_val();
+                                }
+                                StackElem::Label { .. } => {
+                                    stack.pop_label();
+                                }
+                                StackElem::Activation { .. } => {
+                                    next_instr = stack.pop_frame().next_instr;
+                                    break;
+                                }
+                            }
+                        }
+                        if let Some(val) = vals {
+                            stack.push_val(val);
+                        }
+                        *ip = next_instr
+                    }
+                    Call(x) => {
+                        let stack = &mut *self.stack;
+                        let store = &mut *self.store;
+
+                        let a = stack.current_frame().module;
+                        let a = store.modules[a].funcaddrs[x];
+                        self.invoke(a)?;
+                    }
+                    CallIndirect(x) => {
+                        let stack = &mut *self.stack;
+                        let store = &mut *self.store;
+
+                        let ma = stack.current_frame().module;
+                        let ta = store.modules[ma].tableaddrs[TableIdx(0)];
+                        let tab = &store.tables[ta];
+                        let ft_expect = &store.modules[ma].types[x.0 as usize];
+                        let i = I32::assert_val_type(stack.pop_val()) as usize;
+                        if i >= tab.elem.len() {
+                            Err(Trap)?;
+                        }
+                        if tab.elem[i].0.is_none() {
+                            Err(Trap)?;
+                        }
+                        let a = tab.elem[i].0.unwrap();
+                        let f = &store.funcs[a];
+                        let ft_actual = f.type_();
+                        if ft_expect != ft_actual {
+                            Err(Trap)?;
+                        }
+                        self.invoke(a)?;
+                    }
                 }
-                IfElse(resultt, ref jump_target_if, ref jump_target_else) => {
+            }
+            match self.stack.top_ctrl_entry() {
+                TopCtrlEntry::Label => {
                     let stack = &mut *self.stack;
                     let ip = &mut self.ip;
 
-                    let c = I32::assert_val_type(stack.pop_val());
-                    let n = resultt.len();
-                    let cont = &ip[1..];
-                    if c != 0 {
-                        self.enter_block(&jump_target_if, n, cont);
-                    } else {
-                        self.enter_block(&jump_target_else, n, cont);
+                    // pop m vals from top
+                    let mut vals = vec![];
+                    while let Some(StackElem::Val(_)) = stack.top() {
+                        vals.push(stack.pop_val());
                     }
-                }
-                Br(l) => {
-                    self.brop(l);
-                }
-                BrIf(l) => {
-                    let stack = &mut *self.stack;
+                    let next_instr = stack.pop_label().next_instr;
+                    while let Some(val) = vals.pop() {
+                        stack.push_val(val);
+                    }
 
-                    let c = I32::assert_val_type(stack.pop_val());
-                    if c != 0 {
-                        self.brop(l);
-                    }
+                    *ip = next_instr;
                 }
-                BrTable(ref ls, ln) => {
-                    let stack = &mut *self.stack;
-
-                    let i = I32::assert_val_type(stack.pop_val()) as usize;
-                    if i < ls.len() {
-                        let li = ls[i];
-                        self.brop(li);
-                    } else {
-                        self.brop(ln);
-                    }
-                }
-                Return => {
+                TopCtrlEntry::Activation => {
                     let stack = &mut *self.stack;
                     let ip = &mut self.ip;
 
@@ -840,97 +920,17 @@ impl ExecCtx<'instr, 'ctx>
                     if n == 1 {
                         vals = Some(stack.pop_val());
                     }
-                    let next_instr;
-                    loop {
-                        match stack.top().unwrap() {
-                            StackElem::Val(_) => {
-                                stack.pop_val();
-                            }
-                            StackElem::Label { .. } => {
-                                stack.pop_label();
-                            }
-                            StackElem::Activation { .. } => {
-                                next_instr = stack.pop_frame().next_instr;
-                                break;
-                            }
-                        }
-                    }
+                    let frame = stack.pop_frame();
                     if let Some(val) = vals {
                         stack.push_val(val);
                     }
-                    *ip = next_instr
-                }
-                Call(x) => {
-                    let stack = &mut *self.stack;
-                    let store = &mut *self.store;
 
-                    let a = stack.current_frame().module;
-                    let a = store.modules[a].funcaddrs[x];
-                    self.invoke(a)?;
+                    *ip  = frame.next_instr;
                 }
-                CallIndirect(x) => {
-                    let stack = &mut *self.stack;
-                    let store = &mut *self.store;
-
-                    let ma = stack.current_frame().module;
-                    let ta = store.modules[ma].tableaddrs[TableIdx(0)];
-                    let tab = &store.tables[ta];
-                    let ft_expect = &store.modules[ma].types[x.0 as usize];
-                    let i = I32::assert_val_type(stack.pop_val()) as usize;
-                    if i >= tab.elem.len() {
-                        Err(Trap)?;
-                    }
-                    if tab.elem[i].0.is_none() {
-                        Err(Trap)?;
-                    }
-                    let a = tab.elem[i].0.unwrap();
-                    let f = &store.funcs[a];
-                    let ft_actual = f.type_();
-                    if ft_expect != ft_actual {
-                        Err(Trap)?;
-                    }
-                    self.invoke(a)?;
+                TopCtrlEntry::None => {
+                    return Ok(());
                 }
             }
-        }
-        match self.stack.top_ctrl_entry() {
-            TopCtrlEntry::Label => {
-                let stack = &mut *self.stack;
-                let ip = &mut self.ip;
-
-                // pop m vals from top
-                let mut vals = vec![];
-                while let Some(StackElem::Val(_)) = stack.top() {
-                    vals.push(stack.pop_val());
-                }
-                let next_instr = stack.pop_label().next_instr;
-                while let Some(val) = vals.pop() {
-                    stack.push_val(val);
-                }
-
-                *ip = next_instr;
-            }
-            TopCtrlEntry::Activation => {
-                let stack = &mut *self.stack;
-                let ip = &mut self.ip;
-
-                let n = stack.current_frame_arity();
-                assert!(n <= 1);
-                let mut vals = None;
-                if n == 1 {
-                    vals = Some(stack.pop_val());
-                }
-                let frame = stack.pop_frame();
-                if let Some(val) = vals {
-                    stack.push_val(val);
-                }
-
-                *ip  = frame.next_instr;
-            }
-            TopCtrlEntry::None => {
-                return Ok(());
-            }
-        }
         }
     }
 }
