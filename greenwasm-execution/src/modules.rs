@@ -1,5 +1,6 @@
 use structure::types::*;
 use structure::modules::*;
+use validation::ValidatedModule;
 
 use crate::runtime_structure::*;
 use crate::structure_references::*;
@@ -11,15 +12,15 @@ pub const WASM_PAGE_SIZE: usize = 65536;
 pub mod external_typing {
     use super::*;
 
-    pub fn func<Ref>(s: &Store<'ast, Ref>, a: FuncAddr) -> ExternType
-        where Ref: StructureReference<'ast>
+    pub fn func(s: &Store<'ast>, a: FuncAddr) -> ExternType
+
     {
         let functype = s.funcs[a].type_();
-        ExternType::Func((**functype).clone()) // TODO: bad copy
+        ExternType::Func((*functype).clone()) // TODO: bad copy
     }
 
-    pub fn table<Ref>(s: &Store<'ast, Ref>, a: TableAddr) -> ExternType
-        where Ref: StructureReference<'ast>
+    pub fn table(s: &Store<'ast>, a: TableAddr) -> ExternType
+
     {
         let TableInst { elem, max } = &s.tables[a];
         let n = elem.len();
@@ -37,8 +38,8 @@ pub mod external_typing {
         })
     }
 
-    pub fn mem<Ref>(s: &Store<'ast, Ref>, a: MemAddr) -> ExternType
-        where Ref: StructureReference<'ast>
+    pub fn mem(s: &Store<'ast>, a: MemAddr) -> ExternType
+
     {
         let MemInst { data, max } = &s.mems[a];
         let n = data.len() / WASM_PAGE_SIZE;
@@ -55,8 +56,8 @@ pub mod external_typing {
         })
     }
 
-    pub fn global<Ref>(s: &Store<'ast, Ref>, a: GlobalAddr) -> ExternType
-        where Ref: StructureReference<'ast>
+    pub fn global(s: &Store<'ast>, a: GlobalAddr) -> ExternType
+
     {
         let GlobalInst { ref value, mutability } = s.globals[a];
         let t = value.ty();
@@ -111,14 +112,14 @@ pub mod allocation {
     use self::AllocError::*;
     pub type AResult = ::std::result::Result<(), AllocError>;
 
-    pub fn alloc_function<Ref>(s: &mut Store<'ast, Ref>,
-                                func: Ref::FuncRef,
-                                module: &Ref,
+    pub fn alloc_function(s: &mut Store<'ast>,
+                                func: &'ast Func,
+                                module: &'ast Module,
                                 moduleaddr: ModuleAddr) -> FuncAddr
-        where Ref: StructureReference<'ast>
+
     {
         let a = s.funcs.next_addr();
-        let functype = module.functype_ref(func.type_.0 as usize);
+        let functype = &module.types[func.type_.0 as usize];
         let funcinst = FuncInst::Internal {
             type_: functype,
             module: moduleaddr,
@@ -128,10 +129,10 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_host_function<Ref>(s: &mut Store<'ast, Ref>,
+    pub fn alloc_host_function(s: &mut Store<'ast>,
                                      hostfunc: HostFunc,
-                                     functype: Ref::FuncTypeRef) -> FuncAddr
-        where Ref: StructureReference<'ast>
+                                     functype: &'ast FuncType) -> FuncAddr
+
     {
         let a = s.funcs.next_addr();
         let funcinst = FuncInst::Host {
@@ -142,9 +143,9 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_table<Ref>(s: &mut Store<'ast, Ref>,
+    pub fn alloc_table(s: &mut Store<'ast>,
                              tabletype: &TableType) -> TableAddr
-        where Ref: StructureReference<'ast>
+
     {
         let TableType {
             limits: Limits { min: n, max: m },
@@ -159,9 +160,9 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_mem<Ref>(s: &mut Store<'ast, Ref>,
+    pub fn alloc_mem(s: &mut Store<'ast>,
                            memtype: &MemType) -> MemAddr
-        where Ref: StructureReference<'ast>
+
     {
         let MemType {
             limits: Limits { min: n, max: m },
@@ -175,10 +176,10 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_global<Ref>(s: &mut Store<'ast, Ref>,
+    pub fn alloc_global(s: &mut Store<'ast>,
                               globaltype: &GlobalType,
                               val: Val) -> GlobalAddr
-        where Ref: StructureReference<'ast>
+
     {
         let GlobalType {
             mutability,
@@ -221,11 +222,11 @@ pub mod allocation {
 
         Ok(())
     }
-    pub fn alloc_module<Ref>(s: &mut Store<'ast, Ref>,
-                              module: &Ref,
+    pub fn alloc_module(s: &mut Store<'ast>,
+                              module: &'ast Module,
                               externvals_im: &[ExternVal],
                               vals: &[Val]) -> ModuleAddr
-        where Ref: StructureReference<'ast>
+
     {
         // NB: This is a modification to the spec to allow cycles between
         // function instances and module instances
@@ -234,7 +235,7 @@ pub mod allocation {
 
         let mut funcaddrs = vec![];
         for (i, _) in module.funcs.iter().enumerate() {
-            let funci = module.func_ref(i);
+            let funci = &module.funcs[i];
             let funcaddri = alloc_function(s, funci, &module, moduleaddr);
             funcaddrs.push(funcaddri);
         }
@@ -294,14 +295,14 @@ pub mod allocation {
                     => ExternVal::Global(globaladdrs_mod[globalidx]),
             };
             let exportinsti = ExportInst {
-                name: module.name_ref(i),
+                name: &module.exports[i].name,
                 value: externvali,
             };
             exportinsts.push(exportinsti);
         }
 
         let moduleinst = ModuleInst {
-            types: module.functypes_ref(),
+            types: &module.types,
             funcaddrs: funcaddrs_mod,
             tableaddrs: tableaddrs_mod,
             memaddrs: memaddrs_mod,
@@ -330,10 +331,10 @@ pub mod instantiation {
 
     pub type IResult = std::result::Result<ModuleAddr, InstantiationError>;
 
-    pub fn instantiate_module<Ref>(s: &mut Store<'ast, Ref>,
-                                   module: &'ast Ref,
+    pub fn instantiate_module(s: &mut Store<'ast>,
+                                   module: &'ast ValidatedModule,
                                    externvals: &[ExternVal]) -> IResult
-        where Ref: StructureReference<'ast>
+
     {
         let stack = &mut Stack::new();
         let mut ctx = ExecCtx::new(s, stack);
@@ -529,8 +530,8 @@ pub mod invocation {
 
     pub type CResult = ::std::result::Result<Result, InvokeError>;
 
-    pub fn invoke<Ref>(s: &mut Store<'ast, Ref>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
-        where Ref: StructureReference<'ast>
+    pub fn invoke(s: &mut Store<'ast>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
+
     {
         let funcinst = &s.funcs[funcaddr];
         let ty = funcinst.type_();

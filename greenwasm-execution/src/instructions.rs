@@ -167,21 +167,21 @@ mem_op!(c: F32, u32, F32);
 mem_op!(c: F64, u64, F64);
 
 // TODO: More central location
-pub struct ExecCtx<'instr, 'ctx, Ref>
-    where Ref: StructureReference<'instr>,
+pub struct ExecCtx<'instr, 'ctx>
+    where
           'instr: 'ctx,
 {
-    pub store: &'ctx mut Store<'instr, Ref>,
+    pub store: &'ctx mut Store<'instr>,
     pub stack: &'ctx mut Stack<'instr>,
-    _marker: PhantomData<Ref>,
+    _marker: PhantomData<()>,
 }
 
-impl<Ref> ExecCtx<'instr, 'ctx, Ref>
-    where Ref: StructureReference<'instr>,
+impl ExecCtx<'instr, 'ctx>
+    where
           'instr: 'ctx,
 {
     #[inline(always)]
-    pub fn new(store: &'ctx mut Store<'instr, Ref>,
+    pub fn new(store: &'ctx mut Store<'instr>,
                stack: &'ctx mut Stack<'instr>) -> Self {
         ExecCtx {
             store,
@@ -283,7 +283,7 @@ impl<Ref> ExecCtx<'instr, 'ctx, Ref>
 
     #[inline(always)]
     fn loadop<T: ValCast, M: MemOp<T>>(stack: &mut Stack<'instr>,
-                                       store: &mut Store<'instr, Ref>,
+                                       store: &mut Store<'instr>,
                                        memarg: Memarg) -> EResult<()> {
         let a = stack.current_frame().module;
         let a = store.modules[a].memaddrs[MemIdx(0)];
@@ -307,7 +307,7 @@ impl<Ref> ExecCtx<'instr, 'ctx, Ref>
     }
     #[inline(always)]
     fn storeop<T: ValCast, M: MemOp<T>>(stack: &mut Stack<'instr>,
-                                        store: &mut Store<'instr, Ref>,
+                                        store: &mut Store<'instr>,
                                         memarg: Memarg) -> EResult<()> {
         let a = stack.current_frame().module;
         let a = store.modules[a].memaddrs[MemIdx(0)];
@@ -366,7 +366,7 @@ impl<Ref> ExecCtx<'instr, 'ctx, Ref>
     }
 
     fn invoke(stack: &mut Stack<'instr>,
-              store: &Store<'instr, Ref>,
+              store: &Store<'instr>,
               ip: &mut &'instr [Instr],
               a: FuncAddr) -> EResult<()>
     {
@@ -828,7 +828,7 @@ impl<Ref> ExecCtx<'instr, 'ctx, Ref>
                     let a = tab.elem[i].0.unwrap();
                     let f = &store.funcs[a];
                     let ft_actual = f.type_();
-                    if *ft_expect != **ft_actual {
+                    if ft_expect != ft_actual {
                         Err(Trap)?;
                     }
                     Self::invoke(stack, store, &mut ip, a);
