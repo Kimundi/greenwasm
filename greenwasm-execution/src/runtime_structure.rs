@@ -1,7 +1,6 @@
 use structure::types::*;
 use structure::instructions::*;
 use structure::modules::*;
-use crate::structure_references::*;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 

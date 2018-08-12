@@ -3,7 +3,6 @@ use structure::modules::*;
 use validation::ValidatedModule;
 
 use crate::runtime_structure::*;
-use crate::structure_references::*;
 use crate::instructions::*;
 
 // TODO: more central definition
@@ -326,8 +325,12 @@ pub mod instantiation {
         WrongExternTypeInImport,
         ElemIdxOutOfBounds,
         DataIdxOutOfBounds,
+        Trap,
     }
     use self::InstantiationError::*;
+    impl From<crate::instructions::Trap> for InstantiationError {
+        fn from(_: crate::instructions::Trap) -> Self { InstantiationError::Trap }
+    }
 
     pub type IResult = std::result::Result<ModuleAddr, InstantiationError>;
 
@@ -388,7 +391,7 @@ pub mod instantiation {
                 funcaddrs: vec![].into(),
                 memaddrs: vec![].into(),
                 tableaddrs: vec![].into(),
-                types: module.functypes_ref(), // TODO: this should be empty
+                types: &[],
             };
 
             // NB: Because our Frame stores a ModuleAddr,
@@ -410,7 +413,7 @@ pub mod instantiation {
             stack.push_frame(1, f_im, &[]);
 
             for globali in &module.globals {
-                let vali = ctx.evaluate_expr(&globali.init);
+                let vali = ctx.evaluate_expr(&globali.init)?;
 
                 vals.push(vali);
             }
@@ -441,7 +444,7 @@ pub mod instantiation {
 
         let mut eoi_tabeladdri = vec![];
         for elemi in &module.elem {
-            let eovali = ctx.evaluate_expr(&elemi.offset);
+            let eovali = ctx.evaluate_expr(&elemi.offset)?;
             let eoi = if let Val::I32(eoi) = eovali {
                 eoi
             } else {
@@ -461,7 +464,7 @@ pub mod instantiation {
 
         let mut doi_memaddri = vec![];
         for datai in &module.data {
-            let dovali = ctx.evaluate_expr(&datai.offset);
+            let dovali = ctx.evaluate_expr(&datai.offset)?;
             let doi = if let Val::I32(doi) = dovali {
                 doi
             } else {

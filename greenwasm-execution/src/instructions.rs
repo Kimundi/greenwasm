@@ -6,7 +6,6 @@ use structure::instructions::*;
 
 use crate::runtime_structure::*;
 use crate::numerics::*;
-use crate::structure_references::*;
 use crate::modules::*;
 
 #[derive(Debug)]
@@ -190,10 +189,10 @@ impl ExecCtx<'instr, 'ctx>
         }
     }
 
-    pub fn evaluate_expr(&mut self, expr: &'instr Expr) -> Val {
-        self.execute_instrs(&expr.body);
+    pub fn evaluate_expr(&mut self, expr: &'instr Expr) -> EResult<Val> {
+        self.execute_instrs(&expr.body)?;
         let v = self.stack.pop_val();
-        v
+        Ok(v)
     }
 
     #[inline(always)]
@@ -372,7 +371,7 @@ impl ExecCtx<'instr, 'ctx>
     {
         let f = &store.funcs[a];
         match f {
-            FuncInst::Internal { type_, module: module, code: code } => {
+            FuncInst::Internal { type_, module, code } => {
                 let n = type_.args.len();
                 let m = type_.results.len();
 
@@ -811,7 +810,7 @@ impl ExecCtx<'instr, 'ctx>
                 Call(x) => {
                     let a = stack.current_frame().module;
                     let a = store.modules[a].funcaddrs[x];
-                    Self::invoke(stack, store, &mut ip, a);
+                    Self::invoke(stack, store, &mut ip, a)?;
                 }
                 CallIndirect(x) => {
                     let ma = stack.current_frame().module;
@@ -831,7 +830,7 @@ impl ExecCtx<'instr, 'ctx>
                     if ft_expect != ft_actual {
                         Err(Trap)?;
                     }
-                    Self::invoke(stack, store, &mut ip, a);
+                    Self::invoke(stack, store, &mut ip, a)?;
                 }
             }
         }
