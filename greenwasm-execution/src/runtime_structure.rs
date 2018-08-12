@@ -204,42 +204,43 @@ pub enum ExternVal {
 }
 
 #[derive(Default)]
-pub struct Stack<'instrs> {
-    data: Vec<StackElem<'instrs>>,
+pub struct Stack<'instr> {
+    data: Vec<StackElem<'instr>>,
     frame_indices: Vec<usize>,
     label_indices: Vec<usize>,
-    instr_falloff_stack: Vec<&'instrs [Instr]>,
 }
 
-impl Stack<'instrs> {
+impl Stack<'instr> {
     pub fn new() -> Self { Self::default() }
 
     pub fn push_val(&mut self, val: Val) {
         self.data.push(StackElem::Val(val));
     }
-    pub fn push_label(&mut self, n: usize, branch_target: &'instrs [Instr]) {
+    pub fn push_label(&mut self, n: usize, branch_target: &'instr [Instr], next_instr: &'instr [Instr]) {
         self.label_indices.push(self.data.len());
-        self.data.push(StackElem::Label {
+        self.data.push(StackElem::Label(Label {
             n,
             branch_target,
-        });
+            next_instr,
+        }));
     }
-    pub fn push_frame(&mut self, n: usize, frame: Frame) {
+    pub fn push_frame(&mut self, n: usize, frame: Frame, next_instr: &'instr [Instr]) {
         self.frame_indices.push(self.data.len());
-        self.data.push(StackElem::Activation {
+        self.data.push(StackElem::Activation(Activation {
             n,
             frame,
-        });
+            next_instr,
+        }));
     }
 
     pub fn top(&self) -> Option<&StackElem> {
         self.data.last()
     }
 
-    pub fn pop_frame(&mut self) -> (usize, Frame) {
+    pub fn pop_frame(&mut self) -> Activation {
         self.frame_indices.pop();
-        if let Some(StackElem::Activation { n, frame }) = self.data.pop() {
-            (n, frame)
+        if let Some(StackElem::Activation(a)) = self.data.pop() {
+            a
         } else {
             panic!("No Frame at top of stack")
         }
@@ -253,20 +254,20 @@ impl Stack<'instrs> {
         }
     }
 
-    pub fn pop_label(&mut self) -> (usize, &'instr [Instr]) {
+    pub fn pop_label(&mut self) -> Label {
         self.label_indices.pop();
-        if let Some(StackElem::Label { n, branch_target }) = self.data.pop() {
-            (n, branch_target)
+        if let Some(StackElem::Label(l)) = self.data.pop() {
+            l
         } else {
             panic!("No Label at top of stack")
         }
     }
 
-    pub fn lth_label(&self, l: LabelIdx) -> (usize, &'instr [Instr]) {
+    pub fn lth_label(&self, l: LabelIdx) -> Label {
         let len = self.label_indices.len();
         let pos = self.label_indices[len - 1 - (l.0 as usize)];
-        if let StackElem::Label { n, branch_target } = self.data[pos] {
-            (n, branch_target)
+        if let StackElem::Label(l) = self.data[pos] {
+            l
         } else {
             panic!("No Label l at position pos of stack")
             // TODO: more useful debug messages
@@ -281,47 +282,79 @@ impl Stack<'instrs> {
         }
     }
 
-    pub fn current_activation(&mut self) -> (usize, &mut Frame) {
+    pub fn current_activation(&mut self) -> &mut Activation {
         let cfi = *self.frame_indices.last().expect("No Frame at top of stack");
-        if let StackElem::Activation { ref mut frame, n } = self.data[cfi] {
-            (n, frame)
+        if let StackElem::Activation (ref mut a) = self.data[cfi] {
+            a
         } else {
             panic!("No Frame at top of stack")
         }
     }
 
+    pub fn current_label(&self) -> &Label {
+        let cli = *self.label_indices.last().expect("No Label at top of stack");
+        if let StackElem::Label(ref l) = self.data[cli] {
+            l
+        } else {
+            panic!("No Label at top of stack")
+        }
+    }
+
     pub fn current_frame(&mut self) -> &mut Frame {
-        self.current_activation().1
+        &mut self.current_activation().frame
     }
 
     pub fn current_frame_arity(&mut self) -> usize {
-        self.current_activation().0
+        self.current_activation().n
     }
 
     pub fn label_count(&self) -> usize {
         self.label_indices.len()
     }
 
-    pub fn push_falloff(&mut self, instrs: &'instrs [Instr]) {
-        self.instr_falloff_stack.push(instrs);
-    }
-
-    pub fn pop_falloff(&self) -> Option<&'instrs [Instr]> {
-        self.instr_falloff_stack.pop()
+    pub fn top_ctrl_entry(&self) -> TopCtrlEntry {
+        let fi = self.frame_indices.last();
+        let li = self.label_indices.last();
+        match (fi, li) {
+            (Some(fi), Some(li)) if fi > li => TopCtrlEntry::Activation,
+            (Some(fi), Some(li)) if fi < li => TopCtrlEntry::Label,
+            (Some(_), None) => TopCtrlEntry::Activation,
+            (None, Some(_)) => TopCtrlEntry::Label,
+            (None, None) => TopCtrlEntry::None,
+            (Some(_), Some(_)) => unreachable!(),
+        }
     }
 }
 
+pub enum TopCtrlEntry {
+    Label,
+    Activation,
+    None,
+}
+
 #[derive(PartialEq)]
-pub enum StackElem<'instrs> {
+pub struct Label<'instr> {
+    pub n: usize, // NB. Can only be 0 or 1
+    pub branch_target: &'instr [Instr],
+
+    // NB: Added to make instr execution less error prone
+    pub next_instr: &'instr [Instr],
+}
+
+#[derive(PartialEq)]
+pub struct Activation<'instr> {
+    pub n: usize, // NB. Can only be 0 or 1
+    pub frame: Frame,
+
+    // NB: Added to make instr execution less error prone
+    pub next_instr: &'instr [Instr],
+}
+
+#[derive(PartialEq)]
+pub enum StackElem<'instr> {
     Val(Val),
-    Label {
-        n: usize, // NB. Can only be 0 or 1
-        branch_target: &'instrs [Instr],
-    },
-    Activation {
-        n: usize, // NB. Can only be 0 or 1
-        frame: Frame,
-    },
+    Label(Label<'instr>),
+    Activation(Activation<'instr>),
 }
 
 #[derive(PartialEq)]

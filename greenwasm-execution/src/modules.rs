@@ -405,7 +405,7 @@ pub mod instantiation {
 
             // TODO: What value to pick for n here?
             // assuming n = 1 due to needing the result
-            stack.push_frame(1, f_im);
+            stack.push_frame(1, f_im, &[]);
 
             for globali in &module.globals {
                 let vali = ctx.evaluate_expr(&globali.init);
@@ -414,10 +414,14 @@ pub mod instantiation {
             }
 
             let top_frame = stack.pop_frame();
-            assert!(top_frame == (1, Frame {
-                locals: vec![].into(),
-                module: aux_moduleaddr,
-            }));
+            assert!(top_frame == Activation {
+                n: 1,
+                frame: Frame {
+                    locals: vec![].into(),
+                    module: aux_moduleaddr,
+                },
+                next_instr: &[],
+            });
 
             ctx.store().modules.pop_aux();
         }
@@ -431,7 +435,7 @@ pub mod instantiation {
 
         // TODO: What value to pick for n here?
         // assuming n = 1 due to needing the result
-        ctx.stack.push_frame(1, f);
+        ctx.stack.push_frame(1, f, &[]);
 
         let mut eoi_tabeladdri = vec![];
         for elemi in &module.elem {
@@ -474,10 +478,14 @@ pub mod instantiation {
         }
 
         let top_frame = ctx.stack().pop_frame();
-        assert!(top_frame == (1, Frame {
-            locals: vec![].into(),
-            module: moduleaddr,
-        }));
+        assert!(top_frame == Activation {
+            n: 1,
+            frame: Frame {
+                locals: vec![].into(),
+                module: moduleaddr,
+            },
+            next_instr: &[],
+        });
 
         for ((eoi, tableaddri), elemi) in eoi_tabeladdri.into_iter().zip(&module.elem) {
             for (j, &funcidxij) in elemi.init.iter().enumerate() {

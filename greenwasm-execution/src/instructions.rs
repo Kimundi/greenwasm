@@ -345,8 +345,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                            jump_target: &'instr [Instr],
                            label_n: usize,
                            label_cont: &'instr [Instr]) {
-        stack.push_label(label_n, label_cont);
-        stack.push_falloff(&ip[1..]);
+        stack.push_label(label_n, label_cont, &ip[1..]);
         *ip = jump_target;
     }
 
@@ -356,7 +355,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                     l: LabelIdx)
     {
         assert!(stack.label_count() >= (l.0 as usize) + 1);
-        let (n, cont) = stack.lth_label(l);
+        let Label { n, branch_target, .. } = stack.lth_label(l);
         assert!(n <= 1);
         let mut vals = None;
         if n == 1 {
@@ -371,27 +370,48 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         if let Some(val) = vals {
             stack.push_val(val);
         }
-        *ip = cont;
+        *ip = branch_target;
     }
 
-    fn invoke<'instr>(stack: &mut Stack<'instr>, store: &Store<Ref>, a: FuncAddr) -> EResult<()> {
+    fn invoke<'instr>(stack: &mut Stack<'instr>, store: &Store<Ref>, ip: &mut &'instr [Instr], a: FuncAddr) -> EResult<()> {
         let f = store.funcs[a];
         match f {
             FuncInst::Internal { type_, module, code } => {
-                let t1n = type_.args;
-                let t2m = type_.results;
+                let n = type_.args.len();
+                let m = type_.results.len();
 
-                assert!(t2m.len() <= 1);
+                assert!(m <= 1);
 
                 let ts = &code.locals;
-                let instrs = &code.body;
+                let instrs = &code.body.body;
 
+                let mut local_vals = vec![];
+                for _ in 0..n {
+                    local_vals.push(stack.pop_val());
+                }
+                local_vals.reverse();
 
+                for ty in ts {
+                    local_vals.push(match ty {
+                        ValType::I32 => Val::I32(0),
+                        ValType::I64 => Val::I64(0),
+                        ValType::F32 => Val::F32(0.0),
+                        ValType::F64 => Val::F64(0.0),
+                    });
+                }
+                let f = Frame { module: module, locals: local_vals.into() };
+                let next_instr = &ip[1..];
+                stack.push_frame(m, f, next_instr);
+
+                // NB: No next instructions, as that's stored in the function frame
+                Self::enter_block(stack, &mut ip, &instrs, m, &[]);
             }
             FuncInst::Host { type_, hostcode: _ } => {
-
+                unimplemented!()
             }
         }
+
+        Ok(())
     }
 
     fn execute_instrs(&mut self, mut ip: &[Instr]) -> EResult<()> {
@@ -771,6 +791,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                     if n == 1 {
                         vals = Some(stack.pop_val());
                     }
+                    let next_instr;
                     loop {
                         match stack.top().unwrap() {
                             StackElem::Val(_) => {
@@ -779,8 +800,8 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                             StackElem::Label { .. } => {
                                 stack.pop_label();
                             }
-                            StackElem::Activation { n, frame } => {
-                                stack.pop_frame();
+                            StackElem::Activation { .. } => {
+                                next_instr = stack.pop_frame().next_instr;
                                 break;
                             }
                         }
@@ -788,32 +809,47 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                     if let Some(val) = vals {
                         stack.push_val(val);
                     }
-                    unimplemented!(); // jump to instr after call
+                    ip = next_instr
                 }
                 Call(x) => {
                     let a = stack.current_frame().module;
                     let a = store.modules[a].funcaddrs[x];
-                    Self::invoke(stack, store, a);
+                    Self::invoke(stack, store, &mut ip, a);
                 }
 
             }
         }
-        if let Some(instrs) = stack.pop_falloff() {
-            // TODO: This is block specific for now
+        match stack.top_ctrl_entry() {
+            TopCtrlEntry::Label => {
+                // pop m vals from top
+                let mut vals = vec![];
+                while let Some(StackElem::Val(_)) = stack.top() {
+                    vals.push(stack.pop_val());
+                }
+                let next_instr = stack.pop_label().next_instr;
+                while let Some(val) = vals.pop() {
+                    stack.push_val(val);
+                }
 
-            // pop m vals from top
-            let mut vals = vec![];
-            while let Some(StackElem::Val(_)) = stack.top() {
-                vals.push(stack.pop_val());
+                ip = next_instr;
             }
-            stack.pop_label();
-            while let Some(val) = vals.pop() {
-                stack.push_val(val);
-            }
+            TopCtrlEntry::Activation => {
+                let n = stack.current_frame_arity();
+                assert!(n <= 1);
+                let mut vals = None;
+                if n == 1 {
+                    vals = Some(stack.pop_val());
+                }
+                let frame = stack.pop_frame();
+                if let Some(val) = vals {
+                    stack.push_val(val);
+                }
 
-            ip = instrs;
-        } else {
-            return Ok(());
+                ip  = frame.next_instr;
+            }
+            TopCtrlEntry::None => {
+                return Ok(());
+            }
         }
         }
     }
