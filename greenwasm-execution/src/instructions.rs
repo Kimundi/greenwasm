@@ -816,7 +816,26 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                     let a = store.modules[a].funcaddrs[x];
                     Self::invoke(stack, store, &mut ip, a);
                 }
-
+                CallIndirect(x) => {
+                    let ma = stack.current_frame().module;
+                    let ta = store.modules[ma].tableaddrs[TableIdx(0)];
+                    let tab = store.tables[ta];
+                    let ft_expect = store.modules[ma].types[x.0 as usize];
+                    let i = I32::assert_val_type(stack.pop_val()) as usize;
+                    if i >= tab.elem.len() {
+                        Err(Trap)?;
+                    }
+                    if tab.elem[i].0.is_none() {
+                        Err(Trap)?;
+                    }
+                    let a = tab.elem[i].0.unwrap();
+                    let f = store.funcs[a];
+                    let ft_actual = f.type_();
+                    if ft_expect != **ft_actual {
+                        Err(Trap)?;
+                    }
+                    Self::invoke(stack, store, &mut ip, a);
+                }
             }
         }
         match stack.top_ctrl_entry() {
