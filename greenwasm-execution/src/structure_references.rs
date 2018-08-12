@@ -9,8 +9,8 @@ use validation::*;
 
 // TODO: util module
 #[derive(Clone)]
-pub struct SelfDeref<U, T>(pub T, PhantomData<U>);
-impl<T, U> Deref for SelfDeref<U, T>
+pub struct SelfDeref<'ast, U: 'ast, T: 'ast>(pub T, PhantomData<&'ast U>);
+impl<'ast, T: 'ast, U: 'ast> Deref for SelfDeref<'ast, U, T>
     where T: Borrow<U>
 {
     type Target = U;
@@ -31,7 +31,7 @@ macro_rules! generate_refs {
     ;)*) => {
         pub trait StructureReference<'ast>: Deref<Target=$modty> + 'ast {
             $(
-                type $refty: Deref<Target=$t> + Clone;
+                type $refty: Deref<Target=$t> + Clone + 'ast;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty;
             )*
         }
@@ -39,30 +39,30 @@ macro_rules! generate_refs {
     (CLONE: $modty:ty, $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
-        impl<'ast> StructureReference<'ast> for SelfDeref<$modty, $modty> {
+        impl<'ast> StructureReference<'ast> for SelfDeref<'ast, $modty, $modty> {
             $(
-                type $refty = SelfDeref<$t, $t>;
+                type $refty = SelfDeref<'ast, $t, $t>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
                     let $s = $self;
                     SelfDeref($map.clone(), PhantomData)
                 }
             )*
         }
-        pub type ModuleCloneRef = SelfDeref<$modty, $modty>;
+        pub type ModuleCloneRef<'ast> = SelfDeref<'ast, $modty, $modty>;
     };
     (REF: $modty:ty, $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
-        impl<'ast, 'a: 'ast> StructureReference<'ast> for SelfDeref<$modty, &'a $modty> {
+        impl<'ast> StructureReference<'ast> for &'ast $modty {
             $(
-                type $refty = SelfDeref<$t, &'a $t>;
+                type $refty = &'ast $t;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
-                    let $s = &$self.0;
-                    SelfDeref(&$map, PhantomData)
+                    let $s = $self;
+                    &$map
                 }
             )*
         }
-        pub type ModuleRefRef<'a> = SelfDeref<$modty, &'a $modty>;
+        pub type ModuleRefRef<'ast> = &'ast $modty;
     };
     (ARC: $modty:ty, $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
@@ -92,9 +92,9 @@ macro_rules! generate_refs {
                 }
             )*
         }
-        impl<'ast> StructureReference<'ast> for SelfDeref<$modty, Arc<$modty>> {
+        impl<'ast> StructureReference<'ast> for SelfDeref<'ast, $modty, Arc<$modty>> {
             $(
-                type $refty = SelfDeref<$t, self::arc::$refty>;
+                type $refty = SelfDeref<'ast, $t, self::arc::$refty>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
                     let module: &Arc<$modty> = &$self.0;
 
@@ -107,7 +107,7 @@ macro_rules! generate_refs {
                 }
             )*
         }
-        pub type ModuleArcRef = SelfDeref<$modty, Arc<$modty>>;
+        pub type ModuleArcRef<'ast> = SelfDeref<'ast, $modty, Arc<$modty>>;
     }
 }
 

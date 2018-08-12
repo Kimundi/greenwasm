@@ -181,7 +181,8 @@ impl<Ref> ExecCtx<'instr, 'ctx, Ref>
           'instr: 'ctx,
 {
     #[inline(always)]
-    pub fn new(store: &'ctx mut Store<'instr, Ref>, stack: &'ctx mut Stack<'instr>) -> Self {
+    pub fn new(store: &'ctx mut Store<'instr, Ref>,
+               stack: &'ctx mut Stack<'instr>) -> Self {
         ExecCtx {
             store,
             stack,
@@ -365,7 +366,7 @@ impl<Ref> ExecCtx<'instr, 'ctx, Ref>
     }
 
     fn invoke(stack: &mut Stack<'instr>,
-              store: &'ctx Store<'instr, Ref>,
+              store: &Store<'instr, Ref>,
               ip: &mut &'instr [Instr],
               a: FuncAddr) -> EResult<()>
     {
