@@ -208,6 +208,7 @@ pub struct Stack<'instrs> {
     data: Vec<StackElem<'instrs>>,
     frame_indices: Vec<usize>,
     label_indices: Vec<usize>,
+    instr_falloff_stack: Vec<&'instrs [Instr]>,
 }
 
 impl Stack<'instrs> {
@@ -280,17 +281,33 @@ impl Stack<'instrs> {
         }
     }
 
-    pub fn current_frame(&mut self) -> &mut Frame {
+    pub fn current_activation(&mut self) -> (usize, &mut Frame) {
         let cfi = *self.frame_indices.last().expect("No Frame at top of stack");
-        if let StackElem::Activation { ref mut frame, .. } = self.data[cfi] {
-            frame
+        if let StackElem::Activation { ref mut frame, n } = self.data[cfi] {
+            (n, frame)
         } else {
             panic!("No Frame at top of stack")
         }
     }
 
+    pub fn current_frame(&mut self) -> &mut Frame {
+        self.current_activation().1
+    }
+
+    pub fn current_frame_arity(&mut self) -> usize {
+        self.current_activation().0
+    }
+
     pub fn label_count(&self) -> usize {
         self.label_indices.len()
+    }
+
+    pub fn push_falloff(&mut self, instrs: &'instrs [Instr]) {
+        self.instr_falloff_stack.push(instrs);
+    }
+
+    pub fn pop_falloff(&self) -> Option<&'instrs [Instr]> {
+        self.instr_falloff_stack.pop()
     }
 }
 

@@ -10,13 +10,6 @@ use crate::numerics::*;
 use crate::structure_references::*;
 use crate::modules::*;
 
-// TODO: More central location
-pub struct ExecCtx<Ref, Sto, Stk> {
-    pub store: Sto,
-    pub stack: Stk,
-    _marker: PhantomData<Ref>,
-}
-
 #[derive(Debug)]
 pub struct Trap;
 type EResult<T> = ::std::result::Result<T, Trap>;
@@ -174,6 +167,12 @@ mem_op!(b: i32, i64, I64);
 mem_op!(c: F32, u32, F32);
 mem_op!(c: F64, u64, F64);
 
+// TODO: More central location
+pub struct ExecCtx<Ref, Sto, Stk> {
+    pub store: Sto,
+    pub stack: Stk,
+    _marker: PhantomData<Ref>,
+}
 
 impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     where Sto: BorrowMut<Store<Ref>>,
@@ -341,19 +340,20 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     #[inline(always)]
-    pub fn enter_block<'instr>(stack: &mut Stack<'instr>,
-                               current_instrs: &mut &'instr [Instr],
-                               jump_target: &'instr [Instr],
-                               label_n: usize,
-                               label_cont: &'instr [Instr]) {
+    fn enter_block<'instr>(stack: &mut Stack<'instr>,
+                           ip: &mut &'instr [Instr],
+                           jump_target: &'instr [Instr],
+                           label_n: usize,
+                           label_cont: &'instr [Instr]) {
         stack.push_label(label_n, label_cont);
-        *current_instrs = jump_target;
+        stack.push_falloff(&ip[1..]);
+        *ip = jump_target;
     }
 
     #[inline(always)]
-    pub fn brop<'instr>(stack: &mut Stack<'instr>,
-                        current_instrs: &mut &'instr [Instr],
-                        l: LabelIdx)
+    fn brop<'instr>(stack: &mut Stack<'instr>,
+                    ip: &mut &'instr [Instr],
+                    l: LabelIdx)
     {
         assert!(stack.label_count() >= (l.0 as usize) + 1);
         let (n, cont) = stack.lth_label(l);
@@ -371,10 +371,30 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         if let Some(val) = vals {
             stack.push_val(val);
         }
-        *current_instrs = cont;
+        *ip = cont;
     }
 
-    pub fn execute_instrs(&mut self, mut current_instrs: &[Instr]) -> EResult<()> {
+    fn invoke<'instr>(stack: &mut Stack<'instr>, store: &Store<Ref>, a: FuncAddr) -> EResult<()> {
+        let f = store.funcs[a];
+        match f {
+            FuncInst::Internal { type_, module, code } => {
+                let t1n = type_.args;
+                let t2m = type_.results;
+
+                assert!(t2m.len() <= 1);
+
+                let ts = &code.locals;
+                let instrs = &code.body;
+
+
+            }
+            FuncInst::Host { type_, hostcode: _ } => {
+
+            }
+        }
+    }
+
+    fn execute_instrs(&mut self, mut ip: &[Instr]) -> EResult<()> {
         use self::Instr::*;
         let stack = self.stack.borrow_mut();
         let store = self.store.borrow_mut();
@@ -388,7 +408,8 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
             }
         };
 
-        while let Some(instr) = next_instr(&mut current_instrs) {
+        loop {
+        while let Some(instr) = next_instr(&mut ip) {
             match *instr {
                 // consts
                 I32Const(v) => Self::constop(stack, v),
@@ -705,50 +726,95 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                 }
                 Block(resultt, jump_target) => {
                     let n = resultt.len();
-                    let cont = &current_instrs[1..];
+                    let cont = &ip[1..];
 
-                    Self::enter_block(stack, &mut current_instrs, &jump_target, n, cont);
+                    Self::enter_block(stack, &mut ip, &jump_target, n, cont);
                 }
                 Loop(resultt, jump_target) => {
                     let n = 0;
-                    let cont = &current_instrs[..];
+                    let cont = &ip[..];
 
-                    Self::enter_block(stack, &mut current_instrs, &jump_target, n, cont);
+                    Self::enter_block(stack, &mut ip, &jump_target, n, cont);
                 }
                 IfElse(resultt, jump_target_if, jump_target_else) => {
                     let c = I32::assert_val_type(stack.pop_val());
                     let n = resultt.len();
-                    let cont = &current_instrs[1..];
+                    let cont = &ip[1..];
                     if c != 0 {
-                        Self::enter_block(stack, &mut current_instrs, &jump_target_if, n, cont);
+                        Self::enter_block(stack, &mut ip, &jump_target_if, n, cont);
                     } else {
-                        Self::enter_block(stack, &mut current_instrs, &jump_target_else, n, cont);
+                        Self::enter_block(stack, &mut ip, &jump_target_else, n, cont);
                     }
                 }
                 Br(l) => {
-                    Self::brop(stack, &mut current_instrs, l);
+                    Self::brop(stack, &mut ip, l);
                 }
                 BrIf(l) => {
                     let c = I32::assert_val_type(stack.pop_val());
                     if c != 0 {
-                        Self::brop(stack, &mut current_instrs, l);
+                        Self::brop(stack, &mut ip, l);
                     }
                 }
                 BrTable(ls, ln) => {
                     let i = I32::assert_val_type(stack.pop_val()) as usize;
                     if i < ls.len() {
                         let li = ls[i];
-                        Self::brop(stack, &mut current_instrs, li);
+                        Self::brop(stack, &mut ip, li);
                     } else {
-                        Self::brop(stack, &mut current_instrs, ln);
+                        Self::brop(stack, &mut ip, ln);
                     }
+                }
+                Return => {
+                    let n = stack.current_frame_arity();
+                    assert!(n <= 1);
+                    let mut vals = None;
+                    if n == 1 {
+                        vals = Some(stack.pop_val());
+                    }
+                    loop {
+                        match stack.top().unwrap() {
+                            StackElem::Val(_) => {
+                                stack.pop_val();
+                            }
+                            StackElem::Label { .. } => {
+                                stack.pop_label();
+                            }
+                            StackElem::Activation { n, frame } => {
+                                stack.pop_frame();
+                                break;
+                            }
+                        }
+                    }
+                    if let Some(val) = vals {
+                        stack.push_val(val);
+                    }
+                    unimplemented!(); // jump to instr after call
+                }
+                Call(x) => {
+                    let a = stack.current_frame().module;
+                    let a = store.modules[a].funcaddrs[x];
+                    Self::invoke(stack, store, a);
                 }
 
             }
         }
+        if let Some(instrs) = stack.pop_falloff() {
+            // TODO: This is block specific for now
 
-        Ok(())
+            // pop m vals from top
+            let mut vals = vec![];
+            while let Some(StackElem::Val(_)) = stack.top() {
+                vals.push(stack.pop_val());
+            }
+            stack.pop_label();
+            while let Some(val) = vals.pop() {
+                stack.push_val(val);
+            }
+
+            ip = instrs;
+        } else {
+            return Ok(());
+        }
+        }
     }
-
-
 }
