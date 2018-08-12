@@ -174,10 +174,10 @@ pub struct ExecCtx<Ref, Sto, Stk> {
     _marker: PhantomData<Ref>,
 }
 
-impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
+impl<'instr, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     where Sto: BorrowMut<Store<Ref>>,
-          Stk: BorrowMut<Stack<'instrs>>,
-          Ref: StructureReference,
+          Stk: BorrowMut<Stack<'instr>>,
+          Ref: StructureReference + 'instr,
 {
     #[inline(always)]
     pub fn new(store: Sto, stack: Stk) -> Self {
@@ -194,23 +194,23 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     #[inline(always)]
-    pub fn stack(&mut self) -> &mut Stack {
+    pub fn stack(&mut self) -> &mut Stack<'instr> {
         self.stack.borrow_mut()
     }
 
-    pub fn evaluate_expr(&mut self, expr: &Expr) -> Val {
+    pub fn evaluate_expr(&mut self, expr: &'instr Expr) -> Val {
         self.execute_instrs(&expr.body);
         let v = self.stack.borrow_mut().pop_val();
         v
     }
 
     #[inline(always)]
-    fn constop<T: ValCast>(stack: &mut Stack, v: T) {
+    fn constop<T: ValCast>(stack: &mut Stack<'instr>, v: T) {
         stack.push_val(v.to_val());
     }
 
     #[inline(always)]
-    fn unop<T: ValCast, F: FnOnce(T) -> T>(stack: &mut Stack, unop: F) {
+    fn unop<T: ValCast, F: FnOnce(T) -> T>(stack: &mut Stack<'instr>, unop: F) {
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
         let c = unop(c1);
@@ -218,7 +218,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     #[inline(always)]
-    fn binop<T: ValCast, F: FnOnce(T, T) -> T>(stack: &mut Stack, binop: F) {
+    fn binop<T: ValCast, F: FnOnce(T, T) -> T>(stack: &mut Stack<'instr>, binop: F) {
         let val2 = stack.pop_val();
         let c2 = T::assert_val_type(val2);
 
@@ -230,7 +230,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     #[inline(always)]
-    fn partial_binop<T: ValCast, F: FnOnce(T, T) -> Partial<T>>(stack: &mut Stack, binop: F) -> EResult<()> {
+    fn partial_binop<T: ValCast, F: FnOnce(T, T) -> Partial<T>>(stack: &mut Stack<'instr>, binop: F) -> EResult<()> {
         let val2 = stack.pop_val();
         let c2 = T::assert_val_type(val2);
 
@@ -248,7 +248,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     #[inline(always)]
-    fn testop<T: ValCast, F: FnOnce(T) -> I32>(stack: &mut Stack, testop: F) {
+    fn testop<T: ValCast, F: FnOnce(T) -> I32>(stack: &mut Stack<'instr>, testop: F) {
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
         let c = testop(c1);
@@ -256,7 +256,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     #[inline(always)]
-    fn relop<T: ValCast, F: FnOnce(T, T) -> I32>(stack: &mut Stack, relop: F) {
+    fn relop<T: ValCast, F: FnOnce(T, T) -> I32>(stack: &mut Stack<'instr>, relop: F) {
         let val2 = stack.pop_val();
         let c2 = T::assert_val_type(val2);
 
@@ -268,7 +268,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     #[inline(always)]
-    fn cvtop<T: ValCast, U: ValCast, F: FnOnce(T) -> U>(stack: &mut Stack, cvtop: F) {
+    fn cvtop<T: ValCast, U: ValCast, F: FnOnce(T) -> U>(stack: &mut Stack<'instr>, cvtop: F) {
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
         let c = cvtop(c1);
@@ -276,7 +276,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     #[inline(always)]
-    fn partial_cvtop<T: ValCast, U: ValCast, F: FnOnce(T) -> Partial<U>>(stack: &mut Stack, cvtop: F) -> EResult<()> {
+    fn partial_cvtop<T: ValCast, U: ValCast, F: FnOnce(T) -> Partial<U>>(stack: &mut Stack<'instr>, cvtop: F) -> EResult<()> {
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
         let c = cvtop(c1);
@@ -290,7 +290,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     #[inline(always)]
-    fn loadop<T: ValCast, M: MemOp<T>>(stack: &mut Stack,
+    fn loadop<T: ValCast, M: MemOp<T>>(stack: &mut Stack<'instr>,
                                        store: &mut Store<Ref>,
                                        memarg: Memarg) -> EResult<()> {
         let a = stack.current_frame().module;
@@ -314,7 +314,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         Ok(())
     }
     #[inline(always)]
-    fn storeop<T: ValCast, M: MemOp<T>>(stack: &mut Stack,
+    fn storeop<T: ValCast, M: MemOp<T>>(stack: &mut Stack<'instr>,
                                         store: &mut Store<Ref>,
                                         memarg: Memarg) -> EResult<()> {
         let a = stack.current_frame().module;
@@ -340,22 +340,22 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     #[inline(always)]
-    fn enter_block<'instr>(stack: &mut Stack<'instr>,
-                           ip: &mut &'instr [Instr],
-                           jump_target: &'instr [Instr],
-                           label_n: usize,
-                           label_cont: &'instr [Instr]) {
+    fn enter_block(stack: &mut Stack<'instr>,
+                   ip: &mut &'instr [Instr],
+                   jump_target: &'instr [Instr],
+                   label_n: usize,
+                   label_cont: &'instr [Instr]) {
         stack.push_label(label_n, label_cont, &ip[1..]);
         *ip = jump_target;
     }
 
     #[inline(always)]
-    fn brop<'instr>(stack: &mut Stack<'instr>,
-                    ip: &mut &'instr [Instr],
-                    l: LabelIdx)
+    fn brop(stack: &mut Stack<'instr>,
+            ip: &mut &'instr [Instr],
+            l: LabelIdx)
     {
         assert!(stack.label_count() >= (l.0 as usize) + 1);
-        let Label { n, branch_target, .. } = stack.lth_label(l);
+        let Label { n, branch_target, .. } = *stack.lth_label(l);
         assert!(n <= 1);
         let mut vals = None;
         if n == 1 {
@@ -373,17 +373,20 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         *ip = branch_target;
     }
 
-    fn invoke<'instr>(stack: &mut Stack<'instr>, store: &Store<Ref>, ip: &mut &'instr [Instr], a: FuncAddr) -> EResult<()> {
-        let f = store.funcs[a];
+    fn invoke(stack: &mut Stack<'instr>,
+              store: &Store<Ref>,
+              ip: &mut &'instr [Instr],
+              a: FuncAddr) -> EResult<()> {
+        let f = &store.funcs[a];
         match f {
-            FuncInst::Internal { type_, module, code } => {
+            FuncInst::Internal { type_, module: module, code: code } => {
                 let n = type_.args.len();
                 let m = type_.results.len();
 
                 assert!(m <= 1);
 
                 let ts = &code.locals;
-                let instrs = &code.body.body;
+                let instrs = &*code.body.body; // TODO: lifetime constraint has an issue here
 
                 let mut local_vals = vec![];
                 for _ in 0..n {
@@ -399,14 +402,14 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                         ValType::F64 => Val::F64(0.0),
                     });
                 }
-                let f = Frame { module: module, locals: local_vals.into() };
+                let f = Frame { module: *module, locals: local_vals.into() };
                 let next_instr = &ip[1..];
                 stack.push_frame(m, f, next_instr);
 
                 // NB: No next instructions, as that's stored in the function frame
-                Self::enter_block(stack, &mut ip, &instrs, m, &[]);
+                Self::enter_block(stack, ip, instrs, m, &[]);
             }
-            FuncInst::Host { type_, hostcode: _ } => {
+            FuncInst::Host { .. } => {
                 unimplemented!()
             }
         }
@@ -414,22 +417,22 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         Ok(())
     }
 
-    fn execute_instrs(&mut self, mut ip: &[Instr]) -> EResult<()> {
+    fn next_instr(ip: &mut &'instr [Instr]) -> Option<&'instr Instr> {
+        if let Some(instr) = ip.get(0) {
+            *ip = &ip[1..];
+            Some(instr)
+        } else {
+            None
+        }
+    }
+
+    fn execute_instrs(&mut self, mut ip: &'instr [Instr]) -> EResult<()> {
         use self::Instr::*;
         let stack = self.stack.borrow_mut();
         let store = self.store.borrow_mut();
 
-        let next_instr = |instrs: &mut &[Instr]| {
-            if let Some(instr) = instrs.get(0) {
-                *instrs = &instrs[1..];
-                Some(instr)
-            } else {
-                None
-            }
-        };
-
         loop {
-        while let Some(instr) = next_instr(&mut ip) {
+        while let Some(instr) = Self::next_instr(&mut ip) {
             match *instr {
                 // consts
                 I32Const(v) => Self::constop(stack, v),
@@ -744,19 +747,20 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                 Unreachable => {
                     Err(Trap)?;
                 }
-                Block(resultt, jump_target) => {
+                Block(resultt, ref jump_target) => {
                     let n = resultt.len();
                     let cont = &ip[1..];
 
                     Self::enter_block(stack, &mut ip, &jump_target, n, cont);
                 }
-                Loop(resultt, jump_target) => {
+                Loop(_, ref jump_target) => {
+                    // TODO: Is it correct that result type is ignored here?
                     let n = 0;
                     let cont = &ip[..];
 
                     Self::enter_block(stack, &mut ip, &jump_target, n, cont);
                 }
-                IfElse(resultt, jump_target_if, jump_target_else) => {
+                IfElse(resultt, ref jump_target_if, ref jump_target_else) => {
                     let c = I32::assert_val_type(stack.pop_val());
                     let n = resultt.len();
                     let cont = &ip[1..];
@@ -775,7 +779,7 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                         Self::brop(stack, &mut ip, l);
                     }
                 }
-                BrTable(ls, ln) => {
+                BrTable(ref ls, ln) => {
                     let i = I32::assert_val_type(stack.pop_val()) as usize;
                     if i < ls.len() {
                         let li = ls[i];
@@ -819,8 +823,8 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                 CallIndirect(x) => {
                     let ma = stack.current_frame().module;
                     let ta = store.modules[ma].tableaddrs[TableIdx(0)];
-                    let tab = store.tables[ta];
-                    let ft_expect = store.modules[ma].types[x.0 as usize];
+                    let tab = &store.tables[ta];
+                    let ft_expect = &store.modules[ma].types[x.0 as usize];
                     let i = I32::assert_val_type(stack.pop_val()) as usize;
                     if i >= tab.elem.len() {
                         Err(Trap)?;
@@ -829,9 +833,9 @@ impl<'instrs, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                         Err(Trap)?;
                     }
                     let a = tab.elem[i].0.unwrap();
-                    let f = store.funcs[a];
+                    let f = &store.funcs[a];
                     let ft_actual = f.type_();
-                    if ft_expect != **ft_actual {
+                    if *ft_expect != **ft_actual {
                         Err(Trap)?;
                     }
                     Self::invoke(stack, store, &mut ip, a);

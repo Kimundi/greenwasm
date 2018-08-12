@@ -237,7 +237,7 @@ impl Stack<'instr> {
         self.data.last()
     }
 
-    pub fn pop_frame(&mut self) -> Activation {
+    pub fn pop_frame(&mut self) -> Activation<'instr> {
         self.frame_indices.pop();
         if let Some(StackElem::Activation(a)) = self.data.pop() {
             a
@@ -254,7 +254,7 @@ impl Stack<'instr> {
         }
     }
 
-    pub fn pop_label(&mut self) -> Label {
+    pub fn pop_label(&mut self) -> Label<'instr> {
         self.label_indices.pop();
         if let Some(StackElem::Label(l)) = self.data.pop() {
             l
@@ -263,10 +263,10 @@ impl Stack<'instr> {
         }
     }
 
-    pub fn lth_label(&self, l: LabelIdx) -> Label {
+    pub fn lth_label(&self, l: LabelIdx) -> &Label<'instr> {
         let len = self.label_indices.len();
         let pos = self.label_indices[len - 1 - (l.0 as usize)];
-        if let StackElem::Label(l) = self.data[pos] {
+        if let StackElem::Label(l) = &self.data[pos] {
             l
         } else {
             panic!("No Label l at position pos of stack")
@@ -282,7 +282,7 @@ impl Stack<'instr> {
         }
     }
 
-    pub fn current_activation(&mut self) -> &mut Activation {
+    pub fn current_activation(&mut self) -> &mut Activation<'instr> {
         let cfi = *self.frame_indices.last().expect("No Frame at top of stack");
         if let StackElem::Activation (ref mut a) = self.data[cfi] {
             a
@@ -291,7 +291,7 @@ impl Stack<'instr> {
         }
     }
 
-    pub fn current_label(&self) -> &Label {
+    pub fn current_label(&self) -> &Label<'instr> {
         let cli = *self.label_indices.last().expect("No Label at top of stack");
         if let StackElem::Label(ref l) = self.data[cli] {
             l
