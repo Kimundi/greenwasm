@@ -11,15 +11,15 @@ pub const WASM_PAGE_SIZE: usize = 65536;
 pub mod external_typing {
     use super::*;
 
-    pub fn func<Refs>(s: &Store<Refs>, a: FuncAddr) -> ExternType
-        where Refs: StructureReference
+    pub fn func<Ref>(s: &Store<'ast, Ref>, a: FuncAddr) -> ExternType
+        where Ref: StructureReference<'ast>
     {
         let functype = s.funcs[a].type_();
         ExternType::Func((**functype).clone()) // TODO: bad copy
     }
 
-    pub fn table<Refs>(s: &Store<Refs>, a: TableAddr) -> ExternType
-        where Refs: StructureReference
+    pub fn table<Ref>(s: &Store<'ast, Ref>, a: TableAddr) -> ExternType
+        where Ref: StructureReference<'ast>
     {
         let TableInst { elem, max } = &s.tables[a];
         let n = elem.len();
@@ -37,8 +37,8 @@ pub mod external_typing {
         })
     }
 
-    pub fn mem<Refs>(s: &Store<Refs>, a: MemAddr) -> ExternType
-        where Refs: StructureReference
+    pub fn mem<Ref>(s: &Store<'ast, Ref>, a: MemAddr) -> ExternType
+        where Ref: StructureReference<'ast>
     {
         let MemInst { data, max } = &s.mems[a];
         let n = data.len() / WASM_PAGE_SIZE;
@@ -55,8 +55,8 @@ pub mod external_typing {
         })
     }
 
-    pub fn global<Refs>(s: &Store<Refs>, a: GlobalAddr) -> ExternType
-        where Refs: StructureReference
+    pub fn global<Ref>(s: &Store<'ast, Ref>, a: GlobalAddr) -> ExternType
+        where Ref: StructureReference<'ast>
     {
         let GlobalInst { ref value, mutability } = s.globals[a];
         let t = value.ty();
@@ -111,11 +111,11 @@ pub mod allocation {
     use self::AllocError::*;
     pub type AResult = ::std::result::Result<(), AllocError>;
 
-    pub fn alloc_function<Refs>(s: &mut Store<Refs>,
-                                func: Refs::FuncRef,
-                                module: &Refs,
+    pub fn alloc_function<Ref>(s: &mut Store<'ast, Ref>,
+                                func: Ref::FuncRef,
+                                module: &Ref,
                                 moduleaddr: ModuleAddr) -> FuncAddr
-        where Refs: StructureReference
+        where Ref: StructureReference<'ast>
     {
         let a = s.funcs.next_addr();
         let functype = module.functype_ref(func.type_.0 as usize);
@@ -128,10 +128,10 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_host_function<Refs>(s: &mut Store<Refs>,
+    pub fn alloc_host_function<Ref>(s: &mut Store<'ast, Ref>,
                                      hostfunc: HostFunc,
-                                     functype: Refs::FuncTypeRef) -> FuncAddr
-        where Refs: StructureReference
+                                     functype: Ref::FuncTypeRef) -> FuncAddr
+        where Ref: StructureReference<'ast>
     {
         let a = s.funcs.next_addr();
         let funcinst = FuncInst::Host {
@@ -142,9 +142,9 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_table<Refs>(s: &mut Store<Refs>,
+    pub fn alloc_table<Ref>(s: &mut Store<'ast, Ref>,
                              tabletype: &TableType) -> TableAddr
-        where Refs: StructureReference
+        where Ref: StructureReference<'ast>
     {
         let TableType {
             limits: Limits { min: n, max: m },
@@ -159,9 +159,9 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_mem<Refs>(s: &mut Store<Refs>,
+    pub fn alloc_mem<Ref>(s: &mut Store<'ast, Ref>,
                            memtype: &MemType) -> MemAddr
-        where Refs: StructureReference
+        where Ref: StructureReference<'ast>
     {
         let MemType {
             limits: Limits { min: n, max: m },
@@ -175,10 +175,10 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_global<Refs>(s: &mut Store<Refs>,
+    pub fn alloc_global<Ref>(s: &mut Store<'ast, Ref>,
                               globaltype: &GlobalType,
                               val: Val) -> GlobalAddr
-        where Refs: StructureReference
+        where Ref: StructureReference<'ast>
     {
         let GlobalType {
             mutability,
@@ -221,11 +221,11 @@ pub mod allocation {
 
         Ok(())
     }
-    pub fn alloc_module<Refs>(s: &mut Store<Refs>,
-                              module: &Refs,
+    pub fn alloc_module<Ref>(s: &mut Store<'ast, Ref>,
+                              module: &Ref,
                               externvals_im: &[ExternVal],
                               vals: &[Val]) -> ModuleAddr
-        where Refs: StructureReference
+        where Ref: StructureReference<'ast>
     {
         // NB: This is a modification to the spec to allow cycles between
         // function instances and module instances
@@ -330,12 +330,13 @@ pub mod instantiation {
 
     pub type IResult = std::result::Result<ModuleAddr, InstantiationError>;
 
-    pub fn instantiate_module<Ref>(s: &mut Store<Ref>,
-                                   module: &Ref,
+    pub fn instantiate_module<Ref>(s: &mut Store<'ast, Ref>,
+                                   module: &'ast Ref,
                                    externvals: &[ExternVal]) -> IResult
-        where Ref: StructureReference
+        where Ref: StructureReference<'ast>
     {
-        let mut ctx = ExecCtx::new(s, Stack::new());
+        let stack = &mut Stack::new();
+        let mut ctx = ExecCtx::new(s, stack);
 
         let n = externvals.len();
 
@@ -357,16 +358,16 @@ pub mod instantiation {
 
             let externtypei = match externvali {
                 ExternVal::Func(x) => {
-                    external_typing::func(ctx.store(), *x)
+                    external_typing::func(ctx.store, *x)
                 }
                 ExternVal::Table(x) => {
-                    external_typing::table(ctx.store(), *x)
+                    external_typing::table(ctx.store, *x)
                 }
                 ExternVal::Mem(x) => {
-                    external_typing::mem(ctx.store(), *x)
+                    external_typing::mem(ctx.store, *x)
                 }
                 ExternVal::Global(x) => {
-                    external_typing::global(ctx.store(), *x)
+                    external_typing::global(ctx.store, *x)
                 }
             };
 
@@ -393,8 +394,8 @@ pub mod instantiation {
             // we need to temporarily allocate the auxilary
             // module instance in the store
 
-            let aux_moduleaddr = ctx.store().modules.next_addr();
-            ctx.store().modules.push(moduleinst_im);
+            let aux_moduleaddr = ctx.store.modules.next_addr();
+            ctx.store.modules.push(moduleinst_im);
 
             let f_im = Frame {
                 locals: vec![].into(),
@@ -423,10 +424,10 @@ pub mod instantiation {
                 next_instr: &[],
             });
 
-            ctx.store().modules.pop_aux();
+            ctx.store.modules.pop_aux();
         }
 
-        let moduleaddr = allocation::alloc_module(ctx.store(), module, &externvals, &vals);
+        let moduleaddr = allocation::alloc_module(ctx.store, module, &externvals, &vals);
 
         let f = Frame {
             locals: vec![].into(),
@@ -446,8 +447,8 @@ pub mod instantiation {
                 panic!("Due to validation, this should be a I32")
             } as usize;
             let tableidxi = elemi.table;
-            let tableaddri = ctx.store().modules[moduleaddr].tableaddrs[tableidxi];
-            let tableinsti = &ctx.store().tables[tableaddri];
+            let tableaddri = ctx.store.modules[moduleaddr].tableaddrs[tableidxi];
+            let tableinsti = &ctx.store.tables[tableaddri];
 
             let eendi = eoi + elemi.init.len();
             if eendi > tableinsti.elem.len() {
@@ -466,8 +467,8 @@ pub mod instantiation {
                 panic!("Due to validation, this should be a I32")
             } as usize;
             let memidxi = datai.data;
-            let memaddri = ctx.store().modules[moduleaddr].memaddrs[memidxi];
-            let meminsti = &ctx.store().mems[memaddri];
+            let memaddri = ctx.store.modules[moduleaddr].memaddrs[memidxi];
+            let meminsti = &ctx.store.mems[memaddri];
 
             let dendi = doi + datai.init.len();
             if dendi > meminsti.data.len() {
@@ -477,7 +478,7 @@ pub mod instantiation {
             doi_memaddri.push((doi, memaddri));
         }
 
-        let top_frame = ctx.stack().pop_frame();
+        let top_frame = ctx.stack.pop_frame();
         assert!(top_frame == Activation {
             n: 1,
             frame: Frame {
@@ -489,14 +490,14 @@ pub mod instantiation {
 
         for ((eoi, tableaddri), elemi) in eoi_tabeladdri.into_iter().zip(&module.elem) {
             for (j, &funcidxij) in elemi.init.iter().enumerate() {
-                let funcaddrij = ctx.store().modules[moduleaddr].funcaddrs[funcidxij];
-                let tableinsti = &mut ctx.store().tables[tableaddri];
+                let funcaddrij = ctx.store.modules[moduleaddr].funcaddrs[funcidxij];
+                let tableinsti = &mut ctx.store.tables[tableaddri];
                 tableinsti.elem[eoi + j] = FuncElem(Some(funcaddrij));
             }
         }
 
         for ((doi, memaddri), datai) in doi_memaddri.into_iter().zip(&module.data) {
-            let meminsti = &mut ctx.store().mems[memaddri];
+            let meminsti = &mut ctx.store.mems[memaddri];
 
             for (j, &bij) in datai.init.iter().enumerate() {
                 meminsti.data[doi + j] = bij;
@@ -504,7 +505,7 @@ pub mod instantiation {
         }
 
         if let Some(start) = &module.start {
-            let funcaddr = ctx.store().modules[moduleaddr].funcaddrs[start.func];
+            let funcaddr = ctx.store.modules[moduleaddr].funcaddrs[start.func];
 
             // TODO: implement invoke
             let invoke = |_| unimplemented!();
@@ -528,8 +529,8 @@ pub mod invocation {
 
     pub type CResult = ::std::result::Result<Result, InvokeError>;
 
-    pub fn invoke<Refs>(s: &mut Store<Refs>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
-        where Refs: StructureReference
+    pub fn invoke<Ref>(s: &mut Store<'ast, Ref>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
+        where Ref: StructureReference<'ast>
     {
         let funcinst = &s.funcs[funcaddr];
         let ty = funcinst.type_();

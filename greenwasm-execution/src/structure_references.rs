@@ -29,7 +29,7 @@ macro_rules! generate_refs {
     (TRAIT: $modty:ty, $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
-        pub trait StructureReference: Deref<Target=$modty> {
+        pub trait StructureReference<'ast>: Deref<Target=$modty> + 'ast {
             $(
                 type $refty: Deref<Target=$t> + Clone;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty;
@@ -39,7 +39,7 @@ macro_rules! generate_refs {
     (CLONE: $modty:ty, $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
-        impl StructureReference for SelfDeref<$modty, $modty> {
+        impl<'ast> StructureReference<'ast> for SelfDeref<$modty, $modty> {
             $(
                 type $refty = SelfDeref<$t, $t>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
@@ -53,7 +53,7 @@ macro_rules! generate_refs {
     (REF: $modty:ty, $self:ident; $(
         $t:ty, $refty:ident, $fnname:ident($($argname:ident: $argty:ty),*), |$s:ident| $map:expr
     ;)*) => {
-        impl<'a> StructureReference for SelfDeref<$modty, &'a $modty> {
+        impl<'ast, 'a: 'ast> StructureReference<'ast> for SelfDeref<$modty, &'a $modty> {
             $(
                 type $refty = SelfDeref<$t, &'a $t>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {
@@ -92,7 +92,7 @@ macro_rules! generate_refs {
                 }
             )*
         }
-        impl StructureReference for SelfDeref<$modty, Arc<$modty>> {
+        impl<'ast> StructureReference<'ast> for SelfDeref<$modty, Arc<$modty>> {
             $(
                 type $refty = SelfDeref<$t, self::arc::$refty>;
                 fn $fnname(&$self, $($argname: $argty),*) -> Self::$refty {

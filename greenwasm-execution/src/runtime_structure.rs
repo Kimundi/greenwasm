@@ -82,10 +82,10 @@ pub enum Result {
     Trap,
 }
 
-pub struct Store<Refs>
-    where Refs: StructureReference
+pub struct Store<'ast, Ref>
+    where Ref: StructureReference<'ast>
 {
-    pub funcs: TypedIndexVec<FuncInst<Refs>, FuncAddr>,
+    pub funcs: TypedIndexVec<FuncInst<'ast, Ref>, FuncAddr>,
     pub tables: TypedIndexVec<TableInst, TableAddr>,
     pub mems: TypedIndexVec<MemInst, MemAddr>,
     pub globals: TypedIndexVec<GlobalInst, GlobalAddr>,
@@ -94,7 +94,7 @@ pub struct Store<Refs>
     ///
     /// This is a modification of the spec to make it easier to resolve cycles
     /// between data structures.
-    pub modules: TypedIndexVec<ModuleInst<Refs>, ModuleAddr>,
+    pub modules: TypedIndexVec<ModuleInst<'ast, Ref>, ModuleAddr>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -127,33 +127,33 @@ impl Into<usize> for ModuleAddr { fn into(self) -> usize { self.0 } }
 impl From<usize> for ModuleAddr { fn from(a: usize) -> Self { ModuleAddr(a) } }
 
 #[derive(Clone)]
-pub struct ModuleInst<Refs>
-    where Refs: StructureReference
+pub struct ModuleInst<'ast, Ref>
+    where Ref: StructureReference<'ast>
 {
-    pub types: Refs::FuncTypesRef,
+    pub types: Ref::FuncTypesRef,
     pub funcaddrs: TypedIndexVec<FuncAddr, FuncIdx>,
     pub tableaddrs: TypedIndexVec<TableAddr, TableIdx>,
     pub memaddrs: TypedIndexVec<MemAddr, MemIdx>,
     pub globaladdrs: TypedIndexVec<GlobalAddr, GlobalIdx>,
-    pub exports: Vec<ExportInst<Refs>>,
+    pub exports: Vec<ExportInst<'ast, Ref>>,
 }
 
 #[derive(Clone)]
-pub enum FuncInst<Refs>
-    where Refs: StructureReference
+pub enum FuncInst<'ast, Ref>
+    where Ref: StructureReference<'ast>
 {
     Internal {
-        type_: Refs::FuncTypeRef,
+        type_: Ref::FuncTypeRef,
         module: ModuleAddr,
-        code: Refs::FuncRef,
+        code: Ref::FuncRef,
     },
     Host {
-        type_: Refs::FuncTypeRef,
+        type_: Ref::FuncTypeRef,
         hostcode: HostFunc
     },
 }
-impl<Refs> FuncInst<Refs> where Refs: StructureReference {
-    pub fn type_(&self) -> &Refs::FuncTypeRef {
+impl<Ref> FuncInst<'ast, Ref> where Ref: StructureReference<'ast> {
+    pub fn type_(&self) -> &Ref::FuncTypeRef {
         match self {
             | FuncInst::Internal { type_, .. }
             | FuncInst::Host { type_, .. }
@@ -188,10 +188,10 @@ pub struct GlobalInst {
 }
 
 #[derive(Clone)]
-pub struct ExportInst<Refs>
-    where Refs: StructureReference
+pub struct ExportInst<'ast, Ref>
+    where Ref: StructureReference<'ast>
 {
-    pub name: Refs::NameRef,
+    pub name: Ref::NameRef,
     pub value: ExternVal,
 }
 

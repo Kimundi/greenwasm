@@ -1,4 +1,3 @@
-use std::borrow::BorrowMut;
 use std::marker::PhantomData;
 
 use structure::types::*;
@@ -168,19 +167,21 @@ mem_op!(c: F32, u32, F32);
 mem_op!(c: F64, u64, F64);
 
 // TODO: More central location
-pub struct ExecCtx<Ref, Sto, Stk> {
-    pub store: Sto,
-    pub stack: Stk,
+pub struct ExecCtx<'instr, 'ctx, Ref>
+    where Ref: StructureReference<'instr>,
+          'instr: 'ctx,
+{
+    pub store: &'ctx mut Store<'instr, Ref>,
+    pub stack: &'ctx mut Stack<'instr>,
     _marker: PhantomData<Ref>,
 }
 
-impl<'instr, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
-    where Sto: BorrowMut<Store<Ref>>,
-          Stk: BorrowMut<Stack<'instr>>,
-          Ref: StructureReference + 'instr,
+impl<Ref> ExecCtx<'instr, 'ctx, Ref>
+    where Ref: StructureReference<'instr>,
+          'instr: 'ctx,
 {
     #[inline(always)]
-    pub fn new(store: Sto, stack: Stk) -> Self {
+    pub fn new(store: &'ctx mut Store<'instr, Ref>, stack: &'ctx mut Stack<'instr>) -> Self {
         ExecCtx {
             store,
             stack,
@@ -188,19 +189,9 @@ impl<'instr, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
         }
     }
 
-    #[inline(always)]
-    pub fn store(&mut self) -> &mut Store<Ref> {
-        self.store.borrow_mut()
-    }
-
-    #[inline(always)]
-    pub fn stack(&mut self) -> &mut Stack<'instr> {
-        self.stack.borrow_mut()
-    }
-
     pub fn evaluate_expr(&mut self, expr: &'instr Expr) -> Val {
         self.execute_instrs(&expr.body);
-        let v = self.stack.borrow_mut().pop_val();
+        let v = self.stack.pop_val();
         v
     }
 
@@ -291,7 +282,7 @@ impl<'instr, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
 
     #[inline(always)]
     fn loadop<T: ValCast, M: MemOp<T>>(stack: &mut Stack<'instr>,
-                                       store: &mut Store<Ref>,
+                                       store: &mut Store<'instr, Ref>,
                                        memarg: Memarg) -> EResult<()> {
         let a = stack.current_frame().module;
         let a = store.modules[a].memaddrs[MemIdx(0)];
@@ -315,7 +306,7 @@ impl<'instr, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
     #[inline(always)]
     fn storeop<T: ValCast, M: MemOp<T>>(stack: &mut Stack<'instr>,
-                                        store: &mut Store<Ref>,
+                                        store: &mut Store<'instr, Ref>,
                                         memarg: Memarg) -> EResult<()> {
         let a = stack.current_frame().module;
         let a = store.modules[a].memaddrs[MemIdx(0)];
@@ -374,9 +365,10 @@ impl<'instr, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
     }
 
     fn invoke(stack: &mut Stack<'instr>,
-              store: &Store<Ref>,
+              store: &'ctx Store<'instr, Ref>,
               ip: &mut &'instr [Instr],
-              a: FuncAddr) -> EResult<()> {
+              a: FuncAddr) -> EResult<()>
+    {
         let f = &store.funcs[a];
         match f {
             FuncInst::Internal { type_, module: module, code: code } => {
@@ -402,9 +394,9 @@ impl<'instr, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
                         ValType::F64 => Val::F64(0.0),
                     });
                 }
-                let f = Frame { module: *module, locals: local_vals.into() };
+                let frame = Frame { module: *module, locals: local_vals.into() };
                 let next_instr = &ip[1..];
-                stack.push_frame(m, f, next_instr);
+                stack.push_frame(m, frame, next_instr);
 
                 // NB: No next instructions, as that's stored in the function frame
                 Self::enter_block(stack, ip, instrs, m, &[]);
@@ -428,8 +420,8 @@ impl<'instr, Ref, Sto, Stk> ExecCtx<Ref, Sto, Stk>
 
     fn execute_instrs(&mut self, mut ip: &'instr [Instr]) -> EResult<()> {
         use self::Instr::*;
-        let stack = self.stack.borrow_mut();
-        let store = self.store.borrow_mut();
+        let stack = &mut *self.stack;
+        let store = &mut *self.store;
 
         loop {
         while let Some(instr) = Self::next_instr(&mut ip) {
