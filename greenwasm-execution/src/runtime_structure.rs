@@ -3,7 +3,7 @@ use structure::instructions::*;
 use structure::modules::*;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-use std::fmt::Debug;
+
 
 // TODO: util module
 #[derive(Clone, PartialEq)]
@@ -16,6 +16,7 @@ impl<T, IndexT> Default for TypedIndexVec<T, IndexT> {
         TypedIndexVec { data: vec![], _marker: PhantomData }
     }
 }
+use std::fmt::Debug;
 impl<T: Debug, IndexT> Debug for TypedIndexVec<T, IndexT> {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
         self.data.fmt(f)
@@ -231,10 +232,10 @@ impl Stack<'instr> {
                 match e {
                     StackElem::Val(v) => println!("  {:?}", v),
                     StackElem::Activation(Activation { n, frame, next_instr }) => {
-                        println!("  Frame {} {:?} {:?} {:?}", n, frame.module, frame.locals, next_instr)
+                        println!("  Frame {} {:?} locals: {:?} next: {:?}", n, frame.module, frame.locals, next_instr)
                     }
                     StackElem::Label(Label { n, branch_target, next_instr }) => {
-                        println!("  Label {} {:?} {:?}", n, branch_target, next_instr)
+                        println!("  Label {} target: {:?} next: {:?}", n, branch_target, next_instr)
                     }
                 }
             }

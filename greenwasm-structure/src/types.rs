@@ -152,7 +152,7 @@ pub enum ValType {
 // as opposed to a missing or not missing element.
 
 /// A ResultType is a list of 0 or 1 elements
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct ResultType {
     results: Option<ValType>
 }
@@ -175,6 +175,13 @@ impl From<Option<ValType>> for ResultType {
         ResultType {
             results: t
         }
+    }
+}
+use std::fmt::Debug;
+impl Debug for ResultType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+        let x: &[_] = self;
+        x.fmt(f)
     }
 }
 
