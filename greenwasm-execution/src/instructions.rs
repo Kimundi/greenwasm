@@ -170,6 +170,7 @@ pub struct ExecCtx<'instr, 'ctx>
     pub store: &'ctx mut Store<'instr>,
     pub stack: &'ctx mut Stack<'instr>,
     ip: &'instr [Instr],
+    next_ip: &'instr [Instr],
 }
 
 impl ExecCtx<'instr, 'ctx>
@@ -182,6 +183,7 @@ impl ExecCtx<'instr, 'ctx>
             store,
             stack,
             ip: &[],
+            next_ip: &[],
         }
     }
 
@@ -368,17 +370,15 @@ impl ExecCtx<'instr, 'ctx>
                    label_n: usize,
                    label_cont: &'instr [Instr]) {
         let stack = &mut *self.stack;
-        let ip = &mut self.ip;
 
-        stack.push_label(label_n, label_cont, &ip[1..]);
-        *ip = jump_target;
+        stack.push_label(label_n, label_cont, self.next_ip);
+        self.next_ip = jump_target;
     }
 
     #[inline(always)]
     fn brop(&mut self, l: LabelIdx)
     {
         let stack = &mut *self.stack;
-        let ip = &mut self.ip;
 
         assert!(stack.label_count() >= (l.0 as usize) + 1);
         let Label { n, branch_target, .. } = *stack.lth_label(l);
@@ -396,14 +396,13 @@ impl ExecCtx<'instr, 'ctx>
         if let Some(val) = vals {
             stack.push_val(val);
         }
-        *ip = branch_target;
+        self.next_ip = branch_target;
     }
 
     fn invokeop(&mut self, a: FuncAddr) -> EResult<()>
     {
         let stack = &mut *self.stack;
         let store = &mut *self.store;
-        let ip = &mut self.ip;
 
         let f = &store.funcs[a];
         match f {
@@ -431,7 +430,7 @@ impl ExecCtx<'instr, 'ctx>
                     });
                 }
                 let frame = Frame { module: *module, locals: local_vals.into() };
-                let next_instr = &ip[1..];
+                let next_instr = self.next_ip;
                 stack.push_frame(m, frame, next_instr);
 
                 // NB: No next instructions, as that's stored in the function frame
@@ -448,7 +447,7 @@ impl ExecCtx<'instr, 'ctx>
 
     fn next_instr(&mut self) -> Option<&'instr Instr> {
         if let Some(instr) = self.ip.get(0) {
-            self.ip = &self.ip[1..];
+            self.next_ip = self.ip.get(1..).unwrap_or(&[]);
             Some(instr)
         } else {
             None
@@ -463,7 +462,6 @@ impl ExecCtx<'instr, 'ctx>
                     if crate::DEBUG_EXECUTION { println!("continue after ctrl instr"); }
 
                     let stack = &mut *self.stack;
-                    let ip = &mut self.ip;
 
                     // pop m vals from top
                     let mut vals = vec![];
@@ -475,13 +473,12 @@ impl ExecCtx<'instr, 'ctx>
                         stack.push_val(val);
                     }
 
-                    *ip = next_instr;
+                    self.ip = next_instr;
                 }
                 TopCtrlEntry::Activation => {
                     if crate::DEBUG_EXECUTION { println!("continue after call"); }
 
                     let stack = &mut *self.stack;
-                    let ip = &mut self.ip;
 
                     let n = stack.current_frame_arity();
                     assert!(n <= 1);
@@ -494,7 +491,7 @@ impl ExecCtx<'instr, 'ctx>
                         stack.push_val(val);
                     }
 
-                    *ip  = frame.next_instr;
+                    self.ip  = frame.next_instr;
                 }
                 TopCtrlEntry::None => {
                     return Ok(());
@@ -849,24 +846,23 @@ impl ExecCtx<'instr, 'ctx>
                 }
                 Block(resultt, ref jump_target) => {
                     let n = resultt.len();
-                    let cont = &self.ip[1..];
+                    let cont = self.next_ip;
 
                     self.enter_block(&jump_target, n, cont);
                 }
                 Loop(_, ref jump_target) => {
                     // TODO: Is it correct that result type is ignored here?
                     let n = 0;
-                    let cont = &self.ip[..];
+                    let cont = self.ip;
 
                     self.enter_block(&jump_target, n, cont);
                 }
                 IfElse(resultt, ref jump_target_if, ref jump_target_else) => {
                     let stack = &mut *self.stack;
-                    let ip = &mut self.ip;
 
                     let c = I32::assert_val_type(stack.pop_val());
                     let n = resultt.len();
-                    let cont = &ip[1..];
+                    let cont = self.next_ip;
                     if c != 0 {
                         self.enter_block(&jump_target_if, n, cont);
                     } else {
@@ -898,7 +894,6 @@ impl ExecCtx<'instr, 'ctx>
                 }
                 Return => {
                     let stack = &mut *self.stack;
-                    let ip = &mut self.ip;
 
                     let n = stack.current_frame_arity();
                     assert!(n <= 1);
@@ -924,7 +919,7 @@ impl ExecCtx<'instr, 'ctx>
                     if let Some(val) = vals {
                         stack.push_val(val);
                     }
-                    *ip = next_instr
+                    self.next_ip = next_instr;
                 }
                 Call(x) => {
                     let stack = &mut *self.stack;
@@ -958,6 +953,7 @@ impl ExecCtx<'instr, 'ctx>
                     self.invokeop(a)?;
                 }
             }
+            self.ip = self.next_ip;
         }
 
         Ok(())

@@ -2,7 +2,7 @@
 #![feature(core_intrinsics)]
 #![feature(int_to_from_bytes)]
 
-const DEBUG_EXECUTION: bool = true;
+const DEBUG_EXECUTION: bool = false;
 
 pub mod runtime_structure;
 pub mod modules;
