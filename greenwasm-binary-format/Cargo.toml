@@ -1,4 +1,7 @@
+cargo-features = ["edition", "rename-dependency"]
+
 [package]
+edition = '2018'
 name = "greenwasm-binary-format"
 version = "0.1.0"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
@@ -9,5 +12,6 @@ readme = "README.md"
 workspace = ".."
 
 [dependencies]
-greenwasm-structure = { path = "../greenwasm-structure" }
+structure = { package = "greenwasm-structure", path = "../greenwasm-structure" }
 nom = { version = "4.0", features = ["verbose-errors"] }
+

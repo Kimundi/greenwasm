@@ -18,12 +18,12 @@ pub struct Memarg {
     pub align: U32,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Expr {
     pub body: Vec<Instr>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Instr {
     // numeric instructions
     I32Const(I32),

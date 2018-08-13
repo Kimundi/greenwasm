@@ -1,7 +1,5 @@
 //! Types according to the _structure_ section of the spec
 
-pub mod conventions;
-
 // 2.1.3 Vectors
 
 /// Vectors may have at most 2^32 - 1 elements, presumably
@@ -30,10 +28,15 @@ impl<A> Into<Vec<A>> for Wec<A> {
     }
 }
 impl<A> ::std::ops::Deref for Wec<A> {
-    type Target = Vec<A>;
+    type Target = [A];
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+impl<A> ::std::ops::DerefMut for Wec<A> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 impl<'a, A> IntoIterator for &'a Wec<A> {
@@ -62,6 +65,15 @@ impl<A> ::std::iter::FromIterator<A> for Wec<A> {
 impl<A> Default for Wec<A> {
     fn default() -> Self {
         Vec::default().into()
+    }
+}
+impl<A> Wec<A> {
+    pub fn safe_append<F: FnMut() -> A>(&mut self, n: usize, mut f: F) {
+        let l = self.len();
+        self.inner.reserve(l + n);
+        for _ in 0..n {
+            self.inner.push(f());
+        }
     }
 }
 
@@ -139,7 +151,32 @@ pub enum ValType {
 // Later answer: Obviously that it is a list with 0 or 1 element,
 // as opposed to a missing or not missing element.
 
-pub type ResultType = Option<ValType>;
+/// A ResultType is a list of 0 or 1 elements
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct ResultType {
+    results: Option<ValType>
+}
+impl ::std::ops::Deref for ResultType {
+    type Target = [ValType];
+
+    fn deref(&self) -> &Self::Target {
+        self.results.as_ref().map(::std::slice::from_ref).unwrap_or(&[])
+    }
+}
+impl From<ValType> for ResultType {
+    fn from(t: ValType) -> Self {
+        ResultType {
+            results: Some(t)
+        }
+    }
+}
+impl From<Option<ValType>> for ResultType {
+    fn from(t: Option<ValType>) -> Self {
+        ResultType {
+            results: t
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FuncType {

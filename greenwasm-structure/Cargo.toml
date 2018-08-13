@@ -1,4 +1,7 @@
+cargo-features = ["edition", "rename-dependency"]
+
 [package]
+edition = '2018'
 name = "greenwasm-structure"
 version = "0.1.0"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
@@ -9,3 +12,4 @@ readme = "README.md"
 workspace = ".."
 
 [dependencies]
+smallvec = { version = "0.6.4", features = ["union"] }

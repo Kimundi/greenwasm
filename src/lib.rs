@@ -1,11 +1,6 @@
 //! Implementation based on the wasm-core-1 W3C standard
 
-#![feature(non_modrs_mods)]
-#![feature(slice_patterns)]
-#![feature(macro_at_most_once_rep)]
-
-pub extern crate greenwasm_structure as structure;
-pub extern crate greenwasm_validation as validation;
-pub extern crate greenwasm_binary_format as binary_format;
-
-pub mod execution;
+pub use structure;
+pub use validation;
+pub use binary_format;
+pub use execution;

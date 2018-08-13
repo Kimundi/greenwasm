@@ -1,7 +1,5 @@
 #![feature(macro_at_most_once_rep)]
 
-extern crate greenwasm_structure as structure;
-
 use structure::types::FuncType;
 use structure::types::TableType;
 use structure::types::MemType;
@@ -51,7 +49,7 @@ pub enum ValidationErrorEnum {
     InstrStoreOveraligned,
     InstrBrTableNotSameLabelType,
     InstrCallIndirectElemTypeNotAnyFunc,
-    InstrWithTypeNotValid,
+    InstrWithTypeNotValid, // TODO: Exact error codes
     ConstExprGetGlobalNotConst,
     ConstExprIlligalInstruction,
     ElemElemTypeNotAnyFunc,
@@ -73,6 +71,7 @@ pub enum ValidationErrorEnum {
 }
 use self::ValidationErrorEnum::*;
 
+/// A context member is a flattened linked list of lists on the stack
 enum CtxMember<'a, T: 'a> {
     Unset,
     Set(T),
@@ -80,6 +79,9 @@ enum CtxMember<'a, T: 'a> {
     Delegated(&'a CtxMember<'a, T>),
 }
 
+
+// TODO: Optimize memory layout later (no needless 1-elem allocations)
+// TODO: Special case for return, which should only be a 0 or 1 list
 pub struct Ctx<'a> {
     types:   CtxMember<'a, Vec<FuncType>>,
     funcs:   CtxMember<'a, Vec<FuncType>>,
@@ -87,18 +89,19 @@ pub struct Ctx<'a> {
     mems:    CtxMember<'a, Vec<MemType>>,
     globals: CtxMember<'a, Vec<GlobalType>>,
     locals:  CtxMember<'a, Vec<ValType>>,
-    labels:  CtxMember<'a, ResultType>,
-    return_: CtxMember<'a, ResultType>,
+    labels:  CtxMember<'a, Vec<ResultType>>,
+    return_: CtxMember<'a, Vec<ResultType>>,
 }
 
 macro_rules! ctx_set {
     ($fn_name:ident($self:ident, $var_name:ident: $var_type:ty)) => (
-        ctx_set!($fn_name($self, $var_name: $var_type) -> $var_name);
+        ctx_set!($fn_name($self, $var_name: $var_type)
+            -> |_| CtxMember::Set($var_name));
     );
     ($fn_name:ident($self:ident, $var_name:ident: $var_type:ty) -> $mapped:expr) => (
         fn $fn_name(mut $self, $var_name: $var_type) -> Self {
-            if let CtxMember::Delegated(_) = $self.$var_name {
-                $self.$var_name = CtxMember::Set($mapped);
+            if let CtxMember::Delegated(r) = $self.$var_name {
+                $self.$var_name = $mapped(r);
             } else {
                 panic!("can only overwrite Delegated()");
             }
@@ -108,12 +111,9 @@ macro_rules! ctx_set {
 }
 
 macro_rules! ctx_idx {
-    ($self:ident, $name:ident: $type:ty, $idxty:ty, $err:ident, $f:expr, $g:expr) => (
+    ($self:ident, $name:ident: $type:ty, $idxty:ty, $err:ident) => (
         fn $name(&$self, mut x: $idxty) -> VResult<$type> {
             use self::CtxMember::*;
-
-            let len = $f;
-            let get = $g;
 
             let mut cursor = &$self.$name;
 
@@ -122,14 +122,14 @@ macro_rules! ctx_idx {
                     Delegated(next) => {
                         cursor = next;
                     }
-                    Set(v) if (x.0 as usize) < len(v) => {
-                        return Ok(get(v, x.0 as usize));
+                    Set(v) if (x.0 as usize) < v.len() => {
+                        return Ok(v[x.0 as usize].clone());
                     }
-                    Prepended(v, _) if (x.0 as usize) < len(v) => {
-                        return Ok(get(v, x.0 as usize));
+                    Prepended(v, _) if (x.0 as usize) < v.len() => {
+                        return Ok(v[x.0 as usize].clone());
                     }
-                    Prepended(v, next) if (x.0 as usize) >= len(v) => {
-                        x.0 -= len(v) as u32;
+                    Prepended(v, next) if (x.0 as usize) >= v.len() => {
+                        x.0 -= v.len() as u32;
                         cursor = next;
                     }
                     _ => $self.error($err)?,
@@ -153,25 +153,6 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    fn error(&self, error: ValidationErrorEnum) -> VResult<()> {
-        Err(ValidationError {
-            kind: error
-        })
-    }
-
-    fn _index<T: Copy>(v: &[T], x: usize) -> T { v[x] }
-    fn _index_clone<T: Clone>(v: &[T], x: usize) -> T { v[x].clone() }
-    fn _unwrap<T: Copy>(v: &T, _: usize) -> T { *v }
-
-    ctx_idx!(self, locals: ValType,     LocalIdx, CtxLocalsIdxDoesNotExist,  <[_]>::len, Self::_index);
-    ctx_idx!(self, globals: GlobalType, GlobalIdx, CtxGlobalsIdxDoesNotExist, <[_]>::len, Self::_index);
-    ctx_idx!(self, mems: MemType,       MemIdx, CtxMemsIdxDoesNotExist,    <[_]>::len, Self::_index);
-    ctx_idx!(self, funcs: FuncType,     FuncIdx, CtxFuncsIdxDoesNotExist,   <[_]>::len, Self::_index_clone);
-    ctx_idx!(self, tables: TableType,   TableIdx, CtxTablesIdxDoesNotExist,  <[_]>::len, Self::_index);
-    ctx_idx!(self, types: FuncType,     TypeIdx, CtxTypesIdxDoesNotExist,   <[_]>::len, Self::_index_clone);
-    ctx_idx!(self, labels: ResultType,  LabelIdx, CtxLabelsIdxDoesNotExist,   |_| 1,     Self::_unwrap);
-    ctx_idx!(self, return_: ResultType, LabelIdx, CtxReturnDoesNotExist,      |_| 1,     Self::_unwrap);
-
     fn with(&'a self) -> Ctx<'a> {
         Ctx {
             types:   CtxMember::Delegated(&self.types),
@@ -184,24 +165,37 @@ impl<'a> Ctx<'a> {
             return_: CtxMember::Delegated(&self.return_),
         }
     }
-    fn prepend_label(mut self, label: ResultType) -> Ctx<'a> {
-        if let CtxMember::Delegated(r) = self.labels {
-            self.labels = CtxMember::Prepended(label, r);
-        } else {
-            panic!("can only overwrite Delegated()");
-        }
-        self
+
+    fn error(&self, error: ValidationErrorEnum) -> VResult<()> {
+        Err(ValidationError {
+            kind: error
+        })
     }
 
-    ctx_set!(set_locals(self, locals: Vec<ValType>));
-    ctx_set!(set_label(self, labels: ResultType));
-    ctx_set!(set_return_(self, return_: ResultType));
+    ctx_idx!(self, locals: ValType,     LocalIdx,  CtxLocalsIdxDoesNotExist );
+    ctx_idx!(self, globals: GlobalType, GlobalIdx, CtxGlobalsIdxDoesNotExist);
+    ctx_idx!(self, mems: MemType,       MemIdx,    CtxMemsIdxDoesNotExist   );
+    ctx_idx!(self, funcs: FuncType,     FuncIdx,   CtxFuncsIdxDoesNotExist  );
+    ctx_idx!(self, tables: TableType,   TableIdx,  CtxTablesIdxDoesNotExist );
+    ctx_idx!(self, types: FuncType,     TypeIdx,   CtxTypesIdxDoesNotExist  );
+    ctx_idx!(self, labels: ResultType,  LabelIdx,  CtxLabelsIdxDoesNotExist );
+    ctx_idx!(self, return_: ResultType, LabelIdx,  CtxReturnDoesNotExist    );
 
-    ctx_set!(set_types(self, types: Vec<FuncType>));
-    ctx_set!(set_funcs(self, funcs: Vec<FuncType>));
-    ctx_set!(set_tables(self, tables: Vec<TableType>));
-    ctx_set!(set_mems(self, mems: Vec<MemType>));
+    ctx_set!(set_locals(self,  locals:  Vec<ValType>));
+    ctx_set!(set_types(self,   types:   Vec<FuncType>));
+    ctx_set!(set_funcs(self,   funcs:   Vec<FuncType>));
+    ctx_set!(set_tables(self,  tables:  Vec<TableType>));
+    ctx_set!(set_mems(self,    mems:    Vec<MemType>));
     ctx_set!(set_globals(self, globals: Vec<GlobalType>));
+
+    ctx_set!(set_label(self, labels: ResultType)
+        -> |_| CtxMember::Set(vec![labels]));
+
+    ctx_set!(prepend_label(self, labels: ResultType)
+        -> |r| CtxMember::Prepended(vec![labels], r));
+
+    ctx_set!(set_return_(self, return_: ResultType)
+        -> |_| CtxMember::Set(vec![return_]));
 
     fn length_mems(&self) -> u32 {
         use self::CtxMember::*;
@@ -253,11 +247,6 @@ impl<'a> Ctx<'a> {
     }
 }
 
-fn vec_to_option(vec: &[ValType]) -> Option<ValType> {
-    assert!(vec.len() <= 1);
-    vec.get(0).cloned()
-}
-
 macro_rules! valid_with {
     (($ctx:ident, $name:ident: $type:ty $(,$arg:ident: $argty:ty)*) -> $rt:ty $b:block) => (
         pub fn $name($ctx: &Ctx, $name: &$type $(,$arg: $argty)*) -> VResult<$rt> {
@@ -269,8 +258,8 @@ macro_rules! valid_with {
 
 #[derive(Debug, PartialEq)]
 pub struct ImportExportMapping {
-    pub from: Vec<ExternType>,
-    pub to: Vec<ExternType>,
+    pub imports: Vec<ExternType>,
+    pub exports: Vec<ExternType>,
 }
 
 pub struct Valid;
@@ -478,14 +467,15 @@ pub mod validate {
         use self::ValType::*;
 
         macro_rules! ity {
-            ($(:$ci:expr;)? $($arg:expr),* ; $($result:expr),*) => (
+            (:$ci:expr; $($arg:expr),* ; $($result:expr),*) => (
                 {
-                    $(
-                        let ic = $ci;
-                    )?
+                    let ic = $ci;
                     ic.simple_instr(&[$($arg),*], &[$($result),*])?;
                     Valid
                 }
+            );
+            ($($arg:expr),* ; $($result:expr),*) => (
+                ity![:ic; $($arg),* ; $($result),*]
             )
         }
 
@@ -765,8 +755,7 @@ pub mod validate {
                 let c_ = c.with().prepend_label(resulttype);
 
                 // "block" event
-                let a = resulttype.as_ref().map(::std::slice::from_ref)
-                                           .unwrap_or(&[]);
+                let a = &resulttype;
                 ic.push_ctrl(&a, &a);
 
                 validate::instruction_sequence(&c_, block, ic)?;
@@ -777,11 +766,10 @@ pub mod validate {
                 Valid
             }
             Loop(resulttype, ref block) => {
-                let c_ = c.with().prepend_label(None);
+                let c_ = c.with().prepend_label(None.into());
 
                 // "loop" event
-                let a = resulttype.as_ref().map(::std::slice::from_ref)
-                                           .unwrap_or(&[]);
+                let a = &resulttype;
                 ic.push_ctrl(&[], &a);
 
                 validate::instruction_sequence(&c_, block, ic)?;
@@ -796,8 +784,7 @@ pub mod validate {
 
                 // "if" event
                 ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
-                let a = resulttype.as_ref().map(::std::slice::from_ref)
-                                           .unwrap_or(&[]);
+                let a = &resulttype;
                 ic.push_ctrl(&a, &a);
 
                 validate::instruction_sequence(&c_, if_block, ic)?;
@@ -821,10 +808,7 @@ pub mod validate {
                     ic.error()?;
                 }
                 let tmp = ic.ctrls.at(n).label_types.to_owned(); // TODO: Bad copy
-                assert_eq!(
-                    resulttype.as_ref().map(::std::slice::from_ref).unwrap_or(&[]),
-                    &tmp[..]
-                );
+                assert_eq!(*resulttype, tmp[..]);
                 ic.pop_opds(&tmp)?;
                 ic.unreachable();
 
@@ -839,10 +823,7 @@ pub mod validate {
                 }
                 ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
                 let tmp = ic.ctrls.at(n).label_types.to_owned(); // TODO: Bad copy
-                assert_eq!(
-                    resulttype.as_ref().map(::std::slice::from_ref).unwrap_or(&[]),
-                    &tmp[..]
-                );
+                assert_eq!(*resulttype, tmp[..]);
                 ic.pop_opds(&tmp)?;
                 ic.push_opds(&tmp);
 
@@ -866,10 +847,7 @@ pub mod validate {
                 }
                 ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
                 let tmp = ic.ctrls.at(m).label_types.to_owned(); // TODO: Bad copy
-                assert_eq!(
-                    resulttype.as_ref().map(::std::slice::from_ref).unwrap_or(&[]),
-                    &tmp[..]
-                );
+                assert_eq!(*resulttype, tmp[..]);
                 ic.pop_opds(&tmp)?;
                 ic.unreachable();
 
@@ -888,10 +866,7 @@ pub mod validate {
 
                 let n = ic.ctrls.size() - 1;
                 let tmp = ic.ctrls.at(n).label_types.to_owned(); // TODO: Bad copy
-                assert_eq!(
-                    resulttype.as_ref().map(::std::slice::from_ref).unwrap_or(&[]),
-                    &tmp[..]
-                );
+                assert_eq!(*resulttype, tmp[..]);
                 ic.pop_opds(&tmp)?;
                 ic.unreachable();
 
@@ -936,7 +911,7 @@ pub mod validate {
         let mut ic = InstrCtx::new();
 
         // "block" event
-        let a = with.as_ref().map(::std::slice::from_ref).unwrap_or(&[]);
+        let a = &with;
         ic.push_ctrl(&a, &a);
 
         // TODO: According to the wording of the spec, pushing
@@ -978,14 +953,22 @@ pub mod validate {
         let ty = c.types(*x)?;
 
         let locals = ty.args.iter().chain(t).cloned().collect();
-        let result = vec_to_option(&ty.results);
+
+        assert!(ty.results.len() <= 1); // should be enforced by type validation
+        let t2_opt = ty.results.get(0).cloned();
+        let result: ResultType = t2_opt.into();
 
         let c_ = c.with()
             .set_locals(locals)
             .set_label(result)
             .set_return_(result);
 
-        validate::expr(&c_, expr, result.map(|x| x.into()))?;
+        // TODO: The wording for function validation and expression
+        // validation conflict in wether
+        // the expr should be valid with [t2?] or t2?.
+        //
+        // Verify this from official sources at some point.
+        validate::expr(&c_, expr, result)?;
 
         ty
     });
@@ -1009,7 +992,7 @@ pub mod validate {
         let t = type_.valtype;
 
         validate::global_type(c, &type_)?;
-        validate::expr(c, &expr, Some(t.into()))?;
+        validate::expr(c, &expr, t.into())?;
         validate::const_expr(c, &expr)?;
 
         *type_
@@ -1031,7 +1014,7 @@ pub mod validate {
             c.error(ElemElemTypeNotAnyFunc)?;
         }
 
-        validate::expr(c, expr, Some(ValType::I32))?;
+        validate::expr(c, expr, ValType::I32.into())?;
         validate::const_expr(c, expr)?;
         for yi in y {
             c.funcs(*yi)?;
@@ -1048,7 +1031,7 @@ pub mod validate {
         } = data;
 
         c.mems(*x)?;
-        validate::expr(c, expr, Some(ValType::I32))?;
+        validate::expr(c, expr, ValType::I32.into())?;
         validate::const_expr(c, expr)?;
 
         Valid
@@ -1306,8 +1289,32 @@ pub mod validate {
         }
 
         ImportExportMapping {
-            from: its,
-            to: ets,
+            imports: its,
+            exports: ets,
         }
     });
+}
+
+pub struct ValidatedModule {
+    module: Module,
+    import_export_mapping: ImportExportMapping
+}
+impl ::std::ops::Deref for ValidatedModule {
+    type Target = Module;
+    fn deref(&self) -> &Self::Target {
+        &self.module
+    }
+}
+impl ValidatedModule {
+    pub fn import_export_mapping(&self) -> &ImportExportMapping {
+        &self.import_export_mapping
+    }
+}
+
+pub fn validate_module(module: Module) -> VResult<ValidatedModule> {
+    let import_export_mapping = validate::module(&Ctx::new(), &module)?;
+    Ok(ValidatedModule {
+        module,
+        import_export_mapping,
+    })
 }

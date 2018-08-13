@@ -1,9 +1,13 @@
-#![allow(non_snake_case, unused_imports)]
+#![feature(int_to_from_bytes)]
+
 #![recursion_limit="256"]
+
+#![allow(non_snake_case, unused_imports)]
 
 #[macro_use]
 extern crate nom;
-extern crate greenwasm_structure as structure;
+
+pub use nom::ErrorKind as NomErrorKind;
 
 // TODO: Open PR in nom for where applicable
 macro_rules! verify_ref (
@@ -169,8 +173,8 @@ named!(parse_valtype <Inp, ValType>, alt!(
 // 5.3.2 Result Types
 use structure::types::ResultType;
 named!(parse_blocktype <Inp, ResultType>, alt!(
-    btagmap!(0x40, None)
-    | map!(parse_valtype, |v| Some(v))
+    btagmap!(0x40, None.into())
+    | map!(parse_valtype, |v| Some(v).into())
 ));
 
 // 5.3.3 Function Types
@@ -644,19 +648,19 @@ fn parse_section<'a, F, B>(input: Inp<'a>, N: u8, parse_B: F) -> IResult<Inp<'a>
 
 // 5.5.3. Custom Section
 #[derive(Debug, PartialEq)]
-pub struct Custom {
+pub struct CustomSection {
     pub name: Name,
     pub bytes: Vec<u8>,
 }
-named!(parse_custom <Inp, Custom>, do_parse!(
+named!(parse_custom <Inp, CustomSection>, do_parse!(
     name: parse_name
     >> bytes: many0!(parse_byte)
-    >> (Custom { name, bytes })
+    >> (CustomSection { name, bytes })
 ));
-named!(parse_customsec <Inp, Custom>,
+named!(parse_customsec <Inp, CustomSection>,
     call!(parse_section, 0, parse_custom)
 );
-named!(parse_customsecs <Inp, Vec<Custom>>,
+named!(parse_customsecs <Inp, Vec<CustomSection>>,
     many0!(parse_customsec)
 );
 
@@ -825,7 +829,7 @@ named!(parse_magic <Inp, ()>,
 named!(parse_version <Inp, ()>,
     value!((), tag!(&[0x01, 0x00, 0x00, 0x00][..]))
 );
-named!(parse_module <Inp, (Module, Vec<Custom>)>, do_parse!(
+named!(parse_module <Inp, (Module, Vec<CustomSection>)>, do_parse!(
     parse_magic
     >> parse_version
 
@@ -898,7 +902,7 @@ named!(parse_module <Inp, (Module, Vec<Custom>)>, do_parse!(
 pub enum ParseError<'a> {
     NomError(::nom::Err<CompleteByteSlice<'a>, u32>)
 }
-pub fn parse_binary_format(b: &[u8]) -> Result<(Module, Vec<Custom>), ParseError> {
+pub fn parse_binary_format(b: &[u8]) -> Result<(Module, Vec<CustomSection>), ParseError> {
     let res = exact!(CompleteByteSlice(b), parse_module);
     match res {
         Ok((CompleteByteSlice(s), res)) => {
