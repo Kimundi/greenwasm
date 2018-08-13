@@ -441,7 +441,7 @@ impl ExecCtx<'instr, 'ctx>
                 self.enter_block(instrs, m, &[]);
             }
             FuncInst::Host { .. } => {
-                println!("Host beavior not implemented yet");
+                println!("Host behavior not implemented yet");
                 unimplemented!()
             }
         }
@@ -507,6 +507,9 @@ impl ExecCtx<'instr, 'ctx>
         use self::Instr::*;
 
         while let Some(instr) = self.next_instr() {
+            if crate::DEBUG_EXECUTION {
+                println!("exec instr {:?}", instr);
+            }
             match *instr {
                 // consts
                 I32Const(v) => self.constop(v),

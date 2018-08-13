@@ -3,9 +3,10 @@ use structure::instructions::*;
 use structure::modules::*;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
+use std::fmt::Debug;
 
 // TODO: util module
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct TypedIndexVec<T, IndexT> {
     data: Vec<T>,
     _marker: PhantomData<IndexT>,
@@ -13,6 +14,11 @@ pub struct TypedIndexVec<T, IndexT> {
 impl<T, IndexT> Default for TypedIndexVec<T, IndexT> {
     fn default() -> Self {
         TypedIndexVec { data: vec![], _marker: PhantomData }
+    }
+}
+impl<T: Debug, IndexT> Debug for TypedIndexVec<T, IndexT> {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+        self.data.fmt(f)
     }
 }
 
@@ -227,8 +233,8 @@ impl Stack<'instr> {
                     StackElem::Activation(Activation { n, frame, next_instr }) => {
                         println!("  Frame {} {:?} {:?} {:?}", n, frame.module, frame.locals, next_instr)
                     }
-                    StackElem::Label(Label { n, .. }) => {
-                        println!("  Label {} ...", n)
+                    StackElem::Label(Label { n, branch_target, next_instr }) => {
+                        println!("  Label {} {:?} {:?}", n, branch_target, next_instr)
                     }
                 }
             }
@@ -355,6 +361,10 @@ impl Stack<'instr> {
             (None, None) => TopCtrlEntry::None,
             (Some(_), Some(_)) => unreachable!(),
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
 }
 
