@@ -173,6 +173,18 @@ pub struct ExecCtx<'instr, 'ctx>
     next_ip: &'instr [Instr],
 }
 
+macro_rules! instrumented_instrs {
+    (match $x:expr; $($p:pat => $e:expr),*) => {
+        match $x {
+            $($p => {
+                // println!(stringify!($p));
+
+                $e
+            })*
+        }
+    }
+}
+
 impl ExecCtx<'instr, 'ctx>
     where 'instr: 'ctx,
 {
@@ -508,7 +520,8 @@ impl ExecCtx<'instr, 'ctx>
             if crate::DEBUG_EXECUTION {
                 println!("exec instr {:?} - {:?}", instr, self.ip);
             }
-            match *instr {
+
+            instrumented_instrs! { match *instr;
                 // consts
                 I32Const(v) => self.constop(v),
                 I64Const(v) => self.constop(v),
@@ -709,7 +722,7 @@ impl ExecCtx<'instr, 'ctx>
                     let stack = &mut *self.stack;
 
                     stack.pop_val();
-                }
+                },
                 Select => {
                     let stack = &mut *self.stack;
 
@@ -726,7 +739,7 @@ impl ExecCtx<'instr, 'ctx>
                     } else {
                         stack.push_val(val2);
                     }
-                }
+                },
 
                 // variable instructions
                 GetLocal(x) => {
@@ -734,19 +747,19 @@ impl ExecCtx<'instr, 'ctx>
 
                     let val = stack.current_frame().locals[x];
                     stack.push_val(val);
-                }
+                },
                 SetLocal(x) => {
                     let stack = &mut *self.stack;
 
                     let val = stack.pop_val();
                     stack.current_frame().locals[x] = val;
-                }
+                },
                 TeeLocal(x) => {
                     let stack = &mut *self.stack;
 
                     let val = stack.peek_val();
                     stack.current_frame().locals[x] = val;
-                }
+                },
                 GetGlobal(x) => {
                     let stack = &mut *self.stack;
                     let store = &mut *self.store;
@@ -756,7 +769,7 @@ impl ExecCtx<'instr, 'ctx>
                     let glob = &store.globals[a];
                     let val = glob.value;
                     stack.push_val(val);
-                }
+                },
                 SetGlobal(x) => {
                     let stack = &mut *self.stack;
                     let store = &mut *self.store;
@@ -766,7 +779,7 @@ impl ExecCtx<'instr, 'ctx>
                     let glob = &mut store.globals[a];
                     let val = stack.pop_val();
                     glob.value = val;
-                }
+                },
 
                 // memory instructions
 
@@ -811,7 +824,7 @@ impl ExecCtx<'instr, 'ctx>
                     let mem = &store.mems[a];
                     let sz = mem.data.len() / WASM_PAGE_SIZE;
                     stack.push_val(Val::I32(sz as I32));
-                }
+                },
                 GrowMemory => {
                     let stack = &mut *self.stack;
                     let store = &mut *self.store;
@@ -835,28 +848,28 @@ impl ExecCtx<'instr, 'ctx>
 
                     // Or don't:
                     // stack.push_val(Val::I32(-1i32 as I32));
-                }
+                },
 
                 // control instructions
                 Nop => {
                     /* nothing to see here, carry on */
-                }
+                },
                 Unreachable => {
                     Err(Trap)?;
-                }
+                },
                 Block(resultt, ref jump_target) => {
                     let n = resultt.len();
                     let cont = self.next_ip;
 
                     self.enter_block(&jump_target, n, cont);
-                }
+                },
                 Loop(_, ref jump_target) => {
                     // TODO: Is it correct that result type is ignored here?
                     let n = 0;
                     let cont = self.ip;
 
                     self.enter_block(&jump_target, n, cont);
-                }
+                },
                 IfElse(resultt, ref jump_target_if, ref jump_target_else) => {
                     let stack = &mut *self.stack;
 
@@ -868,10 +881,10 @@ impl ExecCtx<'instr, 'ctx>
                     } else {
                         self.enter_block(&jump_target_else, n, cont);
                     }
-                }
+                },
                 Br(l) => {
                     self.brop(l);
-                }
+                },
                 BrIf(l) => {
                     let stack = &mut *self.stack;
 
@@ -879,7 +892,7 @@ impl ExecCtx<'instr, 'ctx>
                     if c != 0 {
                         self.brop(l);
                     }
-                }
+                },
                 BrTable(ref ls, ln) => {
                     let stack = &mut *self.stack;
 
@@ -890,8 +903,7 @@ impl ExecCtx<'instr, 'ctx>
                     } else {
                         self.brop(ln);
                     }
-                    panic!()
-                }
+                },
                 Return => {
                     let stack = &mut *self.stack;
 
@@ -920,7 +932,7 @@ impl ExecCtx<'instr, 'ctx>
                         stack.push_val(val);
                     }
                     self.next_ip = next_instr;
-                }
+                },
                 Call(x) => {
                     let stack = &mut *self.stack;
                     let store = &mut *self.store;
@@ -928,7 +940,7 @@ impl ExecCtx<'instr, 'ctx>
                     let a = stack.current_frame().module;
                     let a = store.modules[a].funcaddrs[x];
                     self.invokeop(a)?;
-                }
+                },
                 CallIndirect(x) => {
                     let stack = &mut *self.stack;
                     let store = &mut *self.store;
