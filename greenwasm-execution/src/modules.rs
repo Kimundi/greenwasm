@@ -334,12 +334,11 @@ pub mod instantiation {
 
     pub type IResult = std::result::Result<ModuleAddr, InstantiationError>;
 
-    pub fn instantiate_module(s: &mut Store<'ast>,
+    pub fn instantiate_module(s: &mut Store<'ast>, stack: &mut Stack<'ast>,
                                    module: &'ast ValidatedModule,
                                    externvals: &[ExternVal]) -> IResult
 
     {
-        let stack = &mut Stack::new();
         let mut ctx = ExecCtx::new(s, stack);
 
         let n = externvals.len();
@@ -406,19 +405,18 @@ pub mod instantiation {
                 module: aux_moduleaddr,
             };
 
-            let mut stack = Stack::new();
-
             // TODO: What value to pick for n here?
             // assuming n = 1 due to needing the result
-            stack.push_frame(1, f_im, &[]);
+            ctx.stack.push_frame(1, f_im, &[]);
 
+            println!("handle globals");
             for globali in &module.globals {
                 let vali = ctx.evaluate_expr(&globali.init)?;
 
                 vals.push(vali);
             }
 
-            let top_frame = stack.pop_frame();
+            let top_frame = ctx.stack.pop_frame();
             assert!(top_frame == Activation {
                 n: 1,
                 frame: Frame {
@@ -442,6 +440,7 @@ pub mod instantiation {
         // assuming n = 1 due to needing the result
         ctx.stack.push_frame(1, f, &[]);
 
+        println!("handle elems");
         let mut eoi_tabeladdri = vec![];
         for elemi in &module.elem {
             let eovali = ctx.evaluate_expr(&elemi.offset)?;
@@ -462,6 +461,7 @@ pub mod instantiation {
             eoi_tabeladdri.push((eoi, tableaddri));
         }
 
+        println!("handle data");
         let mut doi_memaddri = vec![];
         for datai in &module.data {
             let dovali = ctx.evaluate_expr(&datai.offset)?;
@@ -511,10 +511,7 @@ pub mod instantiation {
         if let Some(start) = &module.start {
             let funcaddr = ctx.store.modules[moduleaddr].funcaddrs[start.func];
 
-            // TODO: implement invoke
-            let invoke = |_| unimplemented!();
-
-            invoke(funcaddr);
+            ctx.invoke(funcaddr)?;
         }
 
         Ok(moduleaddr)
@@ -533,7 +530,7 @@ pub mod invocation {
 
     pub type CResult = ::std::result::Result<Result, InvokeError>;
 
-    pub fn invoke(s: &mut Store<'ast>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
+    pub fn invoke(s: &mut Store<'ast>, stack: &mut Stack<'ast>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
 
     {
         let funcinst = &s.funcs[funcaddr];
@@ -551,16 +548,14 @@ pub mod invocation {
             }
         }
 
-        let mut stack = Stack::new();
-
         for val in vals {
             stack.push_val(*val);
         }
 
-        // TODO: implement invoke
-        let invoke = |_| unimplemented!();
-
-        invoke(funcaddr);
+        let res = ExecCtx::new(s, stack).invoke(funcaddr);
+        if let Err(Trap) = res {
+            return Ok(Result::Trap);
+        }
 
         let mut results = vec![];
         for _ in 0..m {

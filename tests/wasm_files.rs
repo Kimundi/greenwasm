@@ -4,6 +4,9 @@ use structure::instructions::Instr::*;
 use structure::instructions::*;
 use binary_format::parse_binary_format;
 use validation::validate_module;
+use execution::modules::instantiation::instantiate_module;
+use execution::modules::allocation::*;
+use execution::runtime_structure::*;
 
 fn diff_print<T: ::std::fmt::Debug>(value_is: &T, value_should: &T) -> String {
     let value_is = format!("{:#?}", value_is);
@@ -34,7 +37,7 @@ fn diff_print<T: ::std::fmt::Debug>(value_is: &T, value_should: &T) -> String {
 }
 
 macro_rules! test_file {
-    (@ $name:ident, $path:expr, $module:expr) => (
+    (@ $name:ident, $path:expr, $args:expr, $imports:expr, $module:expr) => (
         #[test]
         fn $name() {
             let file = std::fs::read($path).unwrap();
@@ -46,17 +49,32 @@ macro_rules! test_file {
             let validated_module = validate_module(module).unwrap();
 
             println!("Is valid with {:?}", validated_module.import_export_mapping());
+
+            let args = $args;
+            let mut store = Default::default();
+            let mut stack = Stack::new();
+
+            fn apply<'a, T, F: FnOnce(&'a T, &mut Store<'a>) -> Vec<ExternVal>>(args: &'a T, store: &mut Store<'a>, f: F) -> Vec<ExternVal> {
+                f(args, store)
+            }
+
+            let imports = apply(&args, &mut store, $imports);
+
+            let instance = instantiate_module(&mut store, &mut stack, &validated_module, &imports).unwrap();
+
+            println!("Is instantiated with addr {:?}", instance);
+
         }
     );
-    ($name:ident, $path:expr) => (
-        test_file!(@ $name, $path, None);
+    ($name:ident, $path:expr, $args:expr, $imports:expr) => (
+        test_file!(@ $name, $path, $args, $imports, None);
     );
-    ($name:ident, $path:expr, $module:expr) => (
-        test_file!(@ $name, $path, Some($module));
+    ($name:ident, $path:expr, $args:expr, $imports:expr, $module:expr) => (
+        test_file!(@ $name, $path, $args, $imports, Some($module));
     )
 }
 
-test_file!(factorial, "tests/factorial.wasm", Module {
+test_file!(factorial, "tests/factorial.wasm", (), |_, _| vec![], Module {
     types: vec![
         FuncType {
             args: vec![ValType::F64].into(),
@@ -101,7 +119,13 @@ test_file!(factorial, "tests/factorial.wasm", Module {
     ].into(),
 });
 
-test_file!(stuff, "tests/stuff.wasm", Module {
+test_file!(stuff, "tests/stuff.wasm", vec![
+    FuncType { args: vec![ValType::F32].into(), results: vec![].into() }
+], |args, store| {
+    let addr = alloc_host_function(store, HostFunc { id: 0 }, &args[0]);
+
+    vec![ExternVal::Func(addr)]
+}, Module {
     types: vec![
         FuncType {
             args: vec![ValType::I32].into(),
@@ -189,7 +213,7 @@ test_file!(stuff, "tests/stuff.wasm", Module {
     ].into(),
 });
 
-test_file!(fuzz0, "tests/fuzz0.wasm");
-test_file!(pong, "tests/pong.wasm");
-test_file!(function_space, "tests/function_space.wasm");
-test_file!(parser_abort, "tests/parser_abort.wasm");
+test_file!(fuzz0, "tests/fuzz0.wasm", (), |_, _| vec![]);
+test_file!(pong, "tests/pong.wasm", (), |_, _| vec![]);
+test_file!(function_space, "tests/function_space.wasm", (), |_, _| vec![]);
+test_file!(parser_abort, "tests/parser_abort.wasm", (), |_, _| vec![]);

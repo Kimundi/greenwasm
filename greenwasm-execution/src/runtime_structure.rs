@@ -10,6 +10,11 @@ pub struct TypedIndexVec<T, IndexT> {
     data: Vec<T>,
     _marker: PhantomData<IndexT>,
 }
+impl<T, IndexT> Default for TypedIndexVec<T, IndexT> {
+    fn default() -> Self {
+        TypedIndexVec { data: vec![], _marker: PhantomData }
+    }
+}
 
 impl<T, IndexT> TypedIndexVec<T, IndexT>
     where IndexT: Into<usize> + From<usize>
@@ -58,7 +63,7 @@ impl<T, IndexT> IndexMut<IndexT> for TypedIndexVec<T, IndexT>
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Val {
     I32(I32),
     I64(I64),
@@ -81,6 +86,7 @@ pub enum Result {
     Trap,
 }
 
+#[derive(Default)]
 pub struct Store<'ast>
 
 {
@@ -96,22 +102,22 @@ pub struct Store<'ast>
     pub modules: TypedIndexVec<ModuleInst<'ast>, ModuleAddr>,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct FuncAddr(pub usize);
 impl Into<usize> for FuncAddr { fn into(self) -> usize { self.0 } }
 impl From<usize> for FuncAddr { fn from(a: usize) -> Self { FuncAddr(a) } }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct TableAddr(pub usize);
 impl Into<usize> for TableAddr { fn into(self) -> usize { self.0 } }
 impl From<usize> for TableAddr { fn from(a: usize) -> Self { TableAddr(a) } }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct MemAddr(pub usize);
 impl Into<usize> for MemAddr { fn into(self) -> usize { self.0 } }
 impl From<usize> for MemAddr { fn from(a: usize) -> Self { MemAddr(a) } }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct GlobalAddr(pub usize);
 impl Into<usize> for GlobalAddr { fn into(self) -> usize { self.0 } }
 impl From<usize> for GlobalAddr { fn from(a: usize) -> Self { GlobalAddr(a) } }
@@ -120,7 +126,7 @@ impl From<usize> for GlobalAddr { fn from(a: usize) -> Self { GlobalAddr(a) } }
 ///
 /// This is a modification of the spec to make it easier to resolve cycles
 /// between data structures.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct ModuleAddr(pub usize);
 impl Into<usize> for ModuleAddr { fn into(self) -> usize { self.0 } }
 impl From<usize> for ModuleAddr { fn from(a: usize) -> Self { ModuleAddr(a) } }
@@ -212,8 +218,25 @@ pub struct Stack<'instr> {
 impl Stack<'instr> {
     pub fn new() -> Self { Self::default() }
 
+    fn printme(&self, msg: &str) {
+        println!("{}: Stack[", msg);
+        for e in self.data.iter().rev() {
+            match e {
+                StackElem::Val(v) => println!("  {:?}", v),
+                StackElem::Activation(Activation { n, frame, next_instr }) => {
+                    println!("  Frame {} {:?} {:?} {:?}", n, frame.module, frame.locals, next_instr)
+                }
+                StackElem::Label(Label { n, .. }) => {
+                    println!("  Label {} ...", n)
+                }
+            }
+        }
+        println!("]\n");
+    }
+
     pub fn push_val(&mut self, val: Val) {
         self.data.push(StackElem::Val(val));
+        self.printme("push_val");
     }
     pub fn push_label(&mut self, n: usize, branch_target: &'instr [Instr], next_instr: &'instr [Instr]) {
         self.label_indices.push(self.data.len());
@@ -222,6 +245,7 @@ impl Stack<'instr> {
             branch_target,
             next_instr,
         }));
+        self.printme("push_label");
     }
     pub fn push_frame(&mut self, n: usize, frame: Frame, next_instr: &'instr [Instr]) {
         self.frame_indices.push(self.data.len());
@@ -230,6 +254,7 @@ impl Stack<'instr> {
             frame,
             next_instr,
         }));
+        self.printme("push_frame");
     }
 
     pub fn top(&self) -> Option<&StackElem> {
@@ -238,28 +263,34 @@ impl Stack<'instr> {
 
     pub fn pop_frame(&mut self) -> Activation<'instr> {
         self.frame_indices.pop();
-        if let Some(StackElem::Activation(a)) = self.data.pop() {
+        let r = if let Some(StackElem::Activation(a)) = self.data.pop() {
             a
         } else {
             panic!("No Frame at top of stack")
-        }
+        };
+        self.printme("pop_frame");
+        r
     }
 
     pub fn pop_val(&mut self) -> Val {
-        if let Some(StackElem::Val(val)) = self.data.pop() {
+        let r = if let Some(StackElem::Val(val)) = self.data.pop() {
             val
         } else {
             panic!("No Val at top of stack")
-        }
+        };
+        self.printme("pop_val");
+        r
     }
 
     pub fn pop_label(&mut self) -> Label<'instr> {
         self.label_indices.pop();
-        if let Some(StackElem::Label(l)) = self.data.pop() {
+        let r = if let Some(StackElem::Label(l)) = self.data.pop() {
             l
         } else {
             panic!("No Label at top of stack")
-        }
+        };
+        self.printme("pop_label");
+        r
     }
 
     pub fn lth_label(&self, l: LabelIdx) -> &Label<'instr> {
