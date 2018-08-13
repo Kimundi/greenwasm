@@ -219,19 +219,21 @@ impl Stack<'instr> {
     pub fn new() -> Self { Self::default() }
 
     fn printme(&self, msg: &str) {
-        println!("{}: Stack[", msg);
-        for e in self.data.iter().rev() {
-            match e {
-                StackElem::Val(v) => println!("  {:?}", v),
-                StackElem::Activation(Activation { n, frame, next_instr }) => {
-                    println!("  Frame {} {:?} {:?} {:?}", n, frame.module, frame.locals, next_instr)
-                }
-                StackElem::Label(Label { n, .. }) => {
-                    println!("  Label {} ...", n)
+        if crate::DEBUG_EXECUTION {
+            println!("{}: Stack[", msg);
+            for e in self.data.iter().rev() {
+                match e {
+                    StackElem::Val(v) => println!("  {:?}", v),
+                    StackElem::Activation(Activation { n, frame, next_instr }) => {
+                        println!("  Frame {} {:?} {:?} {:?}", n, frame.module, frame.locals, next_instr)
+                    }
+                    StackElem::Label(Label { n, .. }) => {
+                        println!("  Label {} ...", n)
+                    }
                 }
             }
+            println!("]\n");
         }
-        println!("]\n");
     }
 
     pub fn push_val(&mut self, val: Val) {

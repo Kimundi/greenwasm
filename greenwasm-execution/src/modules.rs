@@ -409,7 +409,7 @@ pub mod instantiation {
             // assuming n = 1 due to needing the result
             ctx.stack.push_frame(1, f_im, &[]);
 
-            println!("handle globals");
+            if crate::DEBUG_EXECUTION { println!("handle globals"); }
             for globali in &module.globals {
                 let vali = ctx.evaluate_expr(&globali.init)?;
 
@@ -440,7 +440,7 @@ pub mod instantiation {
         // assuming n = 1 due to needing the result
         ctx.stack.push_frame(1, f, &[]);
 
-        println!("handle elems");
+        if crate::DEBUG_EXECUTION { println!("handle elems"); }
         let mut eoi_tabeladdri = vec![];
         for elemi in &module.elem {
             let eovali = ctx.evaluate_expr(&elemi.offset)?;
@@ -461,7 +461,7 @@ pub mod instantiation {
             eoi_tabeladdri.push((eoi, tableaddri));
         }
 
-        println!("handle data");
+        if crate::DEBUG_EXECUTION { println!("handle data"); }
         let mut doi_memaddri = vec![];
         for datai in &module.data {
             let dovali = ctx.evaluate_expr(&datai.offset)?;

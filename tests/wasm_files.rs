@@ -215,5 +215,11 @@ test_file!(stuff, "tests/stuff.wasm", vec![
 
 test_file!(fuzz0, "tests/fuzz0.wasm", (), |_, _| vec![]);
 test_file!(pong, "tests/pong.wasm", (), |_, _| vec![]);
-test_file!(function_space, "tests/function_space.wasm", (), |_, _| vec![]);
+test_file!(function_space, "tests/function_space.wasm", vec![
+    FuncType { args: vec![ValType::F32].into(), results: vec![].into() }
+], |args, store| {
+    let addr = alloc_host_function(store, HostFunc { id: 0 }, &args[0]);
+
+    vec![ExternVal::Func(addr)]
+});
 test_file!(parser_abort, "tests/parser_abort.wasm", (), |_, _| vec![]);

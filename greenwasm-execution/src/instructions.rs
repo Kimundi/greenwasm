@@ -186,16 +186,16 @@ impl ExecCtx<'instr, 'ctx>
     }
 
     pub fn evaluate_expr(&mut self, expr: &'instr Expr) -> EResult<Val> {
-        println!("eval expr...");
+        if crate::DEBUG_EXECUTION { println!("eval expr..."); }
         self.ip = &expr.body;
         self.execute_instrs_no_falloff()?;
         let v = self.stack.pop_val();
-        println!("eval expr DONE");
+        if crate::DEBUG_EXECUTION { println!("eval expr DONE"); }
         Ok(v)
     }
 
     pub fn invoke(&mut self, a: FuncAddr) -> EResult<()> {
-        println!("invoke a...");
+        if crate::DEBUG_EXECUTION { println!("invoke a..."); }
 
         // Function calls want to prepare for executing the next instruction...
         const DUMMY_INSTRS: &[Instr] = &[Instr::Nop];
@@ -203,7 +203,7 @@ impl ExecCtx<'instr, 'ctx>
 
         self.invokeop(a)?;
         self.execute_instrs()?;
-        println!("invoke a DONE");
+        if crate::DEBUG_EXECUTION { println!("invoke a DONE"); }
         Ok(())
     }
 
@@ -460,7 +460,7 @@ impl ExecCtx<'instr, 'ctx>
     fn execute_instrs(&mut self) -> EResult<()> {
         loop {
             self.execute_instrs_no_falloff()?;
-            println!("fell off instruction stream");
+            if crate::DEBUG_EXECUTION { println!("fell off instruction stream"); }
             match self.stack.top_ctrl_entry() {
                 TopCtrlEntry::Label => {
                     let stack = &mut *self.stack;
