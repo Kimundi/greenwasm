@@ -7,6 +7,8 @@
 #[macro_use]
 extern crate nom;
 
+pub use nom::ErrorKind as NomErrorKind;
+
 // TODO: Open PR in nom for where applicable
 macro_rules! verify_ref (
   // Internal parser, do not use directly

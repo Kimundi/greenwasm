@@ -1,16 +1,57 @@
-use binary_format::parse_binary_format;
-use validation::validate_module;
+use binary_format::*;
+use validation::*;
+use execution::modules::*;
+use execution::runtime_structure::*;
+use execution::modules::instantiation::*;
 
 fn main() {
-    if let Some(path) = ::std::env::args().nth(1) {
-        let file = std::fs::read(&path).unwrap();
-
-        println!("Parsing:");
-        let (module, _custom_sections) = parse_binary_format(&file).unwrap();
-
-        println!("Validation:");
-        validate_module(module).unwrap();
+    if let Some(ref path) = ::std::env::args().nth(1) {
+        if let Err(x) = run(path) {
+            println!("{:?}", x);
+            ::std::process::exit(2);
+        }
     } else {
-        println!("Usage: prog <wasmfile>")
+        println!("Usage: prog <wasmfile>");
+        ::std::process::exit(1);
     }
+}
+
+#[derive(Debug)]
+enum FuzzError {
+    IoError(std::io::Error),
+    ParseError(binary_format::NomErrorKind),
+    ValidationError(ValidationError),
+    InstantiationError(InstantiationError),
+}
+
+fn run(path: &str) -> ::std::result::Result<(), FuzzError> {
+    let file = std::fs::read(&path)
+        .map_err(FuzzError::IoError)?;
+
+    println!("Parsing...");
+    let (module, _custom_sections) = parse_binary_format(&file).map_err(|e| {
+        use binary_format::*;
+
+        match e {
+            ParseError::NomError(e) => {
+                e.into_error_kind()
+            }
+        }
+    })
+    .map_err(FuzzError::ParseError)?;
+
+    println!("Validation...");
+    let validated_module = validate_module(module)
+        .map_err(FuzzError::ValidationError)?;
+
+    println!("Execution...");
+    let mut store = Default::default();
+    let mut stack = Stack::new();
+
+    instantiation::instantiate_module(&mut store, &mut stack, &validated_module, &[])
+        .map_err(FuzzError::InstantiationError)?;
+
+    println!("Done");
+
+    Ok(())
 }
