@@ -34,17 +34,20 @@ while True:
     try:
         shell(fuzz_launch_cmd(random_wasm))
     except subprocess.CalledProcessError:
-        shell("wasm-reduce {} '--command={}' -t {} -w {} -f", random_wasm, fuzz_launch_cmd(test), test, work)
-
         filename = "{}.wasm".format(testcase_filename(counter))
         while os.path.isfile(filename):
             counter = counter + 1
             filename = "{}.wasm".format(testcase_filename(counter))
 
         unreduced = "{}.unreduced.wasm".format(testcase_filename(counter))
+        shell("cp {} {}", random_wasm, unreduced)
 
-        shell("mv {} {}", work, filename)
-        shell("mv {} {}", random_wasm, unreduced)
+        shell("wasm-reduce {} '--command={}' -t {} -w {} -f", random_wasm, fuzz_launch_cmd(test), test, work)
+        reduced = "{}.reduced.wasm".format(testcase_filename(counter))
+        shell("cp {} {}", work, reduced)
 
-    print("Iteration {} OK\n".format(iter_counter))
+        shell("wasm-gc {}", work)
+        shell("cp {} {}", work, filename)
+
+    print("Iteration {} DONE\n".format(iter_counter))
     iter_counter = iter_counter + 1
