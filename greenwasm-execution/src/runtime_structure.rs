@@ -192,7 +192,7 @@ pub struct GlobalInst {
     pub mutability: Mut,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExportInst<'ast>
 
 {
@@ -200,7 +200,7 @@ pub struct ExportInst<'ast>
     pub value: ExternVal,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ExternVal {
     Func(FuncAddr),
     Table(TableAddr),

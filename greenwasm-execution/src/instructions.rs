@@ -890,6 +890,7 @@ impl ExecCtx<'instr, 'ctx>
                     } else {
                         self.brop(ln);
                     }
+                    panic!()
                 }
                 Return => {
                     let stack = &mut *self.stack;

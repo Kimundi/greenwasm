@@ -14,3 +14,4 @@ workspace = ".."
 [dependencies]
 structure = { package = "greenwasm-structure", path = "../greenwasm-structure" }
 nom = { version = "4.0", features = ["verbose-errors"] }
+

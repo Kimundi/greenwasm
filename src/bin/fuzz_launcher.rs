@@ -1,3 +1,4 @@
+use structure::types::*;
 use binary_format::*;
 use validation::*;
 use execution::modules::*;
@@ -56,14 +57,48 @@ fn run(path: &str, details: bool) -> ::std::result::Result<(), FuzzError> {
     let validated_module = validate_module(module)
         .map_err(FuzzError::ValidationError)?;
 
-    println!("Execution...");
+    println!("Instantiation...");
     let mut store = Default::default();
     let mut stack = Stack::new();
 
-    instantiation::instantiate_module(&mut store, &mut stack, &validated_module, &[])
+    let moduleaddr = instantiation::instantiate_module(&mut store, &mut stack, &validated_module, &[])
         .map_err(FuzzError::InstantiationError)?;
 
-    println!("Done");
+    println!("Invocation of exports...");
+
+    assert!(validated_module.start.is_none());
+
+    let moduleinst = &store.modules[moduleaddr];
+
+    let mut hanglimitinit = None;
+    let mut export_addrs = vec![];
+    for e in &moduleinst.exports {
+        //println!("{:?}", e);
+        if **e.name == "hangLimitInitializer" {
+            hanglimitinit = Some(if let ExternVal::Func(faddr) = e.value { faddr } else { panic!() });
+        }
+        if e.name.ends_with("_invoker") {
+            export_addrs.push(if let ExternVal::Func(faddr) = e.value { faddr } else { panic!() });
+        }
+    }
+    if let Some(hanglimitinit) = hanglimitinit {
+        invocation::invoke(&mut store, &mut stack, hanglimitinit, &[]).unwrap();
+
+        for faddr in export_addrs {
+            let fty = store.funcs[faddr].type_();
+            let mut vals = vec![];
+            for ty in &fty.args {
+                match ty {
+                    ValType::I32 => vals.push(Val::I32(0)),
+                    ValType::I64 => vals.push(Val::I64(0)),
+                    ValType::F32 => vals.push(Val::F32(0.0)),
+                    ValType::F64 => vals.push(Val::F64(0.0)),
+                }
+            }
+
+            invocation::invoke(&mut store, &mut stack, faddr, &vals).unwrap();
+        }
+    }
 
     Ok(())
 }
