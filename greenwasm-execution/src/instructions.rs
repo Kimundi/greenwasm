@@ -196,13 +196,10 @@ impl ExecCtx<'instr, 'ctx>
 
     pub fn invoke(&mut self, a: FuncAddr) -> EResult<()> {
         if crate::DEBUG_EXECUTION { println!("invoke a..."); }
-
-        // Function calls want to prepare for executing the next instruction...
-        const DUMMY_INSTRS: &[Instr] = &[Instr::Nop];
-        self.ip = DUMMY_INSTRS;
-
+        assert!(self.stack.is_empty());
         self.invokeop(a)?;
         self.execute_instrs()?;
+        assert!(self.stack.is_empty());
         if crate::DEBUG_EXECUTION { println!("invoke a DONE"); }
         Ok(())
     }
@@ -463,6 +460,8 @@ impl ExecCtx<'instr, 'ctx>
             if crate::DEBUG_EXECUTION { println!("fell off instruction stream"); }
             match self.stack.top_ctrl_entry() {
                 TopCtrlEntry::Label => {
+                    if crate::DEBUG_EXECUTION { println!("continue after ctrl instr"); }
+
                     let stack = &mut *self.stack;
                     let ip = &mut self.ip;
 
@@ -479,6 +478,8 @@ impl ExecCtx<'instr, 'ctx>
                     *ip = next_instr;
                 }
                 TopCtrlEntry::Activation => {
+                    if crate::DEBUG_EXECUTION { println!("continue after call"); }
+
                     let stack = &mut *self.stack;
                     let ip = &mut self.ip;
 
@@ -508,7 +509,7 @@ impl ExecCtx<'instr, 'ctx>
 
         while let Some(instr) = self.next_instr() {
             if crate::DEBUG_EXECUTION {
-                println!("exec instr {:?}", instr);
+                println!("exec instr {:?} - {:?}", instr, self.ip);
             }
             match *instr {
                 // consts
