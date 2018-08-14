@@ -170,20 +170,23 @@ pub struct ExecCtx<'instr, 'ctx>
     pub store: &'ctx mut Store<'instr>,
     pub stack: &'ctx mut Stack<'instr>,
     ip: &'instr [Instr],
-    next_ip: &'instr [Instr],
 }
 
 macro_rules! instrumented_instrs {
     (match $x:expr; $($p:pat => $e:expr),*) => {
         match $x {
             $($p => {
-                // println!(stringify!($p));
+                if crate::DEBUG_EXECUTION { println!(stringify!($p)); }
 
                 $e
             })*
         }
     }
 }
+
+/// This just exists to enfore a fetch operation after each instruction
+#[must_use]
+struct JumpWitness;
 
 impl ExecCtx<'instr, 'ctx>
     where 'instr: 'ctx,
@@ -195,50 +198,75 @@ impl ExecCtx<'instr, 'ctx>
             store,
             stack,
             ip: &[],
-            next_ip: &[],
         }
     }
 
     pub fn evaluate_expr(&mut self, expr: &'instr Expr) -> EResult<Val> {
         if crate::DEBUG_EXECUTION { println!("eval expr..."); }
-        self.ip = &expr.body;
-        self.execute_instrs_no_falloff()?;
-        let v = self.stack.pop_val();
+
+        let v = self.stack_cleaner(|s| {
+            s.ip = &expr.body;
+            s.execute_instrs_no_falloff()?;
+            Ok(s.stack.pop_val())
+        })?;
+
         if crate::DEBUG_EXECUTION { println!("eval expr DONE"); }
         Ok(v)
     }
 
     pub fn invoke(&mut self, a: FuncAddr) -> EResult<()> {
-        if crate::DEBUG_EXECUTION { println!("invoke a..."); }
+        if crate::DEBUG_EXECUTION { println!("invoke func..."); }
         assert!(self.stack.is_empty());
-        self.invokeop(a)?;
-        self.execute_instrs()?;
+
+        self.stack_cleaner(|s| {
+            // we need a valid next instruction for the return
+            s.ip = &[Instr::Nop];
+
+            let _: JumpWitness = s.invokeop(a)?;
+            s.execute_instrs()?;
+
+            Ok(())
+        })?;
+
         assert!(self.stack.is_empty());
-        if crate::DEBUG_EXECUTION { println!("invoke a DONE"); }
+        if crate::DEBUG_EXECUTION { println!("invoke func DONE"); }
         Ok(())
     }
 
     // -------------------------------------------------------------------------
 
-    #[inline(always)]
-    fn constop<T: ValCast>(&mut self, v: T) {
-        let stack = &mut *self.stack;
-
-        stack.push_val(v.to_val());
+    fn stack_cleaner<T, F: FnOnce(&mut Self) -> EResult<T>>(&mut self, f: F) -> EResult<T> {
+        let snapshot = self.stack.snapshot();
+        match f(self) {
+            Ok(x) => Ok(x),
+            Err(x) => {
+                self.stack.clear_snapshot(snapshot);
+                Err(x)
+            }
+        }
     }
 
     #[inline(always)]
-    fn unop<T: ValCast, F: FnOnce(T) -> T>(&mut self, unop: F) {
+    fn constop<T: ValCast>(&mut self, v: T) -> JumpWitness {
+        let stack = &mut *self.stack;
+
+        stack.push_val(v.to_val());
+        self.jump_next()
+    }
+
+    #[inline(always)]
+    fn unop<T: ValCast, F: FnOnce(T) -> T>(&mut self, unop: F) -> JumpWitness {
         let stack = &mut *self.stack;
 
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
         let c = unop(c1);
         stack.push_val(c.to_val());
+        self.jump_next()
     }
 
     #[inline(always)]
-    fn binop<T: ValCast, F: FnOnce(T, T) -> T>(&mut self, binop: F) {
+    fn binop<T: ValCast, F: FnOnce(T, T) -> T>(&mut self, binop: F) -> JumpWitness {
         let stack = &mut *self.stack;
 
         let val2 = stack.pop_val();
@@ -249,10 +277,11 @@ impl ExecCtx<'instr, 'ctx>
 
         let c = binop(c1, c2);
         stack.push_val(c.to_val());
+        self.jump_next()
     }
 
     #[inline(always)]
-    fn partial_binop<T: ValCast, F: FnOnce(T, T) -> Partial<T>>(&mut self, binop: F) -> EResult<()> {
+    fn partial_binop<T: ValCast, F: FnOnce(T, T) -> Partial<T>>(&mut self, binop: F) -> EResult<JumpWitness> {
         let stack = &mut *self.stack;
 
         let val2 = stack.pop_val();
@@ -265,24 +294,25 @@ impl ExecCtx<'instr, 'ctx>
 
         if let Partial::Val(c) = c {
             stack.push_val(c.to_val());
-            Ok(())
+            Ok(self.jump_next())
         } else {
             Err(Trap)
         }
     }
 
     #[inline(always)]
-    fn testop<T: ValCast, F: FnOnce(T) -> I32>(&mut self, testop: F) {
+    fn testop<T: ValCast, F: FnOnce(T) -> I32>(&mut self, testop: F) -> JumpWitness {
         let stack = &mut *self.stack;
 
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
         let c = testop(c1);
         stack.push_val(c.to_val());
+        self.jump_next()
     }
 
     #[inline(always)]
-    fn relop<T: ValCast, F: FnOnce(T, T) -> I32>(&mut self, relop: F) {
+    fn relop<T: ValCast, F: FnOnce(T, T) -> I32>(&mut self, relop: F) -> JumpWitness {
         let stack = &mut *self.stack;
 
         let val2 = stack.pop_val();
@@ -293,20 +323,22 @@ impl ExecCtx<'instr, 'ctx>
 
         let c = relop(c1, c2);
         stack.push_val(c.to_val());
+        self.jump_next()
     }
 
     #[inline(always)]
-    fn cvtop<T: ValCast, U: ValCast, F: FnOnce(T) -> U>(&mut self, cvtop: F) {
+    fn cvtop<T: ValCast, U: ValCast, F: FnOnce(T) -> U>(&mut self, cvtop: F) -> JumpWitness {
         let stack = &mut *self.stack;
 
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
         let c = cvtop(c1);
         stack.push_val(c.to_val());
+        self.jump_next()
     }
 
     #[inline(always)]
-    fn partial_cvtop<T: ValCast, U: ValCast, F: FnOnce(T) -> Partial<U>>(&mut self, cvtop: F) -> EResult<()> {
+    fn partial_cvtop<T: ValCast, U: ValCast, F: FnOnce(T) -> Partial<U>>(&mut self, cvtop: F) -> EResult<JumpWitness> {
         let stack = &mut *self.stack;
 
         let val = stack.pop_val();
@@ -315,14 +347,14 @@ impl ExecCtx<'instr, 'ctx>
 
         if let Partial::Val(c) = c {
             stack.push_val(c.to_val());
-            Ok(())
+            Ok(self.jump_next())
         } else {
             Err(Trap)
         }
     }
 
     #[inline(always)]
-    fn loadop<T: ValCast, M: MemOp<T>>(&mut self, memarg: Memarg) -> EResult<()> {
+    fn loadop<T: ValCast, M: MemOp<T>>(&mut self, memarg: Memarg) -> EResult<JumpWitness> {
         let stack = &mut *self.stack;
         let store = &mut *self.store;
 
@@ -347,10 +379,10 @@ impl ExecCtx<'instr, 'ctx>
 
         stack.push_val(c.to_val());
 
-        Ok(())
+        Ok(self.jump_next())
     }
     #[inline(always)]
-    fn storeop<T: ValCast, M: MemOp<T>>(&mut self, memarg: Memarg) -> EResult<()> {
+    fn storeop<T: ValCast, M: MemOp<T>>(&mut self, memarg: Memarg) -> EResult<JumpWitness> {
         let stack = &mut *self.stack;
         let store = &mut *self.store;
 
@@ -373,22 +405,22 @@ impl ExecCtx<'instr, 'ctx>
         let n = M::wrap(c);
         M::to_mem(bs, n);
 
-        Ok(())
+        Ok(self.jump_next())
     }
 
     #[inline(always)]
     fn enter_block(&mut self,
                    jump_target: &'instr [Instr],
                    label_n: usize,
-                   label_cont: &'instr [Instr]) {
+                   label_cont: &'instr [Instr]) -> JumpWitness {
         let stack = &mut *self.stack;
 
-        stack.push_label(label_n, label_cont, self.next_ip);
-        self.next_ip = jump_target;
+        stack.push_label(label_n, label_cont, &self.ip[1..]);
+        self.jump(jump_target)
     }
 
     #[inline(always)]
-    fn brop(&mut self, l: LabelIdx)
+    fn brop(&mut self, l: LabelIdx) -> JumpWitness
     {
         let stack = &mut *self.stack;
 
@@ -408,16 +440,15 @@ impl ExecCtx<'instr, 'ctx>
         if let Some(val) = vals {
             stack.push_val(val);
         }
-        self.next_ip = branch_target;
+        self.jump(branch_target)
     }
 
-    fn invokeop(&mut self, a: FuncAddr) -> EResult<()>
+    fn invokeop(&mut self, a: FuncAddr) -> EResult<JumpWitness>
     {
         let stack = &mut *self.stack;
-        let store = &mut *self.store;
 
-        let f = &store.funcs[a];
-        match f {
+        let f = &self.store.funcs[a];
+        Ok(match f {
             FuncInst::Internal { type_, module, code } => {
                 let n = type_.args.len();
                 let m = type_.results.len();
@@ -442,24 +473,32 @@ impl ExecCtx<'instr, 'ctx>
                     });
                 }
                 let frame = Frame { module: *module, locals: local_vals.into() };
-                let next_instr = self.next_ip;
-                stack.push_frame(m, frame, next_instr);
+                stack.push_frame(m, frame, &self.ip[1..]);
 
-                // NB: No next instructions, as that's stored in the function frame
-                self.enter_block(instrs, m, &[]);
+                // NB: Next instructions are stored in the frame below the label
+                stack.push_label(m, &[], &[]);
+
+                self.jump(instrs)
             }
             FuncInst::Host { .. } => {
                 println!("Host behavior not implemented yet");
                 unimplemented!()
             }
-        }
+        })
+    }
 
-        Ok(())
+    fn jump_next(&mut self) -> JumpWitness {
+        self.ip = &self.ip[1..];
+        JumpWitness
+    }
+
+    fn jump(&mut self, new_ip: &'instr [Instr]) -> JumpWitness {
+        self.ip = new_ip;
+        JumpWitness
     }
 
     fn next_instr(&mut self) -> Option<&'instr Instr> {
         if let Some(instr) = self.ip.get(0) {
-            self.next_ip = self.ip.get(1..).unwrap_or(&[]);
             Some(instr)
         } else {
             None
@@ -469,7 +508,7 @@ impl ExecCtx<'instr, 'ctx>
         loop {
             self.execute_instrs_no_falloff()?;
             if crate::DEBUG_EXECUTION { println!("fell off instruction stream"); }
-            match self.stack.top_ctrl_entry() {
+            let _: JumpWitness = match self.stack.top_ctrl_entry() {
                 TopCtrlEntry::Label => {
                     if crate::DEBUG_EXECUTION { println!("continue after ctrl instr"); }
 
@@ -485,7 +524,7 @@ impl ExecCtx<'instr, 'ctx>
                         stack.push_val(val);
                     }
 
-                    self.ip = next_instr;
+                    self.jump(next_instr)
                 }
                 TopCtrlEntry::Activation => {
                     if crate::DEBUG_EXECUTION { println!("continue after call"); }
@@ -503,12 +542,12 @@ impl ExecCtx<'instr, 'ctx>
                         stack.push_val(val);
                     }
 
-                    self.ip  = frame.next_instr;
+                    self.jump(frame.next_instr)
                 }
                 TopCtrlEntry::None => {
-                    return Ok(());
+                    return Ok(())
                 }
-            }
+            };
         }
     }
 
@@ -521,7 +560,7 @@ impl ExecCtx<'instr, 'ctx>
                 println!("exec instr {:?} - {:?}", instr, self.ip);
             }
 
-            instrumented_instrs! { match *instr;
+            let _: JumpWitness = instrumented_instrs! { match *instr;
                 // consts
                 I32Const(v) => self.constop(v),
                 I64Const(v) => self.constop(v),
@@ -722,6 +761,7 @@ impl ExecCtx<'instr, 'ctx>
                     let stack = &mut *self.stack;
 
                     stack.pop_val();
+                    self.jump_next()
                 },
                 Select => {
                     let stack = &mut *self.stack;
@@ -739,6 +779,7 @@ impl ExecCtx<'instr, 'ctx>
                     } else {
                         stack.push_val(val2);
                     }
+                    self.jump_next()
                 },
 
                 // variable instructions
@@ -747,18 +788,21 @@ impl ExecCtx<'instr, 'ctx>
 
                     let val = stack.current_frame().locals[x];
                     stack.push_val(val);
+                    self.jump_next()
                 },
                 SetLocal(x) => {
                     let stack = &mut *self.stack;
 
                     let val = stack.pop_val();
                     stack.current_frame().locals[x] = val;
+                    self.jump_next()
                 },
                 TeeLocal(x) => {
                     let stack = &mut *self.stack;
 
                     let val = stack.peek_val();
                     stack.current_frame().locals[x] = val;
+                    self.jump_next()
                 },
                 GetGlobal(x) => {
                     let stack = &mut *self.stack;
@@ -769,6 +813,7 @@ impl ExecCtx<'instr, 'ctx>
                     let glob = &store.globals[a];
                     let val = glob.value;
                     stack.push_val(val);
+                    self.jump_next()
                 },
                 SetGlobal(x) => {
                     let stack = &mut *self.stack;
@@ -779,6 +824,7 @@ impl ExecCtx<'instr, 'ctx>
                     let glob = &mut store.globals[a];
                     let val = stack.pop_val();
                     glob.value = val;
+                    self.jump_next()
                 },
 
                 // memory instructions
@@ -824,6 +870,7 @@ impl ExecCtx<'instr, 'ctx>
                     let mem = &store.mems[a];
                     let sz = mem.data.len() / WASM_PAGE_SIZE;
                     stack.push_val(Val::I32(sz as I32));
+                    self.jump_next()
                 },
                 GrowMemory => {
                     let stack = &mut *self.stack;
@@ -848,49 +895,54 @@ impl ExecCtx<'instr, 'ctx>
 
                     // Or don't:
                     // stack.push_val(Val::I32(-1i32 as I32));
+
+                    self.jump_next()
                 },
 
                 // control instructions
                 Nop => {
                     /* nothing to see here, carry on */
+                    self.jump_next()
                 },
                 Unreachable => {
-                    Err(Trap)?;
+                    Err(Trap)?
                 },
                 Block(resultt, ref jump_target) => {
                     let n = resultt.len();
-                    let cont = self.next_ip;
+                    let cont = &self.ip[1..];
 
-                    self.enter_block(&jump_target, n, cont);
+                    self.enter_block(&jump_target, n, cont)
                 },
                 Loop(_, ref jump_target) => {
                     // TODO: Is it correct that result type is ignored here?
                     let n = 0;
                     let cont = self.ip;
 
-                    self.enter_block(&jump_target, n, cont);
+                    self.enter_block(&jump_target, n, cont)
                 },
                 IfElse(resultt, ref jump_target_if, ref jump_target_else) => {
                     let stack = &mut *self.stack;
 
                     let c = I32::assert_val_type(stack.pop_val());
                     let n = resultt.len();
-                    let cont = self.next_ip;
+                    let cont = &self.ip[1..];
                     if c != 0 {
-                        self.enter_block(&jump_target_if, n, cont);
+                        self.enter_block(&jump_target_if, n, cont)
                     } else {
-                        self.enter_block(&jump_target_else, n, cont);
+                        self.enter_block(&jump_target_else, n, cont)
                     }
                 },
                 Br(l) => {
-                    self.brop(l);
+                    self.brop(l)
                 },
                 BrIf(l) => {
                     let stack = &mut *self.stack;
 
                     let c = I32::assert_val_type(stack.pop_val());
                     if c != 0 {
-                        self.brop(l);
+                        self.brop(l)
+                    } else {
+                        self.jump_next()
                     }
                 },
                 BrTable(ref ls, ln) => {
@@ -899,9 +951,9 @@ impl ExecCtx<'instr, 'ctx>
                     let i = I32::assert_val_type(stack.pop_val()) as usize;
                     if i < ls.len() {
                         let li = ls[i];
-                        self.brop(li);
+                        self.brop(li)
                     } else {
-                        self.brop(ln);
+                        self.brop(ln)
                     }
                 },
                 Return => {
@@ -931,7 +983,7 @@ impl ExecCtx<'instr, 'ctx>
                     if let Some(val) = vals {
                         stack.push_val(val);
                     }
-                    self.next_ip = next_instr;
+                    self.jump(next_instr)
                 },
                 Call(x) => {
                     let stack = &mut *self.stack;
@@ -939,7 +991,7 @@ impl ExecCtx<'instr, 'ctx>
 
                     let a = stack.current_frame().module;
                     let a = store.modules[a].funcaddrs[x];
-                    self.invokeop(a)?;
+                    self.invokeop(a)?
                 },
                 CallIndirect(x) => {
                     let stack = &mut *self.stack;
@@ -962,10 +1014,9 @@ impl ExecCtx<'instr, 'ctx>
                     if ft_expect != ft_actual {
                         Err(Trap)?;
                     }
-                    self.invokeop(a)?;
+                    self.invokeop(a)?
                 }
-            }
-            self.ip = self.next_ip;
+            };
         }
 
         Ok(())

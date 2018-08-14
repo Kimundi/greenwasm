@@ -367,6 +367,28 @@ impl Stack<'instr> {
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
+
+    pub fn snapshot(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn clear_snapshot(&mut self, snapshot: usize) {
+        self.data.truncate(snapshot);
+        while let Some(idx) = self.label_indices.last().cloned() {
+            if idx >= snapshot {
+                self.label_indices.pop();
+            } else {
+                break;
+            }
+        }
+        while let Some(idx) = self.frame_indices.last().cloned() {
+            if idx >= snapshot {
+                self.frame_indices.pop();
+            } else {
+                break;
+            }
+        }
+    }
 }
 
 pub enum TopCtrlEntry {
