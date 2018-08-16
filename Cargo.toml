@@ -15,7 +15,7 @@ structure = { package = "greenwasm-structure", path = "greenwasm-structure" }
 validation = { package = "greenwasm-validation", path = "greenwasm-validation" }
 binary_format = { package = "greenwasm-binary-format", path = "greenwasm-binary-format" }
 execution = { package = "greenwasm-execution", path = "greenwasm-execution" }
-binaryen = { git = "https://github.com/pepyakin/binaryen-rs.git" }
+binaryen = "0.4.0"
 
 [dev-dependencies]
 wabt = "0.4.0"
