@@ -17,6 +17,9 @@ binary_format = { package = "greenwasm-binary-format", path = "greenwasm-binary-
 execution = { package = "greenwasm-execution", path = "greenwasm-execution" }
 binaryen = { git = "https://github.com/pepyakin/binaryen-rs.git" }
 
+[dev-dependencies]
+wabt = "0.4.0"
+
 [profile.dev]
 opt-level = 1      # controls the `--opt-level` the compiler builds with.
                    # 0-1 is good for debugging. 2 is well-optimized. Max is 3.

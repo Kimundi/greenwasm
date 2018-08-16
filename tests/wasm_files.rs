@@ -74,7 +74,7 @@ macro_rules! test_file {
     )
 }
 
-test_file!(factorial, "tests/factorial.wasm", (), |_, _| vec![], Module {
+test_file!(factorial, "tests/wasm_files/factorial.wasm", (), |_, _| vec![], Module {
     types: vec![
         FuncType {
             args: vec![ValType::F64].into(),
@@ -119,7 +119,7 @@ test_file!(factorial, "tests/factorial.wasm", (), |_, _| vec![], Module {
     ].into(),
 });
 
-test_file!(stuff, "tests/stuff.wasm", vec![
+test_file!(stuff, "tests/wasm_files/stuff.wasm", vec![
     FuncType { args: vec![ValType::F32].into(), results: vec![].into() }
 ], |args, store| {
     let addr = alloc_host_function(store, HostFunc { id: 0 }, &args[0]);
@@ -213,13 +213,13 @@ test_file!(stuff, "tests/stuff.wasm", vec![
     ].into(),
 });
 
-test_file!(fuzz0, "tests/fuzz0.wasm", (), |_, _| vec![]);
-test_file!(pong, "tests/pong.wasm", (), |_, _| vec![]);
-test_file!(function_space, "tests/function_space.wasm", vec![
+test_file!(fuzz0, "tests/wasm_files/fuzz0.wasm", (), |_, _| vec![]);
+test_file!(pong, "tests/wasm_files/pong.wasm", (), |_, _| vec![]);
+test_file!(function_space, "tests/wasm_files/function_space.wasm", vec![
     FuncType { args: vec![ValType::F32].into(), results: vec![].into() }
 ], |args, store| {
     let addr = alloc_host_function(store, HostFunc { id: 0 }, &args[0]);
 
     vec![ExternVal::Func(addr)]
 });
-test_file!(parser_abort, "tests/parser_abort.wasm", (), |_, _| vec![]);
+test_file!(parser_abort, "tests/wasm_files/parser_abort.wasm", (), |_, _| vec![]);
