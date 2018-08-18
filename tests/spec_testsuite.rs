@@ -37,17 +37,20 @@ struct StSt<'ast> {
 }
 type CmdFn = Box<for<'ast> Fn(&mut Option<StSt<'ast>>) + Send>;
 
-fn store_thread_frame<'ast>(stst: StSt<'ast>)
-{
+#[must_use]
+struct FrameWitness;
+
+fn store_thread_frame<'ast>(stst: StSt<'ast>) -> FrameWitness {
     let mut stst = Some(stst);
     while stst.is_some() {
         match stst.as_ref().unwrap().recv.recv() {
             Ok(cmd) => {
                 cmd(&mut stst);
             }
-            Err(_) => return,
+            Err(_) => return FrameWitness,
         }
     }
+    FrameWitness
 }
 
 struct StoreCtrl {
@@ -69,7 +72,7 @@ impl StoreCtrl {
         }
     }
 
-    fn new_frame<F: Fn(StSt) + Send + 'static>(&self, f: F) {
+    fn new_frame<F: Fn(StSt) -> FrameWitness + Send + 'static>(&self, f: F) {
         self.tx.send(Box::new(move |stst: &mut Option<StSt>| {
             let stst = stst.take().unwrap();
             f(stst);
@@ -133,7 +136,7 @@ fn run_tests() {
                             let mut stst = stst;
                             let moduleaddr = instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &[]).unwrap();
 
-                            store_thread_frame(stst);
+                            store_thread_frame(stst)
                         });
                     }
                     AssertReturn {
