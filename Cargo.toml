@@ -16,6 +16,7 @@ validation = { package = "greenwasm-validation", path = "greenwasm-validation" }
 binary_format = { package = "greenwasm-binary-format", path = "greenwasm-binary-format" }
 execution = { package = "greenwasm-execution", path = "greenwasm-execution" }
 binaryen = "0.4.0"
+owning_ref = "0.4.0"
 
 [dev-dependencies]
 wabt = "0.4.0"
