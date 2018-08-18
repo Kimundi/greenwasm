@@ -75,29 +75,7 @@ trait MemOp<T>: Sized where T: ValCast {
 // TODO: fix le/be mess once nightly is updated
 
 macro_rules! mem_op {
-    (a: $memty:ty, $castty:ty, $opty:ty) => {
-        impl MemOp<$opty> for $memty {
-            #[inline(always)]
-            fn from_mem(b: &[u8]) -> Self {
-                let mut arr = [0; <Self as MemOp<$opty>>::SIZE_OF];
-                arr.copy_from_slice(b);
-                Self::from_le(Self::from_bytes(arr))
-            }
-            #[inline(always)]
-            fn extend(self) -> $opty {
-                self as $castty as $opty
-            }
-            #[inline(always)]
-            fn to_mem(b: &mut [u8], v: Self) {
-                b.copy_from_slice(&v.to_le().to_bytes());
-            }
-            #[inline(always)]
-            fn wrap(t: $opty) -> Self {
-                t as $castty as $memty
-            }
-        }
-    };
-    (b: $memty:ty, $castty:ty, $opty:ty) => {
+    (int: $memty:ty, $castty:ty, $opty:ty) => {
         impl MemOp<$opty> for $memty {
             #[inline(always)]
             fn from_mem(b: &[u8]) -> Self {
@@ -119,7 +97,7 @@ macro_rules! mem_op {
             }
         }
     };
-    (c: $memty:ty, $castty:ty, $opty:ty) => {
+    (float: $memty:ty, $castty:ty, $opty:ty) => {
         impl MemOp<$opty> for $memty {
             #[inline(always)]
             fn from_mem(b: &[u8]) -> Self {
@@ -142,26 +120,26 @@ macro_rules! mem_op {
     }
 }
 
-mem_op!(a: I32, I32, I32);
+mem_op!(int: I32, I32, I32);
 
-mem_op!(a: u8,  u32, I32);
-mem_op!(a: u16, u32, I32);
+mem_op!(int: u8,  u32, I32);
+mem_op!(int: u16, u32, I32);
 
-mem_op!(b: i8,  i32, I32);
-mem_op!(b: i16, i32, I32);
+mem_op!(int: i8,  i32, I32);
+mem_op!(int: i16, i32, I32);
 
-mem_op!(a: I64, I64, I64);
+mem_op!(int: I64, I64, I64);
 
-mem_op!(a: u8,  u64, I64);
-mem_op!(a: u16, u64, I64);
-mem_op!(a: u32, u64, I64);
+mem_op!(int: u8,  u64, I64);
+mem_op!(int: u16, u64, I64);
+mem_op!(int: u32, u64, I64);
 
-mem_op!(b: i8,  i64, I64);
-mem_op!(b: i16, i64, I64);
-mem_op!(b: i32, i64, I64);
+mem_op!(int: i8,  i64, I64);
+mem_op!(int: i16, i64, I64);
+mem_op!(int: i32, i64, I64);
 
-mem_op!(c: F32, u32, F32);
-mem_op!(c: F64, u64, F64);
+mem_op!(float: F32, u32, F32);
+mem_op!(float: F64, u64, F64);
 
 // TODO: More central location
 pub struct ExecCtx<'instr, 'ctx>
@@ -188,7 +166,7 @@ macro_rules! instrumented_instrs {
 #[must_use]
 struct JumpWitness;
 
-impl ExecCtx<'instr, 'ctx>
+impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
     where 'instr: 'ctx,
 {
     #[inline(always)]

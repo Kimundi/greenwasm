@@ -108,6 +108,11 @@ pub struct Store<'ast>
     /// between data structures.
     pub modules: TypedIndexVec<ModuleInst<'ast>, ModuleAddr>,
 }
+impl<'ast> Store<'ast> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct FuncAddr(pub usize);
@@ -164,7 +169,7 @@ pub enum FuncInst<'ast>
         hostcode: HostFunc
     },
 }
-impl FuncInst<'ast>  {
+impl<'ast> FuncInst<'ast>  {
     pub fn type_(&self) -> &'ast FuncType {
         match self {
             | FuncInst::Internal { type_, .. }
@@ -222,7 +227,7 @@ pub struct Stack<'instr> {
     label_indices: Vec<usize>,
 }
 
-impl Stack<'instr> {
+impl<'instr> Stack<'instr> {
     pub fn new() -> Self { Self::default() }
 
     fn printme(&self, msg: &str) {

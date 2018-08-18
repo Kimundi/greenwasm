@@ -138,11 +138,11 @@ named!(parse_i64 <Inp, u64>, map!(parse_s64, |x| x as u64));
 // 5.2.3. Floating-Point
 named!(parse_f32 <Inp, f32>, do_parse!(
     bs: map!(take!(4), |s| { let mut b = [0; 4]; b.copy_from_slice(&**s); b })
-    >> (f32::from_bits(u32::from_le(u32::from_bytes(bs))))
+    >> (f32::from_bits(u32::from_le_bytes(bs)))
 ));
 named!(parse_f64 <Inp, f64>, do_parse!(
     bs: map!(take!(8), |s| { let mut b = [0; 8]; b.copy_from_slice(&**s); b })
-    >> (f64::from_bits(u64::from_le(u64::from_bytes(bs))))
+    >> (f64::from_bits(u64::from_le_bytes(bs)))
 ));
 
 // 5.2.4. Names

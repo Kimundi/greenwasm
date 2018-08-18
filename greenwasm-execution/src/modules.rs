@@ -11,14 +11,14 @@ pub const WASM_PAGE_SIZE: usize = 65536;
 pub mod external_typing {
     use super::*;
 
-    pub fn func(s: &Store<'ast>, a: FuncAddr) -> ExternType
+    pub fn func<'ast>(s: &Store<'ast>, a: FuncAddr) -> ExternType
 
     {
         let functype = s.funcs[a].type_();
         ExternType::Func((*functype).clone()) // TODO: bad copy
     }
 
-    pub fn table(s: &Store<'ast>, a: TableAddr) -> ExternType
+    pub fn table<'ast>(s: &Store<'ast>, a: TableAddr) -> ExternType
 
     {
         let TableInst { elem, max } = &s.tables[a];
@@ -37,7 +37,7 @@ pub mod external_typing {
         })
     }
 
-    pub fn mem(s: &Store<'ast>, a: MemAddr) -> ExternType
+    pub fn mem<'ast>(s: &Store<'ast>, a: MemAddr) -> ExternType
 
     {
         let MemInst { data, max } = &s.mems[a];
@@ -55,7 +55,7 @@ pub mod external_typing {
         })
     }
 
-    pub fn global(s: &Store<'ast>, a: GlobalAddr) -> ExternType
+    pub fn global<'ast>(s: &Store<'ast>, a: GlobalAddr) -> ExternType
 
     {
         let GlobalInst { ref value, mutability } = s.globals[a];
@@ -111,7 +111,7 @@ pub mod allocation {
     use self::AllocError::*;
     pub type AResult = ::std::result::Result<(), AllocError>;
 
-    pub fn alloc_function(s: &mut Store<'ast>,
+    pub fn alloc_function<'ast>(s: &mut Store<'ast>,
                                 func: &'ast Func,
                                 module: &'ast Module,
                                 moduleaddr: ModuleAddr) -> FuncAddr
@@ -128,7 +128,7 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_host_function(s: &mut Store<'ast>,
+    pub fn alloc_host_function<'ast>(s: &mut Store<'ast>,
                                      hostfunc: HostFunc,
                                      functype: &'ast FuncType) -> FuncAddr
 
@@ -142,7 +142,7 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_table(s: &mut Store<'ast>,
+    pub fn alloc_table<'ast>(s: &mut Store<'ast>,
                              tabletype: &TableType) -> TableAddr
 
     {
@@ -159,7 +159,7 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_mem(s: &mut Store<'ast>,
+    pub fn alloc_mem<'ast>(s: &mut Store<'ast>,
                            memtype: &MemType) -> MemAddr
 
     {
@@ -175,7 +175,7 @@ pub mod allocation {
 
         a
     }
-    pub fn alloc_global(s: &mut Store<'ast>,
+    pub fn alloc_global<'ast>(s: &mut Store<'ast>,
                               globaltype: &GlobalType,
                               val: Val) -> GlobalAddr
 
@@ -221,7 +221,7 @@ pub mod allocation {
 
         Ok(())
     }
-    pub fn alloc_module(s: &mut Store<'ast>,
+    pub fn alloc_module<'ast>(s: &mut Store<'ast>,
                               module: &'ast Module,
                               externvals_im: &[ExternVal],
                               vals: &[Val]) -> ModuleAddr
@@ -334,9 +334,9 @@ pub mod instantiation {
 
     pub type IResult = std::result::Result<ModuleAddr, InstantiationError>;
 
-    pub fn instantiate_module(s: &mut Store<'ast>, stack: &mut Stack<'ast>,
-                                   module: &'ast ValidatedModule,
-                                   externvals: &[ExternVal]) -> IResult
+    pub fn instantiate_module<'ast>(s: &mut Store<'ast>, stack: &mut Stack<'ast>,
+                                    module: &'ast ValidatedModule,
+                                    externvals: &[ExternVal]) -> IResult
 
     {
         let mut ctx = ExecCtx::new(s, stack);
@@ -530,7 +530,7 @@ pub mod invocation {
 
     pub type CResult = ::std::result::Result<Result, InvokeError>;
 
-    pub fn invoke(s: &mut Store<'ast>, stack: &mut Stack<'ast>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
+    pub fn invoke<'ast>(s: &mut Store<'ast>, stack: &mut Stack<'ast>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
 
     {
         let funcinst = &s.funcs[funcaddr];
