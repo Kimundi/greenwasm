@@ -274,11 +274,29 @@ pub fn extend_s(i: I32) -> I64 {
 pub fn wrap(i: I64) -> I32 {
     i as I32
 }
+
+// NB: Due to precision reasons, we need to be careful with what values we compare
+const F32_MAX_I32_EXCLUSIVE: f32 = 2147483648_f32;
+const F32_MIN_I32_INCLUSIVE: f32 = -2147483648_f32;
+const F32_MAX_U32_EXCLUSIVE: f32 = 4294967296_f32;
+
+const F32_MAX_I64_EXCLUSIVE: f32 = 9223372036854775808_f32;
+const F32_MIN_I64_INCLUSIVE: f32 = -9223372036854775808_f32;
+const F32_MAX_U64_EXCLUSIVE: f32 = 18446744073709551616_f32;
+
+const F64_MAX_I32_EXCLUSIVE: f64 = 2147483648_f64;
+const F64_MIN_I32_INCLUSIVE: f64 = -2147483648_f64;
+const F64_MAX_U32_EXCLUSIVE: f64 = 4294967296_f64;
+
+const F64_MAX_I64_EXCLUSIVE: f64 = 9223372036854775808_f64;
+const F64_MIN_I64_INCLUSIVE: f64 = -9223372036854775808_f64;
+const F64_MAX_U64_EXCLUSIVE: f64 = 18446744073709551616_f64;
+
 #[inline(always)]
 pub fn trunc_u_f32_i32(z: F32) -> Partial<I32> {
     if z.is_finite() {
         let z = z.trunc();
-        if (z >= 0.0) && z <= (::std::u32::MAX as F32) {
+        if (0.0 <= z) && (z < F32_MAX_U32_EXCLUSIVE) {
             return Partial::Val(z as I32);
         }
     }
@@ -288,7 +306,7 @@ pub fn trunc_u_f32_i32(z: F32) -> Partial<I32> {
 pub fn trunc_u_f32_i64(z: F32) -> Partial<I64> {
     if z.is_finite() {
         let z = z.trunc();
-        if (z >= 0.0) && z <= (::std::u64::MAX as F32) {
+        if (0.0 <= z) && (z < F32_MAX_U64_EXCLUSIVE) {
             return Partial::Val(z as I64);
         }
     }
@@ -298,7 +316,7 @@ pub fn trunc_u_f32_i64(z: F32) -> Partial<I64> {
 pub fn trunc_u_f64_i32(z: F64) -> Partial<I32> {
     if z.is_finite() {
         let z = z.trunc();
-        if (z >= 0.0) && z <= (::std::u32::MAX as F64) {
+        if (0.0 <= z) && (z < F64_MAX_U32_EXCLUSIVE) {
             return Partial::Val(z as I32);
         }
     }
@@ -308,7 +326,7 @@ pub fn trunc_u_f64_i32(z: F64) -> Partial<I32> {
 pub fn trunc_u_f64_i64(z: F64) -> Partial<I64> {
     if z.is_finite() {
         let z = z.trunc();
-        if (z >= 0.0) && z <= (::std::u64::MAX as F64) {
+        if (0.0 <= z) && (z < F64_MAX_U64_EXCLUSIVE) {
             return Partial::Val(z as I64);
         }
     }
@@ -318,7 +336,7 @@ pub fn trunc_u_f64_i64(z: F64) -> Partial<I64> {
 pub fn trunc_s_f32_i32(z: F32) -> Partial<I32> {
     if z.is_finite() {
         let z = z.trunc();
-        if (::std::i32::MIN as F32 <= z) && (z <= ::std::i32::MAX as F32) {
+        if (F32_MIN_I32_INCLUSIVE <= z) && (z < F32_MAX_I32_EXCLUSIVE) {
             return Partial::Val(z as S32 as I32);
         }
     }
@@ -328,7 +346,7 @@ pub fn trunc_s_f32_i32(z: F32) -> Partial<I32> {
 pub fn trunc_s_f32_i64(z: F32) -> Partial<I64> {
     if z.is_finite() {
         let z = z.trunc();
-        if (::std::i64::MIN as F32 <= z) && (z <= ::std::i64::MAX as F32) {
+        if (F32_MIN_I64_INCLUSIVE <= z) && (z < F32_MAX_I64_EXCLUSIVE) {
             return Partial::Val(z as S64 as I64);
         }
     }
@@ -338,7 +356,7 @@ pub fn trunc_s_f32_i64(z: F32) -> Partial<I64> {
 pub fn trunc_s_f64_i32(z: F64) -> Partial<I32> {
     if z.is_finite() {
         let z = z.trunc();
-        if (::std::i32::MIN as F64 <= z) && (z <= ::std::i32::MAX as F64) {
+        if (F64_MIN_I32_INCLUSIVE <= z) && (z < F64_MAX_I32_EXCLUSIVE){
             return Partial::Val(z as S32 as I32);
         }
     }
@@ -348,7 +366,7 @@ pub fn trunc_s_f64_i32(z: F64) -> Partial<I32> {
 pub fn trunc_s_f64_i64(z: F64) -> Partial<I64> {
     if z.is_finite() {
         let z = z.trunc();
-        if (::std::i64::MIN as F64 <= z) && (z <= ::std::i64::MAX as F64) {
+        if (F64_MIN_I64_INCLUSIVE <= z) && (z < F64_MAX_I64_EXCLUSIVE) {
             return Partial::Val(z as S64 as I64);
         }
     }
