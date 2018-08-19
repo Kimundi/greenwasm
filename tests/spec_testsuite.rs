@@ -125,6 +125,65 @@ fn val_greenwasm2wabt(v: Val) -> Value {
         Val::F64(v) => Value::F64(v),
     }
 }
+trait NanPayload {
+    fn payload(&self) -> u64;
+}
+impl NanPayload for f32 {
+    fn payload(&self) -> u64 {
+        let bits: u32 = self.to_bits();
+        let mask: u32 = (1u32 << 23) - 1;
+        let p = bits & mask;
+        p as u64
+    }
+}
+impl NanPayload for f64 {
+    fn payload(&self) -> u64 {
+        let bits: u64 = self.to_bits();
+        let mask: u64 = (1u64 << 52) - 1;
+        let p = bits & mask;
+        p
+    }
+}
+struct NanCompare<'a>(&'a [Value]);
+impl<'a> ::std::cmp::PartialEq for NanCompare<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.0.len() != other.0.len() {
+            return false;
+        }
+        self.0.iter().zip(other.0.iter()).all(|pair| {
+            match pair {
+                (Value::I32(l), Value::I32(r)) => l == r,
+                (Value::I64(l), Value::I64(r)) => l == r,
+                (Value::F32(l), Value::F32(r)) if l.is_nan() && r.is_nan() => {
+                    l.payload() == r.payload()
+                },
+                (Value::F64(l), Value::F64(r)) if l.is_nan() && r.is_nan() => {
+                    l.payload() == r.payload()
+                },
+                (Value::F32(l), Value::F32(r)) => l == r,
+                (Value::F64(l), Value::F64(r)) => l == r,
+                _ => false,
+            }
+        })
+    }
+}
+impl<'a> ::std::fmt::Debug for NanCompare<'a> {
+    fn fmt(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        formatter.debug_list().entries(self.0.iter().map(|e| {
+            match e {
+                Value::F32(v) if v.is_nan() => {
+                    let p = v.payload();
+                    format!("F32(NaN:0x{:x})", p)
+                }
+                Value::F64(v) if v.is_nan() => {
+                    let p = v.payload();
+                    format!("F64(NaN:0x{:x})", p)
+                }
+                _ => format!("{:?}", e)
+            }
+        })).finish()
+    }
+}
 
 impl CommandDispatch for StoreCtrl {
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
@@ -211,7 +270,7 @@ trait CommandDispatch {
                 vec![self.action_get(module, field)]
             }
         };
-        assert_eq!(expected, results);
+        assert_eq!(NanCompare(&expected), NanCompare(&results));
     }
     fn assert_trap(&mut self, action: Action) {
         match action {
