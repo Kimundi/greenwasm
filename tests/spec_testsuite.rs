@@ -142,6 +142,13 @@ impl CommandDispatch for StoreCtrl {
 
         self.add_module(name, moduleaddr);
     }
+    fn assert_malformed(&mut self, bytes: Vec<u8>) {
+        let test = || {
+            let (module, _) = parse_binary_format(&bytes).map_err(|_| "parsing failed")?;
+            validate_module(module).map_err(|_| "validation failed")
+        };
+        assert!(test().is_err());
+    }
 
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> Option<Vec<Value>> {
         let moduleaddr = self.get_module(module);
@@ -218,6 +225,7 @@ trait CommandDispatch {
             }
         }
     }
+    fn assert_malformed(&mut self, bytes: Vec<u8>);
 }
 fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
     use wabt::script::CommandKind::*;
@@ -252,8 +260,7 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
             module,
             message,
         } => {
-            let bytes = module.into_vec();
-            unimplemented!("AssertMalformed");
+            c.assert_malformed(module.into_vec());
         }
         AssertUninstantiable {
             module,
