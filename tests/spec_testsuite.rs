@@ -88,7 +88,7 @@ impl StoreCtrl {
         rx.recv().expect("new_frame() closure terminated before producing result")
     }
 
-    fn action<T: Send + 'static, F: Fn(&mut StSt) -> T + Send + 'static>(&self, f: F) -> T {
+    fn frame<T: Send + 'static, F: Fn(&mut StSt) -> T + Send + 'static>(&self, f: F) -> T {
         let (tx, rx) = channel();
         self.tx.send(Box::new(move |stst: &mut Option<StSt>| {
             let stst = stst.as_mut().unwrap();
@@ -128,6 +128,12 @@ fn val_greenwasm2wabt(v: Val) -> Value {
 }
 trait NanPayload {
     fn payload(&self) -> u64;
+    fn signif() -> u32;
+    fn infinite() -> Self;
+    fn arithmetic_nan(payload: u64) -> Self;
+    fn canonical_nan() -> Self;
+    fn is_arithmetic_nan(&self) -> bool;
+    fn is_canonical_nan(&self) -> bool;
 }
 impl NanPayload for f32 {
     fn payload(&self) -> u64 {
@@ -135,6 +141,29 @@ impl NanPayload for f32 {
         let mask: u32 = (1u32 << 23) - 1;
         let p = bits & mask;
         p as u64
+    }
+    fn signif() -> u32 { 23 }
+    fn infinite() -> Self { 1.0 / 0.0 }
+    fn arithmetic_nan(payload: u64) -> Self {
+        let bits: u32 = Self::infinite().to_bits();
+        let mask: u32 = (1u32 << Self::signif()) - 1;
+        let bits = bits | (mask & (payload as u32));
+        Self::from_bits(bits)
+    }
+    fn canonical_nan() -> Self {
+        Self::arithmetic_nan(1u64 << (Self::signif() - 1))
+    }
+    fn is_arithmetic_nan(&self) -> bool {
+        if !self.is_nan() {
+            return false;
+        }
+        !self.is_canonical_nan()
+    }
+    fn is_canonical_nan(&self) -> bool {
+        if !self.is_nan() {
+            return false;
+        }
+        self.abs().to_bits() == Self::canonical_nan().to_bits()
     }
 }
 impl NanPayload for f64 {
@@ -144,7 +173,31 @@ impl NanPayload for f64 {
         let p = bits & mask;
         p
     }
+    fn signif() -> u32 { 52 }
+    fn infinite() -> Self { 1.0 / 0.0 }
+    fn arithmetic_nan(payload: u64) -> Self {
+        let bits: u64 = Self::infinite().to_bits();
+        let mask: u64 = (1u64 << Self::signif()) - 1;
+        let bits = bits | (mask & payload);
+        Self::from_bits(bits)
+    }
+    fn canonical_nan() -> Self {
+        Self::arithmetic_nan(1u64 << (Self::signif() - 1))
+    }
+    fn is_arithmetic_nan(&self) -> bool {
+        if !self.is_nan() {
+            return false;
+        }
+        !self.is_canonical_nan()
+    }
+    fn is_canonical_nan(&self) -> bool {
+        if !self.is_nan() {
+            return false;
+        }
+        self.abs().to_bits() == Self::canonical_nan().to_bits()
+    }
 }
+
 struct NanCompare<'a>(&'a [Value]);
 impl<'a> ::std::cmp::PartialEq for NanCompare<'a> {
     fn eq(&self, other: &Self) -> bool {
@@ -218,7 +271,7 @@ impl CommandDispatch for StoreCtrl {
 
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult {
         let moduleaddr = self.get_module(module);
-        self.action(move |stst| {
+        self.frame(move |stst| {
             let funcaddr = (|| {
                 let module = &stst.store.modules[moduleaddr];
                 for e in &module.exports {
@@ -252,7 +305,7 @@ impl CommandDispatch for StoreCtrl {
     }
     fn action_get(&mut self, module: Option<String>, field: String) -> Value {
         let moduleaddr = self.get_module(module);
-        self.action(move |stst| {
+        self.frame(move |stst| {
             let globaladdr = (|| {
                 let module = &stst.store.modules[moduleaddr];
                 for e in &module.exports {
@@ -285,10 +338,8 @@ impl CommandDispatch for StoreCtrl {
 trait CommandDispatch {
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult;
     fn action_get(&mut self, module: Option<String>, field: String) -> Value;
-
-    fn module(&mut self, bytes: Vec<u8>, name: Option<String>);
-    fn assert_return(&mut self, action: Action, expected: Vec<Value>) {
-        let results = match action {
+    fn action(&mut self, action: Action) -> Vec<Value> {
+        match action {
             Action::Invoke { module, field, args } => {
                 if let InvokationResult::Vals(v) = self.action_invoke(module, field, args) {
                     v
@@ -299,7 +350,12 @@ trait CommandDispatch {
             Action::Get { module, field } => {
                 vec![self.action_get(module, field)]
             }
-        };
+        }
+    }
+
+    fn module(&mut self, bytes: Vec<u8>, name: Option<String>);
+    fn assert_return(&mut self, action: Action, expected: Vec<Value>) {
+        let results = self.action(action);
         assert_eq!(NanCompare(&expected), NanCompare(&results));
     }
     fn assert_trap(&mut self, action: Action) {
@@ -317,6 +373,26 @@ trait CommandDispatch {
     fn assert_malformed(&mut self, bytes: Vec<u8>);
     fn assert_invalid(&mut self, bytes: Vec<u8>);
     fn assert_exhaustion(&mut self, action: Action);
+    fn assert_return_canonical_nan(&mut self, action: Action) {
+        let results = self.action(action);
+        match *results {
+            [Value::F32(v)] if v.is_canonical_nan() => {}
+            [Value::F64(v)] if v.is_canonical_nan() => {}
+            ref x => {
+                panic!("unexpected value {:?}", NanCompare(x));
+            }
+        }
+    }
+    fn assert_return_arithmetic_nan(&mut self, action: Action) {
+        let results = self.action(action);
+        match *results {
+            [Value::F32(v)] if v.is_arithmetic_nan() => {}
+            [Value::F64(v)] if v.is_arithmetic_nan() => {}
+            ref x => {
+                panic!("unexpected value {:?}", NanCompare(x));
+            }
+        }
+    }
 }
 fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
     use wabt::script::CommandKind::*;
@@ -327,15 +403,11 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
         AssertReturn { action, expected } => {
             c.assert_return(action, expected);
         }
-        AssertReturnCanonicalNan {
-            action,
-        } => {
-            unimplemented!("AssertReturnCanonicalNan");
+        AssertReturnCanonicalNan { action } => {
+            c.assert_return_canonical_nan(action);
         }
-        AssertReturnArithmeticNan {
-            action,
-        } => {
-            unimplemented!("AssertReturnArithmeticNan");
+        AssertReturnArithmeticNan { action } => {
+            c.assert_return_arithmetic_nan(action);
         }
         AssertTrap { action, message } => {
             c.assert_trap(action);
