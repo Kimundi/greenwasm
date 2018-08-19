@@ -556,6 +556,8 @@ pub mod invocation {
 
         let res = ExecCtx::new(s, stack).invoke(funcaddr);
         if let Err(Trap) = res {
+            stack.unwind_to(0);
+            assert!(stack.is_empty());
             return Ok(Result::Trap);
         }
 
@@ -566,7 +568,6 @@ pub mod invocation {
         }
 
         assert!(stack.is_empty());
-
         Ok(Result::Vals(results))
     }
 }

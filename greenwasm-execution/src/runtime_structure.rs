@@ -230,27 +230,31 @@ pub struct Stack<'instr> {
 impl<'instr> Stack<'instr> {
     pub fn new() -> Self { Self::default() }
 
-    fn printme(&self, msg: &str) {
+    fn debug_printme(&self, msg: &str) {
         if crate::DEBUG_EXECUTION {
-            println!("{}: Stack[", msg);
-            for e in self.data.iter().rev() {
-                match e {
-                    StackElem::Val(v) => println!("  {:?}", v),
-                    StackElem::Activation(Activation { n, frame, next_instr }) => {
-                        println!("  Frame {} {:?} locals: {:?} next: {:?}", n, frame.module, frame.locals, next_instr)
-                    }
-                    StackElem::Label(Label { n, branch_target, next_instr }) => {
-                        println!("  Label {} target: {:?} next: {:?}", n, branch_target, next_instr)
-                    }
+            self.printme(msg);
+        }
+    }
+
+    pub fn printme(&self, msg: &str) {
+        println!("{}: Stack[", msg);
+        for e in self.data.iter().rev() {
+            match e {
+                StackElem::Val(v) => println!("  {:?}", v),
+                StackElem::Activation(Activation { n, frame, next_instr }) => {
+                    println!("  Frame {} {:?} locals: {:?} next: {:?}", n, frame.module, frame.locals, next_instr)
+                }
+                StackElem::Label(Label { n, branch_target, next_instr }) => {
+                    println!("  Label {} target: {:?} next: {:?}", n, branch_target, next_instr)
                 }
             }
-            println!("]\n");
         }
+        println!("]\n");
     }
 
     pub fn push_val(&mut self, val: Val) {
         self.data.push(StackElem::Val(val));
-        self.printme("push_val");
+        self.debug_printme("push_val");
     }
     pub fn push_label(&mut self, n: usize, branch_target: &'instr [Instr], next_instr: &'instr [Instr]) {
         self.label_indices.push(self.data.len());
@@ -259,7 +263,7 @@ impl<'instr> Stack<'instr> {
             branch_target,
             next_instr,
         }));
-        self.printme("push_label");
+        self.debug_printme("push_label");
     }
     pub fn push_frame(&mut self, n: usize, frame: Frame, next_instr: &'instr [Instr]) {
         self.frame_indices.push(self.data.len());
@@ -268,7 +272,7 @@ impl<'instr> Stack<'instr> {
             frame,
             next_instr,
         }));
-        self.printme("push_frame");
+        self.debug_printme("push_frame");
     }
 
     pub fn top(&self) -> Option<&StackElem> {
@@ -282,7 +286,7 @@ impl<'instr> Stack<'instr> {
         } else {
             panic!("No Frame at top of stack")
         };
-        self.printme("pop_frame");
+        self.debug_printme("pop_frame");
         r
     }
 
@@ -292,7 +296,7 @@ impl<'instr> Stack<'instr> {
         } else {
             panic!("No Val at top of stack")
         };
-        self.printme("pop_val");
+        self.debug_printme("pop_val");
         r
     }
 
@@ -303,7 +307,7 @@ impl<'instr> Stack<'instr> {
         } else {
             panic!("No Label at top of stack")
         };
-        self.printme("pop_label");
+        self.debug_printme("pop_label");
         r
     }
 
@@ -373,25 +377,21 @@ impl<'instr> Stack<'instr> {
         self.data.is_empty()
     }
 
-    pub fn len(&self) -> usize {
+    pub fn depth(&self) -> usize {
         self.data.len()
     }
 
-    pub fn snapshot(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn clear_snapshot(&mut self, snapshot: usize) {
-        self.data.truncate(snapshot);
+    pub fn unwind_to(&mut self, depth: usize) {
+        self.data.truncate(depth);
         while let Some(idx) = self.label_indices.last().cloned() {
-            if idx >= snapshot {
+            if idx >= depth {
                 self.label_indices.pop();
             } else {
                 break;
             }
         }
         while let Some(idx) = self.frame_indices.last().cloned() {
-            if idx >= snapshot {
+            if idx >= depth {
                 self.frame_indices.pop();
             } else {
                 break;

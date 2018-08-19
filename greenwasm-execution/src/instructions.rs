@@ -179,6 +179,17 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         }
     }
 
+    fn stack_cleaner<T, F: FnOnce(&mut Self) -> EResult<T>>(&mut self, f: F) -> EResult<T> {
+        let depth = self.stack.depth();
+        match f(self) {
+            Ok(x) => Ok(x),
+            Err(x) => {
+                self.stack.unwind_to(depth);
+                Err(x)
+            }
+        }
+    }
+
     pub fn evaluate_expr(&mut self, expr: &'instr Expr) -> EResult<Val> {
         if crate::DEBUG_EXECUTION { println!("eval expr..."); }
 
@@ -195,32 +206,17 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
     pub fn invoke(&mut self, a: FuncAddr) -> EResult<()> {
         if crate::DEBUG_EXECUTION { println!("invoke func..."); }
 
-        self.stack_cleaner(|s| {
-            // we need a valid next instruction for the return
-            s.ip = &[Instr::Nop];
+        // NB: we need a valid next instruction for the return
+        self.ip = &[Instr::Nop];
 
-            let _: JumpWitness = s.invokeop(a)?;
-            s.execute_instrs()?;
-
-            Ok(())
-        })?;
+        let _: JumpWitness = self.invokeop(a)?;
+        self.execute_instrs()?;
 
         if crate::DEBUG_EXECUTION { println!("invoke func DONE"); }
         Ok(())
     }
 
     // -------------------------------------------------------------------------
-
-    fn stack_cleaner<T, F: FnOnce(&mut Self) -> EResult<T>>(&mut self, f: F) -> EResult<T> {
-        let snapshot = self.stack.snapshot();
-        match f(self) {
-            Ok(x) => Ok(x),
-            Err(x) => {
-                self.stack.clear_snapshot(snapshot);
-                Err(x)
-            }
-        }
-    }
 
     #[inline(always)]
     fn constop<T: ValCast>(&mut self, v: T) -> JumpWitness {

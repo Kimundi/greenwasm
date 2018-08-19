@@ -206,6 +206,18 @@ trait CommandDispatch {
         };
         assert_eq!(expected, results);
     }
+    fn assert_trap(&mut self, action: Action) {
+        match action {
+            Action::Invoke { module, field, args } => {
+                if let Some(results) = self.action_invoke(module, field, args) {
+                    panic!("invokation did not trap, but return {:?}", results);
+                }
+            }
+            Action::Get { .. } => {
+                panic!("a global access can not trap!")
+            }
+        }
+    }
 }
 fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
     use wabt::script::CommandKind::*;
@@ -219,60 +231,57 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
         AssertReturnCanonicalNan {
             action,
         } => {
-            unimplemented!();
+            unimplemented!("AssertReturnCanonicalNan");
         }
         AssertReturnArithmeticNan {
             action,
         } => {
-            unimplemented!();
+            unimplemented!("AssertReturnArithmeticNan");
         }
-        AssertTrap {
-            action,
-            message,
-        } => {
-            unimplemented!();
+        AssertTrap { action, message } => {
+            c.assert_trap(action);
         }
         AssertInvalid {
             module,
             message,
         } => {
             let bytes = module.into_vec();
-            unimplemented!();
+            unimplemented!("AssertInvalid");
         }
         AssertMalformed {
             module,
             message,
         } => {
             let bytes = module.into_vec();
-            unimplemented!();
+            unimplemented!("AssertMalformed");
         }
         AssertUninstantiable {
             module,
             message,
         } => {
             let bytes = module.into_vec();
-            unimplemented!();
+            unimplemented!("AssertUninstantiable");
         }
         AssertExhaustion {
             action,
         } => {
-            unimplemented!();
+            unimplemented!("AssertExhaustion");
         }
         AssertUnlinkable {
             module,
             message,
         } => {
             let bytes = module.into_vec();
-            unimplemented!();
+            unimplemented!("AssertUnlinkable");
         }
         Register {
             name,
             as_name,
         } => {
-            unimplemented!();
+            unimplemented!("Register");
         }
         PerformAction(action) => {
-            unimplemented!();
+            unimplemented!("PerformAction");
         }
     }
 }
