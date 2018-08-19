@@ -196,8 +196,8 @@ pub mod allocation {
     }
     pub fn grow_table_by(tableinst: &mut TableInst,
                          n: usize) -> AResult {
+        // TODO: check if size test arithmetic is safe on 32bit archs
         if let Some(max) = tableinst.max {
-            // TODO: check if size test is 32bit arch safe
             if (max as usize) < (tableinst.elem.len() as usize + n) {
                 Err(AllocatingTableBeyondMaxLimit)?;
             }
@@ -209,12 +209,14 @@ pub mod allocation {
     }
     pub fn grow_memory_by(meminst: &mut MemInst,
                           n: usize) -> AResult {
+        // TODO: check if size test arithmetic is safe on 32bit archs
+
         let len = n * WASM_PAGE_SIZE;
-        if let Some(max) = meminst.max {
-            // TODO: check if size test is 32bit arch safe
-            if (max as usize * WASM_PAGE_SIZE) < (meminst.data.len() as usize + len) {
-                Err(AllocatingMemBeyondMaxLimit)?;
-            }
+
+        let max = meminst.max.map(|v| v as usize * WASM_PAGE_SIZE).unwrap_or(WEC_MAX_SIZE as usize);
+
+        if max < (meminst.data.len() + len) {
+            Err(AllocatingMemBeyondMaxLimit)?;
         }
 
         meminst.data.safe_append(len, || 0x00);

@@ -202,11 +202,11 @@ impl CommandDispatch for StoreCtrl {
         self.add_module(name, moduleaddr);
     }
     fn assert_malformed(&mut self, bytes: Vec<u8>) {
-        let test = || {
-            let (module, _) = parse_binary_format(&bytes).map_err(|_| "parsing failed")?;
-            validate_module(module).map_err(|_| "validation failed")
-        };
-        assert!(test().is_err());
+        assert!(parse_binary_format(&bytes).is_err(), "parsing did not fail");
+    }
+    fn assert_invalid(&mut self, bytes: Vec<u8>) {
+        let (module, _) = parse_binary_format(&bytes).unwrap();
+        assert!(validate_module(module).is_err(), "validation did not fail");
     }
 
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> Option<Vec<Value>> {
@@ -285,6 +285,7 @@ trait CommandDispatch {
         }
     }
     fn assert_malformed(&mut self, bytes: Vec<u8>);
+    fn assert_invalid(&mut self, bytes: Vec<u8>);
 }
 fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
     use wabt::script::CommandKind::*;
@@ -308,17 +309,10 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
         AssertTrap { action, message } => {
             c.assert_trap(action);
         }
-        AssertInvalid {
-            module,
-            message,
-        } => {
-            let bytes = module.into_vec();
-            unimplemented!("AssertInvalid");
+        AssertInvalid { module, message } => {
+            c.assert_invalid(module.into_vec());
         }
-        AssertMalformed {
-            module,
-            message,
-        } => {
+        AssertMalformed { module, message } => {
             c.assert_malformed(module.into_vec());
         }
         AssertUninstantiable {
@@ -375,6 +369,8 @@ fn run_tests() {
             while let Some(Command { line, kind }) = script.next().unwrap() {
                 use std::panic::catch_unwind;
                 use std::panic::AssertUnwindSafe;
+
+                println!("Line {} ...", line);
 
                 if fatal {
                     failures.push((filename.to_owned(), line, "<not attempted>".to_string()));

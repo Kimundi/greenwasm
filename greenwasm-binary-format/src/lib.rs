@@ -457,8 +457,8 @@ named!(parse_instr_event <Inp, InstrEvent>, alt!(
     | ins!(0x3D, Instr::I64Store16(m); m: parse_memarg)
     | ins!(0x3E, Instr::I64Store32(m); m: parse_memarg)
 
-    | ins!(0x3F, Instr::CurrentMemory)
-    | ins!(0x40, Instr::GrowMemory)
+    | ins!(0x3F, Instr::CurrentMemory; verify!(parse_byte, |b| b == 0))
+    | ins!(0x40, Instr::GrowMemory; verify!(parse_byte, |b| b == 0))
 
     // 5.4.5. Numeric Instructions
     | ins!(0x41, Instr::I32Const(n); n: parse_i32)
@@ -784,14 +784,19 @@ named!(parse_locals <Inp, (usize, ValType)>, do_parse!(
     >> ((n as usize, t))
 ));
 named!(parse_func <Inp, Code>, do_parse!(
-    ts: map!(verify_ref!(map!(
-            call!(parse_vec, parse_locals),
-            |tss| tss.into_iter()
-                     .flat_map(|(n, t)| ::std::iter::repeat(t).take(n))
-                     .collect()
-        ),
-        |v: &Vec<_>| v.len() <= ::structure::types::WEC_MAX_SIZE
-    ), |v: Vec<_>| v.into())
+    tss: call!(parse_vec, parse_locals)
+    >> tss: verify_ref!(
+        value!(tss),
+        |tss: &Wec<(_, _)>|
+            tss.iter().map(|x| x.0 as u64).sum::<u64>()
+            <= ::structure::types::WEC_MAX_SIZE as u64
+    )
+    >> ts: map!(
+        value!(tss),
+        |tss| tss.into_iter()
+                 .flat_map(|(n, t)| ::std::iter::repeat(t).take(n))
+                 .collect::<Vec<_>>().into()
+    )
     >> e: parse_expr
     >> (Code { locals: ts, body: e })
 ));
