@@ -533,6 +533,8 @@ pub mod invocation {
     pub fn invoke<'ast>(s: &mut Store<'ast>, stack: &mut Stack<'ast>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
 
     {
+        assert!(stack.is_empty());
+
         let funcinst = &s.funcs[funcaddr];
         let ty = funcinst.type_();
         let t1n = &ty.args;
@@ -562,6 +564,8 @@ pub mod invocation {
             let v = stack.pop_val();
             results.push(v);
         }
+
+        assert!(stack.is_empty());
 
         Ok(Result::Vals(results))
     }

@@ -194,7 +194,6 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
 
     pub fn invoke(&mut self, a: FuncAddr) -> EResult<()> {
         if crate::DEBUG_EXECUTION { println!("invoke func..."); }
-        assert!(self.stack.is_empty());
 
         self.stack_cleaner(|s| {
             // we need a valid next instruction for the return
@@ -206,7 +205,6 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
             Ok(())
         })?;
 
-        assert!(self.stack.is_empty());
         if crate::DEBUG_EXECUTION { println!("invoke func DONE"); }
         Ok(())
     }

@@ -373,6 +373,10 @@ impl<'instr> Stack<'instr> {
         self.data.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
     pub fn snapshot(&self) -> usize {
         self.data.len()
     }
@@ -425,6 +429,12 @@ pub enum StackElem<'instr> {
     Val(Val),
     Label(Label<'instr>),
     Activation(Activation<'instr>),
+}
+
+impl<'instr> StackElem<'instr> {
+    pub fn is_val(&self) -> bool {
+        if let StackElem::Val(_) = self { true } else { false }
+    }
 }
 
 #[derive(PartialEq)]
