@@ -57,7 +57,7 @@ fn store_thread_frame<'ast>(stst: StSt<'ast>) -> FrameWitness {
 
 struct StoreCtrl {
     tx: Sender<CmdFn>,
-    handle: thread::JoinHandle<()>,
+    _handle: thread::JoinHandle<()>,
     modules: HashMap<String, ModuleAddr>,
     last_module: Option<ModuleAddr>,
 }
@@ -66,13 +66,14 @@ impl StoreCtrl {
     fn new() -> Self {
         let (tx, rx) = channel();
 
-        let handle = thread::spawn(|| {
-            store_thread_frame(StSt { store: Store::new(), stack: Stack::new(), recv: rx});
+        let _handle = thread::spawn(|| {
+            let _: FrameWitness = store_thread_frame(
+                StSt { store: Store::new(), stack: Stack::new(), recv: rx});
         });
 
         StoreCtrl {
             tx,
-            handle,
+            _handle,
             modules: HashMap::new(),
             last_module: None,
         }
