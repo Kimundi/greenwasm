@@ -227,7 +227,21 @@ pub struct Stack<'instr> {
     label_indices: Vec<usize>,
 }
 
+#[derive(Debug)]
+pub struct StackExhaustion;
+pub type StackResult = ::std::result::Result<(), StackExhaustion>;
+
 impl<'instr> Stack<'instr> {
+    const DEPTH_LIMIT: usize = 1000;
+
+    fn depth_check(&self) -> StackResult {
+        if self.data.len() >= Self::DEPTH_LIMIT {
+            Err(StackExhaustion)
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn new() -> Self { Self::default() }
 
     fn debug_printme(&self, msg: &str) {
@@ -252,11 +266,14 @@ impl<'instr> Stack<'instr> {
         println!("]\n");
     }
 
-    pub fn push_val(&mut self, val: Val) {
+    pub fn push_val(&mut self, val: Val) -> StackResult {
+        self.depth_check()?;
         self.data.push(StackElem::Val(val));
         self.debug_printme("push_val");
+        Ok(())
     }
-    pub fn push_label(&mut self, n: usize, branch_target: &'instr [Instr], next_instr: &'instr [Instr]) {
+    pub fn push_label(&mut self, n: usize, branch_target: &'instr [Instr], next_instr: &'instr [Instr]) -> StackResult {
+        self.depth_check()?;
         self.label_indices.push(self.data.len());
         self.data.push(StackElem::Label(Label {
             n,
@@ -264,8 +281,10 @@ impl<'instr> Stack<'instr> {
             next_instr,
         }));
         self.debug_printme("push_label");
+        Ok(())
     }
-    pub fn push_frame(&mut self, n: usize, frame: Frame, next_instr: &'instr [Instr]) {
+    pub fn push_frame(&mut self, n: usize, frame: Frame, next_instr: &'instr [Instr]) -> StackResult {
+        self.depth_check()?;
         self.frame_indices.push(self.data.len());
         self.data.push(StackElem::Activation(Activation {
             n,
@@ -273,6 +292,7 @@ impl<'instr> Stack<'instr> {
             next_instr,
         }));
         self.debug_printme("push_frame");
+        Ok(())
     }
 
     pub fn top(&self) -> Option<&StackElem> {

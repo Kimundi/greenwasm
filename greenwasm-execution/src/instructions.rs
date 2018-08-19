@@ -7,8 +7,15 @@ use crate::numerics::*;
 use crate::modules::*;
 
 #[derive(Debug)]
-pub struct Trap;
-type EResult<T> = ::std::result::Result<T, Trap>;
+pub enum ExecutionError {
+    Trap,
+    StackExhaustion,
+}
+use self::ExecutionError::Trap;
+impl From<crate::runtime_structure::StackExhaustion> for ExecutionError {
+    fn from(_: crate::runtime_structure::StackExhaustion) -> Self { ExecutionError::StackExhaustion }
+}
+type EResult<T> = ::std::result::Result<T, ExecutionError>;
 
 trait ValCast {
     fn assert_val_type(val: Val) -> Self;
@@ -219,11 +226,11 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
     // -------------------------------------------------------------------------
 
     #[inline(always)]
-    fn constop<T: ValCast>(&mut self, v: T) -> JumpWitness {
+    fn constop<T: ValCast>(&mut self, v: T) -> EResult<JumpWitness> {
         let stack = &mut *self.stack;
 
-        stack.push_val(v.to_val());
-        self.jump_next()
+        stack.push_val(v.to_val())?;
+        Ok(self.jump_next())
     }
 
     #[inline(always)]
@@ -233,7 +240,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
         let c = unop(c1);
-        stack.push_val(c.to_val());
+        stack.push_val(c.to_val()).expect("stack can not grow here");
         self.jump_next()
     }
 
@@ -248,7 +255,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         let c1 = T::assert_val_type(val1);
 
         let c = binop(c1, c2);
-        stack.push_val(c.to_val());
+        stack.push_val(c.to_val()).expect("stack can not grow here");
         self.jump_next()
     }
 
@@ -265,7 +272,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         let c = binop(c1, c2);
 
         if let Partial::Val(c) = c {
-            stack.push_val(c.to_val());
+            stack.push_val(c.to_val()).expect("stack can not grow here");
             Ok(self.jump_next())
         } else {
             Err(Trap)
@@ -279,7 +286,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
         let c = testop(c1);
-        stack.push_val(c.to_val());
+        stack.push_val(c.to_val()).expect("stack can not grow here");
         self.jump_next()
     }
 
@@ -294,7 +301,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         let c1 = T::assert_val_type(val1);
 
         let c = relop(c1, c2);
-        stack.push_val(c.to_val());
+        stack.push_val(c.to_val()).expect("stack can not grow here");
         self.jump_next()
     }
 
@@ -305,7 +312,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         let val = stack.pop_val();
         let c1 = T::assert_val_type(val);
         let c = cvtop(c1);
-        stack.push_val(c.to_val());
+        stack.push_val(c.to_val()).expect("stack can not grow here");
         self.jump_next()
     }
 
@@ -318,7 +325,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         let c = cvtop(c1);
 
         if let Partial::Val(c) = c {
-            stack.push_val(c.to_val());
+            stack.push_val(c.to_val()).expect("stack can not grow here");
             Ok(self.jump_next())
         } else {
             Err(Trap)
@@ -349,7 +356,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         let v = M::from_mem(bs);
         let c = M::extend(v);
 
-        stack.push_val(c.to_val());
+        stack.push_val(c.to_val()).expect("stack can not grow here");
 
         Ok(self.jump_next())
     }
@@ -384,11 +391,11 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
     fn enter_block(&mut self,
                    jump_target: &'instr [Instr],
                    label_n: usize,
-                   label_cont: &'instr [Instr]) -> JumpWitness {
+                   label_cont: &'instr [Instr]) -> EResult<JumpWitness> {
         let stack = &mut *self.stack;
 
-        stack.push_label(label_n, label_cont, &self.ip[1..]);
-        self.jump(jump_target)
+        stack.push_label(label_n, label_cont, &self.ip[1..])?;
+        Ok(self.jump(jump_target))
     }
 
     #[inline(always)]
@@ -410,7 +417,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
             stack.pop_label();
         }
         if let Some(val) = vals {
-            stack.push_val(val);
+            stack.push_val(val).expect("stack can not grow here");
         }
         self.jump(branch_target)
     }
@@ -445,10 +452,10 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     });
                 }
                 let frame = Frame { module: *module, locals: local_vals.into() };
-                stack.push_frame(m, frame, &self.ip[1..]);
+                stack.push_frame(m, frame, &self.ip[1..])?;
 
                 // NB: Next instructions are stored in the frame below the label
-                stack.push_label(m, &[], &[]);
+                stack.push_label(m, &[], &[])?;
 
                 self.jump(instrs)
             }
@@ -493,7 +500,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     }
                     let next_instr = stack.pop_label().next_instr;
                     while let Some(val) = vals.pop() {
-                        stack.push_val(val);
+                        stack.push_val(val).expect("stack can not grow here");
                     }
 
                     self.jump(next_instr)
@@ -511,7 +518,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     }
                     let frame = stack.pop_frame();
                     if let Some(val) = vals {
-                        stack.push_val(val);
+                        stack.push_val(val).expect("stack can not grow here");
                     }
 
                     self.jump(frame.next_instr)
@@ -534,10 +541,10 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
 
             let _: JumpWitness = instrumented_instrs! { match *instr;
                 // consts
-                I32Const(v) => self.constop(v),
-                I64Const(v) => self.constop(v),
-                F32Const(v) => self.constop(v),
-                F64Const(v) => self.constop(v),
+                I32Const(v) => self.constop(v)?,
+                I64Const(v) => self.constop(v)?,
+                F32Const(v) => self.constop(v)?,
+                F64Const(v) => self.constop(v)?,
 
                 // unops
                 I32Clz => self.unop(I32::iclz),
@@ -747,9 +754,9 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     assert!(val2.ty() == val1.ty());
 
                     if c != 0 {
-                        stack.push_val(val1);
+                        stack.push_val(val1).expect("stack can not grow here");
                     } else {
-                        stack.push_val(val2);
+                        stack.push_val(val2).expect("stack can not grow here");
                     }
                     self.jump_next()
                 },
@@ -759,7 +766,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     let stack = &mut *self.stack;
 
                     let val = stack.current_frame().locals[x];
-                    stack.push_val(val);
+                    stack.push_val(val)?;
                     self.jump_next()
                 },
                 SetLocal(x) => {
@@ -784,7 +791,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     let a = store.modules[a].globaladdrs[x];
                     let glob = &store.globals[a];
                     let val = glob.value;
-                    stack.push_val(val);
+                    stack.push_val(val)?;
                     self.jump_next()
                 },
                 SetGlobal(x) => {
@@ -841,7 +848,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     let a = store.modules[a].memaddrs[MemIdx(0)];
                     let mem = &store.mems[a];
                     let sz = mem.data.len() / WASM_PAGE_SIZE;
-                    stack.push_val(Val::I32(sz as I32));
+                    stack.push_val(Val::I32(sz as I32))?;
                     self.jump_next()
                 },
                 GrowMemory => {
@@ -860,13 +867,13 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     // Either try alloc:
                     let result = allocation::grow_memory_by(mem, n as usize);
                     if result.is_ok() {
-                        stack.push_val(Val::I32(sz as I32));
+                        stack.push_val(Val::I32(sz as I32)).expect("stack can not grow here");
                     } else {
-                        stack.push_val(Val::I32(-1i32 as I32));
+                        stack.push_val(Val::I32(-1i32 as I32)).expect("stack can not grow here");
                     }
 
                     // Or don't:
-                    // stack.push_val(Val::I32(-1i32 as I32));
+                    // stack.push_val(Val::I32(-1i32 as I32)).expect("stack can not grow here");
 
                     self.jump_next()
                 },
@@ -883,14 +890,14 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     let n = resultt.len();
                     let cont = &self.ip[1..];
 
-                    self.enter_block(&jump_target, n, cont)
+                    self.enter_block(&jump_target, n, cont)?
                 },
                 Loop(_, ref jump_target) => {
                     // TODO: Is it correct that result type is ignored here?
                     let n = 0;
                     let cont = self.ip;
 
-                    self.enter_block(&jump_target, n, cont)
+                    self.enter_block(&jump_target, n, cont)?
                 },
                 IfElse(resultt, ref jump_target_if, ref jump_target_else) => {
                     let stack = &mut *self.stack;
@@ -899,9 +906,9 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     let n = resultt.len();
                     let cont = &self.ip[1..];
                     if c != 0 {
-                        self.enter_block(&jump_target_if, n, cont)
+                        self.enter_block(&jump_target_if, n, cont)?
                     } else {
-                        self.enter_block(&jump_target_else, n, cont)
+                        self.enter_block(&jump_target_else, n, cont)?
                     }
                 },
                 Br(l) => {
@@ -953,7 +960,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                         }
                     }
                     if let Some(val) = vals {
-                        stack.push_val(val);
+                        stack.push_val(val).expect("stack can not grow here");
                     }
                     self.jump(next_instr)
                 },

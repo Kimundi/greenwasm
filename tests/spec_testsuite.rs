@@ -186,6 +186,12 @@ impl<'a> ::std::fmt::Debug for NanCompare<'a> {
     }
 }
 
+enum InvokationResult {
+    Vals(Vec<Value>),
+    Trap,
+    StackExhaustion,
+}
+
 impl CommandDispatch for StoreCtrl {
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
         let moduleaddr = self.new_frame(move |stst: StSt, tx| {
@@ -210,7 +216,7 @@ impl CommandDispatch for StoreCtrl {
         assert!(validate_module(module).is_err(), "validation did not fail");
     }
 
-    fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> Option<Vec<Value>> {
+    fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult {
         let moduleaddr = self.get_module(module);
         self.action(move |stst| {
             let funcaddr = (|| {
@@ -227,14 +233,20 @@ impl CommandDispatch for StoreCtrl {
 
             funcaddr.and_then(|funcaddr| {
                 let args = args.iter().cloned().map(val_wabt2greenwasm).collect::<Vec<_>>();
-                invoke(&mut stst.store, &mut stst.stack, funcaddr, &args).map(|r| {
-                    match r {
-                        IResult::Vals(v) => {
-                            Some(v.into_iter().map(val_greenwasm2wabt).collect())
-                        }
-                        IResult::Trap => None
+                match invoke(&mut stst.store, &mut stst.stack, funcaddr, &args) {
+                    Ok(IResult::Vals(v)) => {
+                        Ok(InvokationResult::Vals(v.into_iter().map(val_greenwasm2wabt).collect()))
                     }
-                }).map_err(|_| "Invokation error")
+                    Ok(IResult::Trap) => {
+                        Ok(InvokationResult::Trap)
+                    }
+                    Err(InvokeError::StackExhaustion) => {
+                        Ok(InvokationResult::StackExhaustion)
+                    }
+                    Err(_) => {
+                        Err("Invokation error")
+                    }
+                }
             })
         }).unwrap()
     }
@@ -255,17 +267,34 @@ impl CommandDispatch for StoreCtrl {
             globaladdr.map(|globaladdr| val_greenwasm2wabt(stst.store.globals[globaladdr].value))
         }).expect("No matching export found")
     }
+    fn assert_exhaustion(&mut self, action: Action) {
+        match action {
+            Action::Invoke { module, field, args } => {
+                if let InvokationResult::StackExhaustion = self.action_invoke(module, field, args) {
+                } else {
+                    panic!("invokation should exhaust the stack, but did not");
+                }
+            }
+            Action::Get { .. } => {
+                panic!("a global access can not exhaust the stack!")
+            }
+        }
+    }
 }
 
 trait CommandDispatch {
-    fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> Option<Vec<Value>>;
+    fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult;
     fn action_get(&mut self, module: Option<String>, field: String) -> Value;
 
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>);
     fn assert_return(&mut self, action: Action, expected: Vec<Value>) {
         let results = match action {
             Action::Invoke { module, field, args } => {
-                self.action_invoke(module, field, args).expect("invokation returned Trap")
+                if let InvokationResult::Vals(v) = self.action_invoke(module, field, args) {
+                    v
+                } else {
+                    panic!("invokation returned Trap or exhausted the stack");
+                }
             }
             Action::Get { module, field } => {
                 vec![self.action_get(module, field)]
@@ -276,7 +305,7 @@ trait CommandDispatch {
     fn assert_trap(&mut self, action: Action) {
         match action {
             Action::Invoke { module, field, args } => {
-                if let Some(results) = self.action_invoke(module, field, args) {
+                if let InvokationResult::Vals(results) = self.action_invoke(module, field, args) {
                     panic!("invokation did not trap, but return {:?}", results);
                 }
             }
@@ -287,6 +316,7 @@ trait CommandDispatch {
     }
     fn assert_malformed(&mut self, bytes: Vec<u8>);
     fn assert_invalid(&mut self, bytes: Vec<u8>);
+    fn assert_exhaustion(&mut self, action: Action);
 }
 fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
     use wabt::script::CommandKind::*;
@@ -326,7 +356,7 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
         AssertExhaustion {
             action,
         } => {
-            unimplemented!("AssertExhaustion");
+            c.assert_exhaustion(action);
         }
         AssertUnlinkable {
             module,

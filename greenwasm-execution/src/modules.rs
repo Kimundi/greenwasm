@@ -328,10 +328,19 @@ pub mod instantiation {
         ElemIdxOutOfBounds,
         DataIdxOutOfBounds,
         Trap,
+        StackExhaustion,
     }
     use self::InstantiationError::*;
-    impl From<crate::instructions::Trap> for InstantiationError {
-        fn from(_: crate::instructions::Trap) -> Self { InstantiationError::Trap }
+    impl From<crate::instructions::ExecutionError> for InstantiationError {
+        fn from(v: crate::instructions::ExecutionError) -> Self {
+            match v {
+                crate::instructions::ExecutionError::Trap => InstantiationError::Trap,
+                crate::instructions::ExecutionError::StackExhaustion => InstantiationError::StackExhaustion,
+            }
+        }
+    }
+    impl From<crate::runtime_structure::StackExhaustion> for InstantiationError {
+        fn from(_: crate::runtime_structure::StackExhaustion) -> Self { InstantiationError::StackExhaustion }
     }
 
     pub type IResult = std::result::Result<ModuleAddr, InstantiationError>;
@@ -341,6 +350,8 @@ pub mod instantiation {
                                     externvals: &[ExternVal]) -> IResult
 
     {
+        // TODO: Ensure store and stack is in good state after an error
+
         let mut ctx = ExecCtx::new(s, stack);
 
         let n = externvals.len();
@@ -409,7 +420,7 @@ pub mod instantiation {
 
             // TODO: What value to pick for n here?
             // assuming n = 1 due to needing the result
-            ctx.stack.push_frame(1, f_im, &[]);
+            ctx.stack.push_frame(1, f_im, &[])?;
 
             if crate::DEBUG_EXECUTION { println!("handle globals"); }
             for globali in &module.globals {
@@ -440,7 +451,7 @@ pub mod instantiation {
 
         // TODO: What value to pick for n here?
         // assuming n = 1 due to needing the result
-        ctx.stack.push_frame(1, f, &[]);
+        ctx.stack.push_frame(1, f, &[])?;
 
         if crate::DEBUG_EXECUTION { println!("handle elems"); }
         let mut eoi_tabeladdri = vec![];
@@ -527,8 +538,12 @@ pub mod invocation {
     pub enum InvokeError {
         MismatchedArgumentCount,
         MismatchedArgumentType,
+        StackExhaustion,
     }
     use self::InvokeError::*;
+    impl From<crate::runtime_structure::StackExhaustion> for InvokeError {
+        fn from(_: crate::runtime_structure::StackExhaustion) -> Self { InvokeError::StackExhaustion }
+    }
 
     pub type CResult = ::std::result::Result<Result, InvokeError>;
 
@@ -553,23 +568,34 @@ pub mod invocation {
         }
 
         for val in vals {
-            stack.push_val(*val);
+            stack.push_val(*val)?;
         }
 
         let res = ExecCtx::new(s, stack).invoke(funcaddr);
-        if let Err(Trap) = res {
-            stack.unwind_to(0);
-            assert!(stack.is_empty());
-            return Ok(Result::Trap);
-        }
 
-        let mut results = vec![];
-        for _ in 0..m {
-            let v = stack.pop_val();
-            results.push(v);
-        }
+        match res {
+            Err(ExecutionError::Trap) => {
+                stack.unwind_to(0);
 
-        assert!(stack.is_empty());
-        Ok(Result::Vals(results))
+                assert!(stack.is_empty());
+                Ok(Result::Trap)
+            }
+            Err(ExecutionError::StackExhaustion) => {
+                stack.unwind_to(0);
+
+                assert!(stack.is_empty());
+                Err(InvokeError::StackExhaustion)
+            }
+            Ok(_) => {
+                let mut results = vec![];
+                for _ in 0..m {
+                    let v = stack.pop_val();
+                    results.push(v);
+                }
+
+                assert!(stack.is_empty());
+                Ok(Result::Vals(results))
+            }
+        }
     }
 }
