@@ -370,7 +370,7 @@ fn run_tests() {
                 use std::panic::catch_unwind;
                 use std::panic::AssertUnwindSafe;
 
-                println!("Line {} ...", line);
+                // println!("Line {} ...", line);
 
                 if fatal {
                     failures.push((filename.to_owned(), line, "<not attempted>".to_string()));

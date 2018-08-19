@@ -804,7 +804,7 @@ pub mod validate {
                 let resulttype = c.labels(labelidx)?;
 
                 let n = labelidx.0;
-                if ic.ctrls.size() < n {
+                if !(n < ic.ctrls.size()) {
                     ic.error()?;
                 }
                 let tmp = ic.ctrls.at(n).label_types.to_owned(); // TODO: Bad copy
@@ -818,7 +818,7 @@ pub mod validate {
                 let resulttype = c.labels(labelidx)?;
 
                 let n = labelidx.0;
-                if ic.ctrls.size() < n {
+                if !(n < ic.ctrls.size()) {
                     ic.error()?;
                 }
                 ic.pop_opd_expect(ValTypeOrUnknown::ValType(I32))?;
@@ -835,11 +835,11 @@ pub mod validate {
                 let ns = labelindices;
                 let m = labelidx_n.0;
 
-                if ic.ctrls.size() < m {
+                if !(m < ic.ctrls.size()) {
                     ic.error()?;
                 }
                 for &LabelIdx(n) in ns {
-                    if ic.ctrls.size() < n
+                    if !(n < ic.ctrls.size())
                     || ic.ctrls.at(n).label_types != ic.ctrls.at(m).label_types
                     {
                         ic.error()?;
