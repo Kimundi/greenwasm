@@ -182,16 +182,10 @@ impl NanPayload for f32 {
         Self::arithmetic_nan(1u64 << (Self::signif() - 1))
     }
     fn is_arithmetic_nan(&self) -> bool {
-        if !self.is_nan() {
-            return false;
-        }
-        !self.is_canonical_nan()
+        self.is_nan()
     }
     fn is_canonical_nan(&self) -> bool {
-        if !self.is_nan() {
-            return false;
-        }
-        self.abs().to_bits() == Self::canonical_nan().to_bits()
+        self.is_nan() && self.abs().to_bits() == Self::canonical_nan().to_bits()
     }
 }
 impl NanPayload for f64 {
@@ -213,16 +207,10 @@ impl NanPayload for f64 {
         Self::arithmetic_nan(1u64 << (Self::signif() - 1))
     }
     fn is_arithmetic_nan(&self) -> bool {
-        if !self.is_nan() {
-            return false;
-        }
-        !self.is_canonical_nan()
+        self.is_nan()
     }
     fn is_canonical_nan(&self) -> bool {
-        if !self.is_nan() {
-            return false;
-        }
-        self.abs().to_bits() == Self::canonical_nan().to_bits()
+        self.is_nan() && self.abs().to_bits() == Self::canonical_nan().to_bits()
     }
 }
 
