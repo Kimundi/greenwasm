@@ -177,17 +177,31 @@ define_trait! {
     }
 }
 
-trait Copysign {
+trait FloatIntrinsics {
     fn copysign(z1: Self, z2: Self) -> Self;
+    fn rint(z: Self) -> Self;
+    fn nearbyint(z: Self) -> Self;
 }
-impl Copysign for f32 {
+impl FloatIntrinsics for f32 {
     fn copysign(z1: Self, z2: Self) -> Self {
         unsafe { std::intrinsics::copysignf32(z1, z2) }
     }
+    fn rint(z: Self) -> Self {
+        unsafe { std::intrinsics::rintf32(z) }
+    }
+    fn nearbyint(z: Self) -> Self {
+        unsafe { std::intrinsics::nearbyintf32(z) }
+    }
 }
-impl Copysign for f64 {
+impl FloatIntrinsics for f64 {
     fn copysign(z1: Self, z2: Self) -> Self {
         unsafe { std::intrinsics::copysignf64(z1, z2) }
+    }
+    fn rint(z: Self) -> Self {
+        unsafe { std::intrinsics::rintf64(z) }
+    }
+    fn nearbyint(z: Self) -> Self {
+        unsafe { std::intrinsics::nearbyintf64(z) }
     }
 }
 
@@ -211,13 +225,17 @@ define_trait! {
         z1 / z2
     }
     fn fmin(z1: Self, z2: Self) -> Self {
+        if z1.is_nan() {return z1;}
+        if z2.is_nan() {return z2;}
         z1.min(z2)
     }
     fn fmax(z1: Self, z2: Self) -> Self {
+        if z1.is_nan() {return z1;}
+        if z2.is_nan() {return z2;}
         z1.max(z2)
     }
     fn fcopysign(z1: Self, z2: Self) -> Self {
-        Copysign::copysign(z1, z2)
+        FloatIntrinsics::copysign(z1, z2)
     }
     fn fabs(z: Self) -> Self {
         z.abs()
@@ -238,7 +256,7 @@ define_trait! {
         z.trunc()
     }
     fn fnearest(z: Self) -> Self {
-        z.round() // TODO: Depends on rounding modes
+        FloatIntrinsics::nearbyint(z)
     }
     fn feq(z1: Self, z2: Self) -> I32 {
         I32::bool(z1 == z2)

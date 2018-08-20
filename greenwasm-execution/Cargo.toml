@@ -14,3 +14,4 @@ workspace = ".."
 [dependencies]
 structure = { package = "greenwasm-structure", path = "../greenwasm-structure" }
 validation = { package = "greenwasm-validation", path = "../greenwasm-validation" }
+frounding = "0.0.4"

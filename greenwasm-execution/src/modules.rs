@@ -363,8 +363,10 @@ pub mod instantiation {
     fn instantiate_module_<'ast>(s: &mut Store<'ast>, stack: &mut Stack<'ast>,
                                  module: &'ast ValidatedModule,
                                  externvals: &[ExternVal]) -> IResult
-
     {
+        let mut rounding = ::frounding::RoundingState::new();
+        rounding.to_nearest();
+
         assert!(stack.is_empty());
 
         // TODO: Ensure store and stack is in good state after an error
@@ -564,9 +566,14 @@ pub mod invocation {
 
     pub type CResult = ::std::result::Result<Result, InvokeError>;
 
-    pub fn invoke<'ast>(s: &mut Store<'ast>, stack: &mut Stack<'ast>, funcaddr: FuncAddr, vals: &[Val]) -> CResult
-
+    pub fn invoke<'ast>(s: &mut Store<'ast>,
+                        stack: &mut Stack<'ast>,
+                        funcaddr: FuncAddr,
+                        vals: &[Val]) -> CResult
     {
+        let mut rounding = ::frounding::RoundingState::new();
+        rounding.to_nearest();
+
         assert!(stack.is_empty());
 
         let funcinst = &s.funcs[funcaddr];
