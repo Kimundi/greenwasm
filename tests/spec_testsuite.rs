@@ -483,6 +483,10 @@ impl CommandDispatch for StoreCtrl {
             }
         }
     }
+    fn register(&mut self, name: Option<String>, as_name: String) {
+        let moduleaddr = name.map(|n| self.modules[&n]).unwrap_or_else(|| self.last_module.unwrap());
+        self.add_module(Some(as_name), moduleaddr);
+    }
 }
 
 trait CommandDispatch {
@@ -551,6 +555,7 @@ trait CommandDispatch {
             }
         }
     }
+    fn register(&mut self, name: Option<String>, as_name: String);
 }
 fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
     use wabt::script::CommandKind::*;
@@ -583,19 +588,14 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
             let bytes = module.into_vec();
             unimplemented!("AssertUninstantiable");
         }
-        AssertExhaustion {
-            action,
-        } => {
+        AssertExhaustion { action } => {
             c.assert_exhaustion(action);
         }
         AssertUnlinkable { module, message } => {
             c.assert_unlinkable(module.into_vec());
         }
-        Register {
-            name,
-            as_name,
-        } => {
-            unimplemented!("Register");
+        Register { name, as_name } => {
+            c.register(name, as_name);
         }
         PerformAction(action) => {
             unimplemented!("PerformAction");
