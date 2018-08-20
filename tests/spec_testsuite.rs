@@ -71,12 +71,38 @@ impl StoreCtrl {
                 StSt { store: Store::new(), stack: Stack::new(), recv: rx});
         });
 
-        StoreCtrl {
+        let mut s = StoreCtrl {
             tx,
             _handle,
             modules: HashMap::new(),
             last_module: None,
-        }
+        };
+
+        let moduleaddr = s.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
+            macro_rules! try {
+                ($e:expr, $s:expr, $m:expr) => {
+                    match $e {
+                        Ok(v) => v,
+                        Err(_) => {
+                            tx.send(Err($m)).unwrap();
+                            return store_thread_frame($s);
+                        }
+                    }
+                }
+            }
+
+            let validated_module = try!(validate_module(spectest_module()), stst, "validation failed");
+
+            let mut stst = stst;
+            let moduleaddr = try!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &[]), stst, "instantiation failed");
+
+            tx.send(Ok(moduleaddr)).unwrap();
+            store_thread_frame(stst)
+        });
+
+        s.add_module(Some("spectest".into()), moduleaddr.unwrap());
+
+        s
     }
 
     fn new_frame<T: Send + 'static, F: Fn(StSt, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
@@ -247,19 +273,30 @@ enum InvokationResult {
 
 impl CommandDispatch for StoreCtrl {
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
-        let moduleaddr = self.new_frame(move |stst: StSt, tx| {
-            let (module, _custom_sections) = parse_binary_format(&bytes).unwrap();
-            let validated_module = validate_module(module).unwrap();
+        let moduleaddr = self.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
+            macro_rules! try {
+                ($e:expr, $s:expr, $m:expr) => {
+                    match $e {
+                        Ok(v) => v,
+                        Err(_) => {
+                            tx.send(Err($m)).unwrap();
+                            return store_thread_frame($s);
+                        }
+                    }
+                }
+            }
+
+            let (module, _custom_sections) = try!(parse_binary_format(&bytes), stst, "parsing failed");
+            let validated_module = try!(validate_module(module), stst, "validation failed");
 
             let mut stst = stst;
-            let moduleaddr = instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &[]).unwrap();
+            let moduleaddr = try!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &[]), stst, "instantiation failed");
 
-            tx.send(moduleaddr).unwrap();
-
+            tx.send(Ok(moduleaddr)).unwrap();
             store_thread_frame(stst)
         });
 
-        self.add_module(name, moduleaddr);
+        self.add_module(name, moduleaddr.unwrap());
     }
     fn assert_malformed(&mut self, bytes: Vec<u8>) {
         assert!(parse_binary_format(&bytes).is_err(), "parsing did not fail");
@@ -449,6 +486,232 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
     }
 }
 
+/*
+from wabt's spectest-interp.cc
+
+static void InitEnvironment(Environment* env) {
+  HostModule* host_module = env->AppendHostModule("spectest");
+  host_module->AppendFuncExport("print", {{}, {}}, PrintCallback);
+  host_module->AppendFuncExport("print_i32", {{Type::I32}, {}}, PrintCallback);
+  host_module->AppendFuncExport("print_f32", {{Type::F32}, {}}, PrintCallback);
+  host_module->AppendFuncExport("print_f64", {{Type::F64}, {}}, PrintCallback);
+  host_module->AppendFuncExport("print_i32_f32", {{Type::I32, Type::F32}, {}},
+                                PrintCallback);
+  host_module->AppendFuncExport("print_f64_f64", {{Type::F64, Type::F64}, {}},
+                                PrintCallback);
+
+  host_module->AppendTableExport("table", Limits(10, 20));
+  host_module->AppendMemoryExport("memory", Limits(1, 2));
+
+  host_module->AppendGlobalExport("global_i32", false, uint32_t(666));
+  host_module->AppendGlobalExport("global_i64", false, uint64_t(666));
+  host_module->AppendGlobalExport("global_f32", false, float(666.6f));
+  host_module->AppendGlobalExport("global_f64", false, double(666.6));
+}
+*/
+// TODO: Get this module in binary wasm form, and inject with same mechanism as testsuite modules
+fn spectest_module() -> Module {
+    Module {
+        types: vec![
+            FuncType {
+                args: vec![].into(),
+                results: vec![].into(),
+            },
+            FuncType {
+                args: vec![ValType::I32].into(),
+                results: vec![].into(),
+            },
+            FuncType {
+                args: vec![ValType::F32].into(),
+                results: vec![].into(),
+            },
+            FuncType {
+                args: vec![ValType::F64].into(),
+                results: vec![].into(),
+            },
+            FuncType {
+                args: vec![ValType::I32, ValType::F32].into(),
+                results: vec![].into(),
+            },
+            FuncType {
+                args: vec![ValType::F64, ValType::F64].into(),
+                results: vec![].into(),
+            },
+        ].into(),
+        funcs: vec![
+            Func {
+                type_: TypeIdx(0),
+                locals: vec![].into(),
+                body: Expr {
+                    body: vec![
+                    ]
+                },
+            },
+            Func {
+                type_: TypeIdx(1),
+                locals: vec![].into(),
+                body: Expr {
+                    body: vec![
+                    ]
+                },
+            },
+            Func {
+                type_: TypeIdx(2),
+                locals: vec![].into(),
+                body: Expr {
+                    body: vec![
+                    ]
+                },
+            },
+            Func {
+                type_: TypeIdx(3),
+                locals: vec![].into(),
+                body: Expr {
+                    body: vec![
+                    ]
+                },
+            },
+            Func {
+                type_: TypeIdx(4),
+                locals: vec![].into(),
+                body: Expr {
+                    body: vec![
+                    ]
+                },
+            },
+            Func {
+                type_: TypeIdx(5),
+                locals: vec![].into(),
+                body: Expr {
+                    body: vec![
+                    ]
+                },
+            },
+        ].into(),
+        tables: vec![
+            Table {
+                type_: TableType {
+                    limits: Limits {
+                        min: 10,
+                        max: Some(20),
+                    },
+                    elemtype: ElemType::AnyFunc,
+                }
+            },
+        ].into(),
+        mems: vec![
+            Mem {
+                type_: MemType {
+                    limits: Limits {
+                        min: 1,
+                        max: Some(2),
+                    }
+                }
+            }
+        ].into(),
+        globals: vec![
+            Global {
+                type_: GlobalType {
+                    mutability: Mut::Const,
+                    valtype: ValType::I32,
+                },
+                init: Expr {
+                    body: vec![
+                        Instr::I32Const(666)
+                    ]
+                }
+            },
+            Global {
+                type_: GlobalType {
+                    mutability: Mut::Const,
+                    valtype: ValType::I64,
+                },
+                init: Expr {
+                    body: vec![
+                        Instr::I64Const(666)
+                    ]
+                }
+            },
+            Global {
+                type_: GlobalType {
+                    mutability: Mut::Const,
+                    valtype: ValType::F32,
+                },
+                init: Expr {
+                    body: vec![
+                        Instr::F32Const(666.6)
+                    ]
+                }
+            },
+            Global {
+                type_: GlobalType {
+                    mutability: Mut::Const,
+                    valtype: ValType::F64,
+                },
+                init: Expr {
+                    body: vec![
+                        Instr::F64Const(666.6)
+                    ]
+                }
+            },
+        ].into(),
+        elem: vec![].into(),
+        data: vec![].into(),
+        start: None,
+        imports: vec![].into(),
+        exports: vec![
+            Export {
+                name: "print".into(),
+                desc: ExportDesc::Func(FuncIdx(0)),
+            },
+            Export {
+                name: "print_i32".into(),
+                desc: ExportDesc::Func(FuncIdx(1)),
+            },
+            Export {
+                name: "print_f32".into(),
+                desc: ExportDesc::Func(FuncIdx(2)),
+            },
+            Export {
+                name: "print_f64".into(),
+                desc: ExportDesc::Func(FuncIdx(3)),
+            },
+            Export {
+                name: "print_i32_f32".into(),
+                desc: ExportDesc::Func(FuncIdx(4)),
+            },
+            Export {
+                name: "print_f64_f64".into(),
+                desc: ExportDesc::Func(FuncIdx(5)),
+            },
+            Export {
+                name: "table".into(),
+                desc: ExportDesc::Table(TableIdx(0)),
+            },
+            Export {
+                name: "memory".into(),
+                desc: ExportDesc::Mem(MemIdx(0)),
+            },
+            Export {
+                name: "global_i32".into(),
+                desc: ExportDesc::Global(GlobalIdx(0)),
+            },
+            Export {
+                name: "global_i64".into(),
+                desc: ExportDesc::Global(GlobalIdx(1)),
+            },
+            Export {
+                name: "global_f32".into(),
+                desc: ExportDesc::Global(GlobalIdx(2)),
+            },
+            Export {
+                name: "global_f64".into(),
+                desc: ExportDesc::Global(GlobalIdx(3)),
+            },
+        ].into(),
+    }
+}
+
 #[test]
 fn run_tests() {
     let mut successes = 0;
@@ -465,10 +728,10 @@ fn run_tests() {
         if path.metadata().unwrap().file_type().is_file() && filename.ends_with(".wast") && !BLACKLIST.contains(&filename)  {
             let source = fs::read(&path).unwrap();
 
-            println!("\nParse {} ...", filename);
+            //println!("\nParse {} ...", filename);
             let mut script = ScriptParser::<F32, F64>::from_source_and_name(&source, filename).unwrap();
 
-            println!("Executing {} ...", filename);
+            //println!("Executing {} ...", filename);
             while let Some(Command { line, kind }) = script.next().unwrap() {
                 use std::panic::catch_unwind;
                 use std::panic::AssertUnwindSafe;
@@ -492,6 +755,7 @@ fn run_tests() {
                     };
                     failures.push((filename.to_owned(), line, msg));
                     fatal = true;
+                    //panic!();
                 } else {
                     successes += 1;
                 }
