@@ -78,7 +78,7 @@ impl StoreCtrl {
             last_module: None,
         };
 
-        let moduleaddr = s.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
+        let moduleaddr = s.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
             macro_rules! try {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
@@ -105,11 +105,12 @@ impl StoreCtrl {
         s
     }
 
-    fn new_frame<T: Send + 'static, F: Fn(StSt, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
+    fn new_frame<T: Send + 'static, F: Fn(StSt, &HashMap<String, ModuleAddr>, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
         let (tx, rx) = channel();
+        let modules = self.modules.clone();
         self.tx.send(Box::new(move |stst: &mut Option<StSt>| {
             let stst = stst.take().unwrap();
-            let _: FrameWitness = f(stst, &tx);
+            let _: FrameWitness = f(stst, &modules, &tx);
         })).unwrap();
         rx.recv().expect("new_frame() closure terminated before producing result")
     }
@@ -273,7 +274,7 @@ enum InvokationResult {
 
 impl CommandDispatch for StoreCtrl {
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
-        let moduleaddr = self.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
+        let moduleaddr = self.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
             macro_rules! try {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
@@ -290,7 +291,23 @@ impl CommandDispatch for StoreCtrl {
             let validated_module = try!(validate_module(module), stst, "validation failed");
 
             let mut stst = stst;
-            let moduleaddr = try!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &[]), stst, "instantiation failed");
+            let mut exports = vec![];
+            for i in &validated_module.imports {
+                // println!("i: {:?}", i);
+                let exporting_module = *try!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
+                let exporting_module = &stst.store.modules[exporting_module];
+                let mut value = None;
+                for e in &exporting_module.exports {
+                    // println!("  e: {:?}", e);
+                    if e.name[..] == i.name[..] {
+                        value = Some(e.value);
+                        break;
+                    }
+                }
+                exports.push(try!(value.ok_or(()), stst, "import not found in import modules exports"));
+            }
+
+            let moduleaddr = try!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
 
             tx.send(Ok(moduleaddr)).unwrap();
             store_thread_frame(stst)

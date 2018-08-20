@@ -212,7 +212,7 @@ pub struct ExportInst<'ast>
     pub value: ExternVal,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum ExternVal {
     Func(FuncAddr),
     Table(TableAddr),
