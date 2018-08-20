@@ -78,7 +78,7 @@ impl StoreCtrl {
             last_module: None,
         };
 
-        let moduleaddr = s.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
+        let moduleaddr = s.new_frame(move |stst: StSt, _modules, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
             macro_rules! try {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
@@ -115,11 +115,12 @@ impl StoreCtrl {
         rx.recv().expect("new_frame() closure terminated before producing result")
     }
 
-    fn frame<T: Send + 'static, F: Fn(&mut StSt) -> T + Send + 'static>(&self, f: F) -> T {
+    fn frame<T: Send + 'static, F: Fn(&mut StSt, &HashMap<String, ModuleAddr>) -> T + Send + 'static>(&self, f: F) -> T {
         let (tx, rx) = channel();
+        let modules = self.modules.clone();
         self.tx.send(Box::new(move |stst: &mut Option<StSt>| {
             let stst = stst.as_mut().unwrap();
-            let r = f(stst);
+            let r = f(stst, &modules);
             tx.send(r).unwrap();
         })).unwrap();
         rx.recv().expect("action() closure terminated before producing result")
@@ -315,6 +316,56 @@ impl CommandDispatch for StoreCtrl {
 
         self.add_module(name, moduleaddr.unwrap());
     }
+    fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
+        self.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<&'static str, &'static str>>| {
+            macro_rules! try {
+                ($e:expr, $s:expr, $m:expr) => {
+                    match $e {
+                        Ok(v) => v,
+                        Err(_) => {
+                            tx.send(Err($m)).unwrap();
+                            return store_thread_frame($s);
+                        }
+                    }
+                }
+            }
+            macro_rules! antitry {
+                ($e:expr, $s:expr, $m:expr) => {
+                    match $e {
+                        Ok(v) => v,
+                        Err(_) => {
+                            tx.send(Ok($m)).unwrap();
+                            return store_thread_frame($s);
+                        }
+                    }
+                }
+            }
+            let (module, _custom_sections) = try!(parse_binary_format(&bytes), stst, "parsing failed");
+            let validated_module = try!(validate_module(module), stst, "validation failed");
+
+            let mut stst = stst;
+            let mut exports = vec![];
+            for i in &validated_module.imports {
+                // println!("i: {:?}", i);
+                let exporting_module = *try!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
+                let exporting_module = &stst.store.modules[exporting_module];
+                let mut value = None;
+                for e in &exporting_module.exports {
+                    // println!("  e: {:?}", e);
+                    if e.name[..] == i.name[..] {
+                        value = Some(e.value);
+                        break;
+                    }
+                }
+                exports.push(try!(value.ok_or(()), stst, "import not found in import modules exports"));
+            }
+
+            antitry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
+
+            tx.send(Err("instantiation did not fail")).unwrap();
+            store_thread_frame(stst)
+        }).unwrap();
+    }
     fn assert_malformed(&mut self, bytes: Vec<u8>) {
         assert!(parse_binary_format(&bytes).is_err(), "parsing did not fail");
     }
@@ -322,10 +373,55 @@ impl CommandDispatch for StoreCtrl {
         let (module, _) = parse_binary_format(&bytes).unwrap();
         assert!(validate_module(module).is_err(), "validation did not fail");
     }
+    fn assert_import_export_error(&mut self, bytes: Vec<u8>) {
+        self.frame(move |stst, modules: &HashMap<_, _>| {
+            macro_rules! try {
+                ($e:expr, $s:expr, $m:expr) => {
+                    match $e {
+                        Ok(v) => v,
+                        Err(_) => {
+                            return Err($m);
+                        }
+                    }
+                }
+            }
+            macro_rules! antitry {
+                ($e:expr, $s:expr, $m:expr) => {
+                    match $e {
+                        Ok(v) => v,
+                        Err(_) => {
+                            return Ok($m);
+                        }
+                    }
+                }
+            }
+
+            let (module, _custom_sections) = try!(parse_binary_format(&bytes), stst, "parsing failed");
+            let validated_module = try!(validate_module(module), stst, "validation failed");
+
+            let mut exports = vec![];
+            for i in &validated_module.imports {
+                // println!("i: {:?}", i);
+                let exporting_module = *antitry!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
+                let exporting_module = &stst.store.modules[exporting_module];
+                let mut value = None;
+                for e in &exporting_module.exports {
+                    // println!("  e: {:?}", e);
+                    if e.name[..] == i.name[..] {
+                        value = Some(e.value);
+                        break;
+                    }
+                }
+                exports.push(antitry!(value.ok_or(()), stst, "import not found in import modules exports"));
+            }
+
+            Err("no link errors occurred")
+        }).unwrap();
+    }
 
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult {
         let moduleaddr = self.get_module(module);
-        self.frame(move |stst| {
+        self.frame(move |stst, _modules| {
             let funcaddr = (|| {
                 let module = &stst.store.modules[moduleaddr];
                 for e in &module.exports {
@@ -359,7 +455,7 @@ impl CommandDispatch for StoreCtrl {
     }
     fn action_get(&mut self, module: Option<String>, field: String) -> Value {
         let moduleaddr = self.get_module(module);
-        self.frame(move |stst| {
+        self.frame(move |stst, _modules| {
             let globaladdr = (|| {
                 let module = &stst.store.modules[moduleaddr];
                 for e in &module.exports {
@@ -426,6 +522,14 @@ trait CommandDispatch {
     }
     fn assert_malformed(&mut self, bytes: Vec<u8>);
     fn assert_invalid(&mut self, bytes: Vec<u8>);
+    fn assert_import_export_error(&mut self, bytes: Vec<u8>);
+    fn assert_unlinkable(&mut self, bytes: Vec<u8>) {
+        // TODO: figure out the exact difference
+        // Currently it looks like a link error is any instantiation error except
+        // a runtime error during execution of a start function
+        self.assert_uninstantiable(bytes);
+    }
+    fn assert_uninstantiable(&mut self, bytes: Vec<u8>);
     fn assert_exhaustion(&mut self, action: Action);
     fn assert_return_canonical_nan(&mut self, action: Action) {
         let results = self.action(action);
@@ -484,12 +588,8 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
         } => {
             c.assert_exhaustion(action);
         }
-        AssertUnlinkable {
-            module,
-            message,
-        } => {
-            let bytes = module.into_vec();
-            unimplemented!("AssertUnlinkable");
+        AssertUnlinkable { module, message } => {
+            c.assert_unlinkable(module.into_vec());
         }
         Register {
             name,

@@ -348,8 +348,25 @@ pub mod instantiation {
     pub fn instantiate_module<'ast>(s: &mut Store<'ast>, stack: &mut Stack<'ast>,
                                     module: &'ast ValidatedModule,
                                     externvals: &[ExternVal]) -> IResult
+    {
+        // NB: We need to keep the stack in a clean state even in case
+        // of an error
+
+        let res = instantiate_module_(s, stack, module, externvals);
+        if res.is_err() {
+            stack.unwind_to(0);
+        }
+        assert!(stack.is_empty());
+        res
+    }
+
+    fn instantiate_module_<'ast>(s: &mut Store<'ast>, stack: &mut Stack<'ast>,
+                                 module: &'ast ValidatedModule,
+                                 externvals: &[ExternVal]) -> IResult
 
     {
+        assert!(stack.is_empty());
+
         // TODO: Ensure store and stack is in good state after an error
 
         let mut ctx = ExecCtx::new(s, stack);
