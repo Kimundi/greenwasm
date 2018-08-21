@@ -13,7 +13,6 @@ use spectest::*;
 
 use wabt::script::*;
 
-use std::fs;
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
@@ -539,36 +538,5 @@ fn spectest_module() -> Module {
 
 #[test]
 fn run_tests() {
-    let mut successes = 0;
-    let mut failures = vec![];
-
-    'outer: for dir in fs::read_dir("tests/spec_testsuite").unwrap() {
-        let dir = dir.unwrap();
-        let path = dir.path();
-        let filename = path.file_name().unwrap().to_str().unwrap();
-
-        let mut sctrl = StoreCtrl::new();
-
-        if path.metadata().unwrap().file_type().is_file() && filename.ends_with(".wast") {
-            println!("Executing {} ...", filename);
-            let res = run_single_file(&path, &mut sctrl);
-            successes += res.successes;
-            failures.extend(res.failures);
-        }
-    }
-
-    if failures.len() > 0 {
-        println!("wast failures:");
-        for (i, f) in failures.iter().enumerate() {
-            println!("    {}:{}, {}", f.0, f.1, f.2);
-            if i > 10 {
-                println!("    ...");
-                break;
-            }
-        }
-        println!("wast total: {} passed; {} failed", successes, failures.len());
-        panic!("some wast commands failed");
-    } else {
-        println!("wast total: {} passed; {} failed", successes, failures.len());
-    }
+    run_all_in_directory("tests/spec_testsuite".as_ref(), || StoreCtrl::new()).present();
 }

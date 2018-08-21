@@ -176,13 +176,55 @@ impl NanPayload for f64 {
     }
 }
 
+#[must_use]
 pub struct SpectestResult {
     pub failures: Vec<(String, u64, String)>,
     pub successes: usize,
 }
 
-pub fn run_all_in_directory() {
+impl SpectestResult {
+    pub fn present(self) {
+        if self.failures.len() > 0 {
+            println!("wast failures:");
+            for (i, f) in self.failures.iter().enumerate() {
+                println!("    {}:{}, {}", f.0, f.1, f.2);
+                if i > 10 {
+                    println!("    ...");
+                    break;
+                }
+            }
+            println!("wast total: {} passed; {} failed", self.successes, self.failures.len());
+            panic!("some wast commands failed");
+        } else {
+            println!("wast total: {} passed; {} failed", self.successes, self.failures.len());
+        }
+    }
+}
 
+pub fn run_all_in_directory<C: CommandDispatch, F: FnMut() -> C>(path: &Path, mut create_dispatcher: F) -> SpectestResult {
+    println!("{}", env!("CARGO_MANIFEST_DIR"));
+    use std::fs;
+    let mut res = SpectestResult {
+        failures: vec![],
+        successes: 0,
+    };
+
+    'outer: for dir in fs::read_dir(&path).unwrap() {
+        let dir = dir.unwrap();
+        let path = dir.path();
+        let filename = path.file_name().unwrap().to_str().unwrap();
+
+        let mut sctrl = create_dispatcher();
+
+        if path.metadata().unwrap().file_type().is_file() && filename.ends_with(".wast") {
+            println!("Executing {} ...", filename);
+            let res2 = run_single_file(&path, &mut sctrl);
+            res.successes += res2.successes;
+            res.failures.extend(res2.failures);
+        }
+    }
+
+    return res;
 }
 
 pub fn run_single_file<C: CommandDispatch>(path: &Path, sctrl: &mut C) -> SpectestResult {
