@@ -586,7 +586,7 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
             c.register(name, as_name);
         }
         PerformAction(action) => {
-            unimplemented!("PerformAction");
+            c.action(action);
         }
     }
 }

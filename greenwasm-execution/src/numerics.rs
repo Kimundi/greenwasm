@@ -102,7 +102,11 @@ define_trait! {
         let j1 = Self::signed(i1);
         let j2 = Self::signed(i2);
 
-        j1.checked_rem(j2).map(Self::rsigned).into()
+        if i2 != 0 {
+            Some(Self::rsigned(j1.wrapping_rem(j2))).into()
+        } else {
+            None.into()
+        }
     }
     fn iand(i1: Self, i2: Self) -> Self {
         i1 & i2
