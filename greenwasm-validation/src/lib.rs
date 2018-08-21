@@ -68,6 +68,7 @@ pub enum ValidationErrorEnum {
     CtxLabelsIdxDoesNotExist,
     CtxReturnDoesNotExist,
     StartFunNotValidWithEmptyEmpty,
+    MemoryBoundsOutside32Bit,
 }
 use self::ValidationErrorEnum::*;
 
@@ -293,6 +294,16 @@ pub mod validate {
 
     valid_with!((c, memory_type: MemType) -> Valid {
         validate::limit(c, &memory_type.limits)?;
+
+        // NB: This check is requires by the testsuite and seems sensible,
+        // but is not actually written in the spec at the point of writing this
+
+        let min = memory_type.limits.min;
+        let max = memory_type.limits.max.unwrap_or(min);
+
+        if min > 65536 || max > 65536 {
+            c.error(MemoryBoundsOutside32Bit)?;
+        }
 
         Valid
     });

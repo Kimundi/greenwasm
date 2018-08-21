@@ -2,23 +2,18 @@
 
 use structure::types::*;
 use structure::modules::*;
-use structure::instructions::Instr::*;
 use structure::instructions::*;
 use binary_format::parse_binary_format;
-use validation::{validate_module, ValidatedModule};
+use validation::{validate_module};
 use execution::modules::instantiation::instantiate_module;
-use execution::modules::allocation::*;
 use execution::modules::invocation::*;
 use execution::runtime_structure::*;
 use execution::runtime_structure::Result as IResult;
 
 use wabt::script::*;
 
-use owning_ref::ArcRef;
-
 use std::fs;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver, Sender};
 //use std::boxed::FnBox;
 use std::thread;
@@ -335,7 +330,7 @@ impl CommandDispatch for StoreCtrl {
             let mut exports = vec![];
             for i in &validated_module.imports {
                 // println!("i: {:?}", i);
-                let exporting_module = *try!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
+                let exporting_module = *antitry!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
                 let exporting_module = &stst.store.modules[exporting_module];
                 let mut value = None;
                 for e in &exporting_module.exports {
@@ -345,7 +340,7 @@ impl CommandDispatch for StoreCtrl {
                         break;
                     }
                 }
-                exports.push(try!(value.ok_or(()), stst, "import not found in import modules exports"));
+                exports.push(antitry!(value.ok_or(()), stst, "import not found in import modules exports"));
             }
 
             antitry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
@@ -361,52 +356,6 @@ impl CommandDispatch for StoreCtrl {
         let (module, _) = parse_binary_format(&bytes).unwrap();
         assert!(validate_module(module).is_err(), "validation did not fail");
     }
-    fn assert_import_export_error(&mut self, bytes: Vec<u8>) {
-        self.frame(move |stst, modules: &HashMap<_, _>| {
-            macro_rules! try {
-                ($e:expr, $s:expr, $m:expr) => {
-                    match $e {
-                        Ok(v) => v,
-                        Err(_) => {
-                            return Err($m);
-                        }
-                    }
-                }
-            }
-            macro_rules! antitry {
-                ($e:expr, $s:expr, $m:expr) => {
-                    match $e {
-                        Ok(v) => v,
-                        Err(_) => {
-                            return Ok($m);
-                        }
-                    }
-                }
-            }
-
-            let (module, _custom_sections) = try!(parse_binary_format(&bytes), stst, "parsing failed");
-            let validated_module = try!(validate_module(module), stst, "validation failed");
-
-            let mut exports = vec![];
-            for i in &validated_module.imports {
-                // println!("i: {:?}", i);
-                let exporting_module = *antitry!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
-                let exporting_module = &stst.store.modules[exporting_module];
-                let mut value = None;
-                for e in &exporting_module.exports {
-                    // println!("  e: {:?}", e);
-                    if e.name[..] == i.name[..] {
-                        value = Some(e.value);
-                        break;
-                    }
-                }
-                exports.push(antitry!(value.ok_or(()), stst, "import not found in import modules exports"));
-            }
-
-            Err("no link errors occurred")
-        }).unwrap();
-    }
-
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult {
         let moduleaddr = self.get_module(module);
         self.frame(move |stst, _modules| {
@@ -514,7 +463,6 @@ trait CommandDispatch {
     }
     fn assert_malformed(&mut self, bytes: Vec<u8>);
     fn assert_invalid(&mut self, bytes: Vec<u8>);
-    fn assert_import_export_error(&mut self, bytes: Vec<u8>);
     fn assert_unlinkable(&mut self, bytes: Vec<u8>) {
         // TODO: figure out the exact difference
         // Currently it looks like a link error is any instantiation error except
@@ -569,12 +517,8 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
         AssertMalformed { module, message } => {
             c.assert_malformed(module.into_vec());
         }
-        AssertUninstantiable {
-            module,
-            message,
-        } => {
-            let bytes = module.into_vec();
-            unimplemented!("AssertUninstantiable");
+        AssertUninstantiable { module, message } => {
+            c.assert_uninstantiable(module.into_vec());
         }
         AssertExhaustion { action } => {
             c.assert_exhaustion(action);
