@@ -201,8 +201,11 @@ impl SpectestResult {
     }
 }
 
+pub fn run_mvp_spectest<C: CommandDispatch, F: FnMut() -> C>(create_dispatcher: F) -> SpectestResult {
+    run_all_in_directory(format!("{}/testsuite", env!("CARGO_MANIFEST_DIR")).as_ref(), create_dispatcher)
+}
+
 pub fn run_all_in_directory<C: CommandDispatch, F: FnMut() -> C>(path: &Path, mut create_dispatcher: F) -> SpectestResult {
-    println!("{}", env!("CARGO_MANIFEST_DIR"));
     use std::fs;
     let mut res = SpectestResult {
         failures: vec![],

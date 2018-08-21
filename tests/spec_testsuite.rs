@@ -536,5 +536,5 @@ fn spectest_module() -> Module {
 
 #[test]
 fn run_tests() {
-    run_all_in_directory("tests/spec_testsuite".as_ref(), StoreCtrl::new).present();
+    run_mvp_spectest(StoreCtrl::new).present();
 }
