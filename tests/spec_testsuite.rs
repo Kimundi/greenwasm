@@ -15,13 +15,12 @@ use wabt::script::*;
 use std::fs;
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
-//use std::boxed::FnBox;
 use std::thread;
 
 // TODO: solve the issue here
 const BLACKLIST: &[&str] = &[
-    "globals.wast",
-    "linking.wast",
+    // "globals.wast",
+    // "linking.wast",
 ];
 
 type F32 = f32;
@@ -324,7 +323,7 @@ impl CommandDispatch for StoreCtrl {
                 }
             }
             let (module, _custom_sections) = try!(parse_binary_format(&bytes), stst, "parsing failed");
-            let validated_module = try!(validate_module(module), stst, "validation failed");
+            let validated_module = antitry!(validate_module(module), stst, "validation failed");
 
             let mut stst = stst;
             let mut exports = vec![];
@@ -494,6 +493,7 @@ trait CommandDispatch {
     fn register(&mut self, name: Option<String>, as_name: String);
 }
 fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
+    // TODO: Figure out if the "message" fields need to actually be handled
     use wabt::script::CommandKind::*;
     match cmd {
         Module { module, name } => {
@@ -508,22 +508,22 @@ fn command_dispatch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
         AssertReturnArithmeticNan { action } => {
             c.assert_return_arithmetic_nan(action);
         }
-        AssertTrap { action, message } => {
+        AssertTrap { action, message: _ } => {
             c.assert_trap(action);
         }
-        AssertInvalid { module, message } => {
+        AssertInvalid { module, message: _ } => {
             c.assert_invalid(module.into_vec());
         }
-        AssertMalformed { module, message } => {
+        AssertMalformed { module, message: _ } => {
             c.assert_malformed(module.into_vec());
         }
-        AssertUninstantiable { module, message } => {
+        AssertUninstantiable { module, message: _ } => {
             c.assert_uninstantiable(module.into_vec());
         }
         AssertExhaustion { action } => {
             c.assert_exhaustion(action);
         }
-        AssertUnlinkable { module, message } => {
+        AssertUnlinkable { module, message: _ } => {
             c.assert_unlinkable(module.into_vec());
         }
         Register { name, as_name } => {
