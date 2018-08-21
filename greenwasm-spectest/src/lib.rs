@@ -1,3 +1,4 @@
+use std::path::Path;
 use wabt::script::*;
 
 pub trait CommandDispatch {
@@ -175,12 +176,46 @@ impl NanPayload for f64 {
     }
 }
 
+pub struct SpectestResult {
+    pub failures: Vec<(String, u64, String)>,
+    pub successes: usize,
+}
+
 pub fn run_all_in_directory() {
 
 }
 
-pub fn run_single_file() {
+pub fn run_single_file<C: CommandDispatch>(path: &Path, sctrl: &mut C) -> SpectestResult {
+    use std::fs;
 
+    let mut res = SpectestResult {
+        failures: vec![],
+        successes: 0,
+    };
+
+    let filename = path.file_name().unwrap().to_str().unwrap();
+    let source = fs::read(&path).unwrap();
+
+    let mut script = ScriptParser::<>::from_source_and_name(&source, filename).unwrap();
+    let mut fatal = false;
+
+    while let Some(Command { line, kind }) = script.next().unwrap() {
+        if fatal {
+            res.failures.push((filename.to_owned(), line, "<not attempted>".to_string()));
+            continue;
+        }
+        match run_single_command(kind, sctrl) {
+            Err(msg) => {
+                res.failures.push((filename.to_owned(), line, msg));
+                fatal = true;
+            }
+            Ok(()) => {
+                res.successes += 1;
+            }
+        }
+    }
+
+    return res;
 }
 
 pub fn run_single_command<C: CommandDispatch>(kind: CommandKind, sctrl: &mut C) -> Result<(), String> {

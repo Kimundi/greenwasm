@@ -18,15 +18,6 @@ use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 
-// TODO: solve the issue here
-const BLACKLIST: &[&str] = &[
-    // "globals.wast",
-    // "linking.wast",
-];
-
-type F32 = f32;
-type F64 = f64;
-
 struct StSt<'ast> {
     store: Store<'ast>,
     stack: Stack<'ast>,
@@ -555,35 +546,14 @@ fn run_tests() {
         let dir = dir.unwrap();
         let path = dir.path();
         let filename = path.file_name().unwrap().to_str().unwrap();
-        let mut fatal = false;
 
         let mut sctrl = StoreCtrl::new();
 
-        if path.metadata().unwrap().file_type().is_file() && filename.ends_with(".wast") && !BLACKLIST.contains(&filename)  {
-            let source = fs::read(&path).unwrap();
-
-            //println!("\nParse {} ...", filename);
-            let mut script = ScriptParser::<F32, F64>::from_source_and_name(&source, filename).unwrap();
-
-            //println!("Executing {} ...", filename);
-            while let Some(Command { line, kind }) = script.next().unwrap() {
-                // println!("Line {} ...", line);
-
-                if fatal {
-                    failures.push((filename.to_owned(), line, "<not attempted>".to_string()));
-                    continue;
-                }
-                match run_single_command(kind, &mut sctrl) {
-                    Err(msg) => {
-                        failures.push((filename.to_owned(), line, msg));
-                        fatal = true;
-                        //panic!();
-                    }
-                    Ok(()) => {
-                        successes += 1;
-                    }
-                }
-            }
+        if path.metadata().unwrap().file_type().is_file() && filename.ends_with(".wast") {
+            println!("Executing {} ...", filename);
+            let res = run_single_file(&path, &mut sctrl);
+            successes += res.successes;
+            failures.extend(res.failures);
         }
     }
 
