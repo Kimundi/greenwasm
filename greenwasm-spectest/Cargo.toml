@@ -3,7 +3,7 @@ cargo-features = ["edition", "rename-dependency"]
 [package]
 edition = '2018'
 name = "greenwasm-spectest"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 
 [dependencies]

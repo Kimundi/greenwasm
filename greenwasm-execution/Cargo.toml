@@ -3,7 +3,7 @@ cargo-features = ["edition", "rename-dependency"]
 [package]
 edition = '2018'
 name = "greenwasm-execution"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 license = "MIT/Apache-2.0"
 
@@ -12,6 +12,6 @@ readme = "README.md"
 workspace = ".."
 
 [dependencies]
-structure = { package = "greenwasm-structure", path = "../greenwasm-structure" }
-validation = { package = "greenwasm-validation", path = "../greenwasm-validation" }
+structure = { version = "0.2.0", package = "greenwasm-structure", path = "../greenwasm-structure" }
+validation = { version = "0.2.0", package = "greenwasm-validation", path = "../greenwasm-validation" }
 frounding = "0.0.4"
