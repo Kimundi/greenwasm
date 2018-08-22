@@ -180,7 +180,7 @@ fn test_parse_i64() {
 #[test]
 fn test_parse_f32() {
     let x: f32 = -1459.78965;
-    let b = x.to_bits().to_le().to_bytes();
+    let b = x.to_bits().to_le_bytes();
 
     check(&parse_f32, &b, OkWith(x));
 }
@@ -188,7 +188,7 @@ fn test_parse_f32() {
 #[test]
 fn test_parse_f64() {
     let x: f64 = -1459.78965;
-    let b = x.to_bits().to_le().to_bytes();
+    let b = x.to_bits().to_le_bytes();
 
     check(&parse_f64, &b, OkWith(x));
 }
