@@ -8,8 +8,7 @@ use execution::modules::invocation::*;
 use execution::runtime_structure::*;
 use execution::runtime_structure::Result as IResult;
 use spectest::*;
-
-use wabt::script::*;
+use spectest::wabt::script::*;
 
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};

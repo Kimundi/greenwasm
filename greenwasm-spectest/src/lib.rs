@@ -1,6 +1,8 @@
 use std::path::Path;
 use wabt::script::*;
 
+pub use wabt;
+
 pub trait CommandDispatch {
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult;
     fn action_get(&mut self, module: Option<String>, field: String) -> Value;
