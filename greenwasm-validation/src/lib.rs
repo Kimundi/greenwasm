@@ -53,8 +53,6 @@ pub enum ValidationErrorEnum {
     ConstExprGetGlobalNotConst,
     ConstExprIlligalInstruction,
     ElemElemTypeNotAnyFunc,
-    ExportGlobalNotConst,
-    ImportGlobalNotConst,
     ModulePrepassImportFuncTypeIdxDoesNotExist,
     ModuleTablesLengthNotOne,
     ModuleMemsLengthNotOne,
@@ -1082,10 +1080,6 @@ pub mod validate {
             ExportDesc::Global(x) => {
                 let global = c.globals(x)?;
 
-                if global.mutability != Mut::Const {
-                    c.error(ExportGlobalNotConst)?;
-                }
-
                 ExternType::Global(global)
             }
         }
@@ -1110,10 +1104,6 @@ pub mod validate {
             }
             ImportDesc::Global(globaltype) => {
                 validate::global_type(c, &globaltype)?;
-
-                if globaltype.mutability != Mut::Const {
-                    c.error(ImportGlobalNotConst)?;
-                }
 
                 ExternType::Global(globaltype)
             }
