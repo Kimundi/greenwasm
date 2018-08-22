@@ -1,5 +1,7 @@
 cargo-features = ["edition", "rename-dependency"]
 
+[workspace]
+
 [package]
 edition = '2018'
 name = "greenwasm"
