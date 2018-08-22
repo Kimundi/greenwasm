@@ -120,6 +120,7 @@ pub trait NanPayload {
     fn payload(&self) -> u64;
     fn signif() -> u32;
     fn infinite() -> Self;
+    fn canonical_payload() -> u64;
     fn arithmetic_nan(payload: u64) -> Self;
     fn canonical_nan() -> Self;
     fn is_arithmetic_nan(&self) -> bool;
@@ -134,14 +135,18 @@ impl NanPayload for f32 {
     }
     fn signif() -> u32 { 23 }
     fn infinite() -> Self { 1.0 / 0.0 }
+    fn canonical_payload() -> u64 {
+        1u64 << (Self::signif() - 1)
+    }
     fn arithmetic_nan(payload: u64) -> Self {
+        assert!(payload >= Self::canonical_payload());
         let bits: u32 = Self::infinite().to_bits();
         let mask: u32 = (1u32 << Self::signif()) - 1;
         let bits = bits | (mask & (payload as u32));
         Self::from_bits(bits)
     }
     fn canonical_nan() -> Self {
-        Self::arithmetic_nan(1u64 << (Self::signif() - 1))
+        Self::arithmetic_nan(Self::canonical_payload())
     }
     fn is_arithmetic_nan(&self) -> bool {
         self.is_nan()
@@ -159,14 +164,18 @@ impl NanPayload for f64 {
     }
     fn signif() -> u32 { 52 }
     fn infinite() -> Self { 1.0 / 0.0 }
+    fn canonical_payload() -> u64 {
+        1u64 << (Self::signif() - 1)
+    }
     fn arithmetic_nan(payload: u64) -> Self {
+        assert!(payload >= Self::canonical_payload());
         let bits: u64 = Self::infinite().to_bits();
         let mask: u64 = (1u64 << Self::signif()) - 1;
         let bits = bits | (mask & payload);
         Self::from_bits(bits)
     }
     fn canonical_nan() -> Self {
-        Self::arithmetic_nan(1u64 << (Self::signif() - 1))
+        Self::arithmetic_nan(Self::canonical_payload())
     }
     fn is_arithmetic_nan(&self) -> bool {
         self.is_nan()
