@@ -61,7 +61,7 @@ impl StoreCtrl {
         };
 
         let moduleaddr = s.new_frame(move |stst: StSt, _modules, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
-            macro_rules! try {
+            macro_rules! mytry {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
                         Ok(v) => v,
@@ -73,10 +73,10 @@ impl StoreCtrl {
                 }
             }
 
-            let validated_module = try!(validate_module(spectest_module()), stst, "validation failed");
+            let validated_module = mytry!(validate_module(spectest_module()), stst, "validation failed");
 
             let mut stst = stst;
-            let moduleaddr = try!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &[]), stst, "instantiation failed");
+            let moduleaddr = mytry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &[]), stst, "instantiation failed");
 
             tx.send(Ok(moduleaddr)).unwrap();
             store_thread_frame(stst)
@@ -140,7 +140,7 @@ fn val_greenwasm2wabt(v: Val) -> Value {
 impl CommandDispatch for StoreCtrl {
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
         let moduleaddr = self.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
-            macro_rules! try {
+            macro_rules! mytry {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
                         Ok(v) => v,
@@ -152,14 +152,14 @@ impl CommandDispatch for StoreCtrl {
                 }
             }
 
-            let (module, _custom_sections) = try!(parse_binary_format(&bytes), stst, "parsing failed");
-            let validated_module = try!(validate_module(module), stst, "validation failed");
+            let (module, _custom_sections) = mytry!(parse_binary_format(&bytes), stst, "parsing failed");
+            let validated_module = mytry!(validate_module(module), stst, "validation failed");
 
             let mut stst = stst;
             let mut exports = vec![];
             for i in &validated_module.imports {
                 // println!("i: {:?}", i);
-                let exporting_module = *try!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
+                let exporting_module = *mytry!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
                 let exporting_module = &stst.store.modules[exporting_module];
                 let mut value = None;
                 for e in &exporting_module.exports {
@@ -169,10 +169,10 @@ impl CommandDispatch for StoreCtrl {
                         break;
                     }
                 }
-                exports.push(try!(value.ok_or(()), stst, "import not found in import modules exports"));
+                exports.push(mytry!(value.ok_or(()), stst, "import not found in import modules exports"));
             }
 
-            let moduleaddr = try!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
+            let moduleaddr = mytry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
 
             tx.send(Ok(moduleaddr)).unwrap();
             store_thread_frame(stst)
@@ -182,7 +182,7 @@ impl CommandDispatch for StoreCtrl {
     }
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
         self.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<&'static str, &'static str>>| {
-            macro_rules! try {
+            macro_rules! mytry {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
                         Ok(v) => v,
@@ -193,7 +193,7 @@ impl CommandDispatch for StoreCtrl {
                     }
                 }
             }
-            macro_rules! antitry {
+            macro_rules! antimytry {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
                         Ok(v) => v,
@@ -204,14 +204,14 @@ impl CommandDispatch for StoreCtrl {
                     }
                 }
             }
-            let (module, _custom_sections) = try!(parse_binary_format(&bytes), stst, "parsing failed");
-            let validated_module = antitry!(validate_module(module), stst, "validation failed");
+            let (module, _custom_sections) = mytry!(parse_binary_format(&bytes), stst, "parsing failed");
+            let validated_module = antimytry!(validate_module(module), stst, "validation failed");
 
             let mut stst = stst;
             let mut exports = vec![];
             for i in &validated_module.imports {
                 // println!("i: {:?}", i);
-                let exporting_module = *antitry!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
+                let exporting_module = *antimytry!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
                 let exporting_module = &stst.store.modules[exporting_module];
                 let mut value = None;
                 for e in &exporting_module.exports {
@@ -221,10 +221,10 @@ impl CommandDispatch for StoreCtrl {
                         break;
                     }
                 }
-                exports.push(antitry!(value.ok_or(()), stst, "import not found in import modules exports"));
+                exports.push(antimytry!(value.ok_or(()), stst, "import not found in import modules exports"));
             }
 
-            antitry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
+            antimytry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
 
             tx.send(Err("instantiation did not fail")).unwrap();
             store_thread_frame(stst)
