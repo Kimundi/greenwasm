@@ -7,4 +7,4 @@ version = "0.2.0"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 
 [dependencies]
-wabt = { version = "0.5.0", path = "../../wabt-rs" }
+wabt = { version = "0.5.0" }
