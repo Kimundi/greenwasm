@@ -5,7 +5,7 @@ The structure of the project tries to follow the structure of the Spec where pos
 
 - [x] __Stucture__ (crate `greenwasm-structure`): Typedefs for Wasm Types, Instructions and Modules.
 - [x] __Validation__ (crate `greenwasm-validation`): Validator for a Wasm Module.
-- [ ] __Execution__: Interpreter/Vm.
+- [x] __Execution__ (crate `greenwasm-execution`): Naive Execution Engine for a Wasm Module.
 - [x] __Binary-Format__ (crate `greenwasm-binary-format`) parser for the `.wasm` binary format.
 - [ ] __Text-Format__: Parser for the `.wat` text format.
 
