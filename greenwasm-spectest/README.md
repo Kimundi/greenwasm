@@ -1,8 +1,7 @@
-# greenwasm-execution
-An implementation of the _Execution_ section from the Webassembly spec in Rust.
+# greenwasm-spectest
+A library shim around a mirror of the official [Webasembly MVP testsuite](https://github.com/WebAssembly/spec/tree/master/test/core).
 
-Contains a naive implementation of an execution framework
-that borrows the AST.
+It can be used as a independent testsuite launcher for other Webassembly implementations.
 
 ## License
 
