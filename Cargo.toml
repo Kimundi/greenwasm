@@ -9,6 +9,7 @@ version = "0.2.0"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 license = "MIT/Apache-2.0"
 
+documentation = "https://docs.rs/greenwasm"
 description = "An implementation of the Webassembly spec in Rust."
 readme = "README.md"
 
