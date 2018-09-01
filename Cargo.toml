@@ -1,4 +1,4 @@
-cargo-features = ["edition", "rename-dependency"]
+cargo-features = ["edition"]
 
 [workspace]
 
@@ -16,32 +16,27 @@ repository = "https://github.com/Kimundi/greenwasm"
 categories = ["wasm"]
 keywords = []
 
-[dependencies.structure]
+[dependencies.greenwasm-structure]
 version = "0.2.0"
-package = "greenwasm-structure"
 path = "greenwasm-structure"
 
-[dependencies.validation]
-version = "0.2.0"
-package = "greenwasm-validation"
+[dependencies.greenwasm-validation]
+version = "0.2.1"
 path = "greenwasm-validation"
 
-[dependencies.binary_format]
-version = "0.2.0"
-package = "greenwasm-binary-format"
+[dependencies.greenwasm-binary-format]
+version = "0.2.1"
 path = "greenwasm-binary-format"
 
-[dependencies.execution]
-version = "0.2.0"
-package = "greenwasm-execution"
+[dependencies.greenwasm-execution]
+version = "0.2.1"
 path = "greenwasm-execution"
 
 [dependencies.binaryen]
 version = "0.4.0"
 
-[dev-dependencies.spectest]
+[dev-dependencies.greenwasm-spectest]
 version = "0.2.0"
-package = "greenwasm-spectest"
 path = "greenwasm-spectest"
 
 [profile.dev]

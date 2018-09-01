@@ -54,7 +54,7 @@ use nom::types::CompleteByteSlice;
 type Inp<'a> = CompleteByteSlice<'a>;
 
 // 5.1.3. Vectors
-use structure::types::Wec;
+use greenwasm_structure::types::Wec;
 fn parse_vec<'a, F, B>(input: Inp<'a>, parse_b: F) -> IResult<Inp<'a>, Wec<B>>
     where F: Fn(Inp<'a>) -> IResult<Inp<'a>, B>
 {
@@ -146,7 +146,7 @@ named!(parse_f64 <Inp, f64>, do_parse!(
 ));
 
 // 5.2.4. Names
-use structure::types::Name;
+use greenwasm_structure::types::Name;
 named!(parse_name <Inp, Name>, do_parse!(
     bs: map!(
         verify_ref!(
@@ -162,7 +162,7 @@ named!(parse_name <Inp, Name>, do_parse!(
 ));
 
 // 5.3.1 Value Types
-use structure::types::ValType;
+use greenwasm_structure::types::ValType;
 named!(parse_valtype <Inp, ValType>, alt!(
     btagmap!(0x7f, ValType::I32)
     | btagmap!(0x7e, ValType::I64)
@@ -171,14 +171,14 @@ named!(parse_valtype <Inp, ValType>, alt!(
 ));
 
 // 5.3.2 Result Types
-use structure::types::ResultType;
+use greenwasm_structure::types::ResultType;
 named!(parse_blocktype <Inp, ResultType>, alt!(
     btagmap!(0x40, None.into())
     | map!(parse_valtype, |v| Some(v).into())
 ));
 
 // 5.3.3 Function Types
-use structure::types::FuncType;
+use greenwasm_structure::types::FuncType;
 named!(parse_functype <Inp, FuncType>, do_parse!(
     btag!(0x60)
     >> t1s: call!(parse_vec, parse_valtype)
@@ -190,7 +190,7 @@ named!(parse_functype <Inp, FuncType>, do_parse!(
 ));
 
 // 5.3.4 Limits
-use structure::types::Limits;
+use greenwasm_structure::types::Limits;
 named!(parse_limits <Inp, Limits>, alt!(
     do_parse!(
         btag!(0x00)
@@ -206,12 +206,12 @@ named!(parse_limits <Inp, Limits>, alt!(
 ));
 
 // 5.3.5 Memory Types
-use structure::types::MemType;
+use greenwasm_structure::types::MemType;
 named!(parse_memtype <Inp, MemType>, map!(parse_limits, |limits| MemType { limits }));
 
 // 5.3.6. Table Types
-use structure::types::TableType;
-use structure::types::ElemType;
+use greenwasm_structure::types::TableType;
+use greenwasm_structure::types::ElemType;
 named!(parse_tabletype <Inp, TableType>, do_parse!(
     et: parse_elemtype
     >> lim: parse_limits
@@ -220,8 +220,8 @@ named!(parse_tabletype <Inp, TableType>, do_parse!(
 named!(parse_elemtype <Inp, ElemType>, btagmap!(0x70, ElemType::AnyFunc));
 
 // 5.3.7. Global Types
-use structure::types::GlobalType;
-use structure::types::Mut;
+use greenwasm_structure::types::GlobalType;
+use greenwasm_structure::types::Mut;
 named!(parse_globaltype <Inp, GlobalType>, do_parse!(
     t: parse_valtype
     >> m: parse_mut
@@ -233,7 +233,7 @@ named!(parse_mut <Inp, Mut>, alt!(
 ));
 
 // 5.4. Instructions
-use structure::instructions::Instr;
+use greenwasm_structure::instructions::Instr;
 
 // NB: The canonical grammar is defined with recursion for nested control
 // instructions. This can lead to stack overflows during parsing, so
@@ -602,7 +602,7 @@ named!(parse_instr_event <Inp, InstrEvent>, alt!(
     | ins!(0xBE, Instr::F32ReinterpretI32)
     | ins!(0xBF, Instr::F64ReinterpretI64)
 ));
-use structure::instructions::Memarg;
+use greenwasm_structure::instructions::Memarg;
 named!(parse_memarg <Inp, Memarg>, do_parse!(
     a: parse_u32
     >> o: parse_u32
@@ -610,20 +610,20 @@ named!(parse_memarg <Inp, Memarg>, do_parse!(
 ));
 
 // 5.4.6. Expressions
-use structure::instructions::Expr;
+use greenwasm_structure::instructions::Expr;
 named!(parse_expr <Inp, Expr>, do_parse!(
     ins: parse_instrs_end
     >> (Expr { body: ins })
 ));
 
 // 5.5.1. Indices
-use structure::modules::TypeIdx;
-use structure::modules::FuncIdx;
-use structure::modules::TableIdx;
-use structure::modules::MemIdx;
-use structure::modules::GlobalIdx;
-use structure::modules::LocalIdx;
-use structure::modules::LabelIdx;
+use greenwasm_structure::modules::TypeIdx;
+use greenwasm_structure::modules::FuncIdx;
+use greenwasm_structure::modules::TableIdx;
+use greenwasm_structure::modules::MemIdx;
+use greenwasm_structure::modules::GlobalIdx;
+use greenwasm_structure::modules::LocalIdx;
+use greenwasm_structure::modules::LabelIdx;
 named!(parse_typeidx <Inp, TypeIdx>,     map!(parse_u32, TypeIdx));
 named!(parse_funcidx <Inp, FuncIdx>,     map!(parse_u32, FuncIdx));
 named!(parse_tableidx <Inp, TableIdx>,   map!(parse_u32, TableIdx));
@@ -671,8 +671,8 @@ named!(parse_typesec <Inp, Wec<FuncType>>,
 );
 
 // 5.5.5. Import Section
-use structure::modules::Import;
-use structure::modules::ImportDesc;
+use greenwasm_structure::modules::Import;
+use greenwasm_structure::modules::ImportDesc;
 named!(parse_import <Inp, Import>, do_parse!(
     module: parse_name
     >> name: parse_name
@@ -697,7 +697,7 @@ named!(parse_funcsec <Inp, Wec<TypeIdx>>,
 );
 
 // 5.5.7. Table Section
-use structure::modules::Table;
+use greenwasm_structure::modules::Table;
 named!(parse_table <Inp, Table>, do_parse!(
     tt: parse_tabletype
     >> (Table { type_: tt })
@@ -708,7 +708,7 @@ named!(parse_tablesec <Inp, Wec<Table>>,
 );
 
 // 5.5.8. Memory Section
-use structure::modules::Mem;
+use greenwasm_structure::modules::Mem;
 named!(parse_mem <Inp, Mem>, do_parse!(
     mt: parse_memtype
     >> (Mem { type_: mt })
@@ -719,7 +719,7 @@ named!(parse_memsec <Inp, Wec<Mem>>,
 );
 
 // 5.5.9. Global Section
-use structure::modules::Global;
+use greenwasm_structure::modules::Global;
 named!(parse_global <Inp, Global>, do_parse!(
     gt: parse_globaltype
     >> e: parse_expr
@@ -731,8 +731,8 @@ named!(parse_globalsec <Inp, Wec<Global>>,
 );
 
 // 5.5.10. Export Section
-use structure::modules::Export;
-use structure::modules::ExportDesc;
+use greenwasm_structure::modules::Export;
+use greenwasm_structure::modules::ExportDesc;
 named!(parse_export <Inp, Export>, do_parse!(
     name: parse_name
     >> desc: parse_exportdesc
@@ -750,7 +750,7 @@ named!(parse_exportdesc <Inp, ExportDesc>, alt!(
 ));
 
 // 5.5.11. Start Section
-use structure::modules::Start;
+use greenwasm_structure::modules::Start;
 named!(parse_start <Inp, Start>, do_parse!(
     x: parse_funcidx
     >> (Start { func: x })
@@ -760,7 +760,7 @@ named!(parse_startsec <Inp, Option<Start>>,
 );
 
 // 5.5.12. Element Section
-use structure::modules::Elem;
+use greenwasm_structure::modules::Elem;
 named!(parse_elem <Inp, Elem>, do_parse!(
     x: parse_tableidx
     >> e: parse_expr
@@ -789,7 +789,7 @@ named!(parse_func <Inp, Code>, do_parse!(
         value!(tss),
         |tss: &Wec<(_, _)>|
             tss.iter().map(|x| x.0 as u64).sum::<u64>()
-            <= ::structure::types::WEC_MAX_SIZE as u64
+            <= ::greenwasm_structure::types::WEC_MAX_SIZE as u64
     )
     >> ts: map!(
         value!(tss),
@@ -813,7 +813,7 @@ named!(parse_codesec <Inp, Wec<Code>>,
 );
 
 // 5.5.14. Data Section
-use structure::modules::Data;
+use greenwasm_structure::modules::Data;
 named!(parse_data <Inp, Data>, do_parse!(
     x: parse_memidx
     >> e: parse_expr
@@ -826,8 +826,8 @@ named!(parse_datasec <Inp, Wec<Data>>,
 );
 
 // 5.5.15. Modules
-use structure::modules::Module;
-use structure::modules::Func;
+use greenwasm_structure::modules::Module;
+use greenwasm_structure::modules::Func;
 named!(parse_magic <Inp, ()>,
     value!((), tag!(&[0x00, 0x61, 0x73, 0x6D][..]))
 );

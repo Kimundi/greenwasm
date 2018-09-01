@@ -1,14 +1,14 @@
-use structure::types::*;
-use structure::modules::*;
-use structure::instructions::*;
-use binary_format::parse_binary_format;
-use validation::{validate_module};
-use execution::modules::instantiation::instantiate_module;
-use execution::modules::invocation::*;
-use execution::runtime_structure::*;
-use execution::runtime_structure::Result as IResult;
-use spectest::*;
-use spectest::wabt::script::*;
+use greenwasm_structure::types::*;
+use greenwasm_structure::modules::*;
+use greenwasm_structure::instructions::*;
+use greenwasm_binary_format::parse_binary_format;
+use greenwasm_validation::{validate_module};
+use greenwasm_execution::modules::instantiation::instantiate_module;
+use greenwasm_execution::modules::invocation::*;
+use greenwasm_execution::runtime_structure::*;
+use greenwasm_execution::runtime_structure::Result as IResult;
+use greenwasm_spectest::*;
+use greenwasm_spectest::wabt::script::*;
 
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};

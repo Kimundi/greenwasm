@@ -1,12 +1,12 @@
-use structure::types::*;
-use structure::modules::*;
-use structure::instructions::Instr::*;
-use structure::instructions::*;
-use binary_format::parse_binary_format;
-use validation::validate_module;
-use execution::modules::instantiation::instantiate_module;
-use execution::modules::allocation::*;
-use execution::runtime_structure::*;
+use greenwasm_structure::types::*;
+use greenwasm_structure::modules::*;
+use greenwasm_structure::instructions::Instr::*;
+use greenwasm_structure::instructions::*;
+use greenwasm_binary_format::parse_binary_format;
+use greenwasm_validation::validate_module;
+use greenwasm_execution::modules::instantiation::instantiate_module;
+use greenwasm_execution::modules::allocation::*;
+use greenwasm_execution::runtime_structure::*;
 
 fn diff_print<T: ::std::fmt::Debug>(value_is: &T, value_should: &T) -> String {
     let value_is = format!("{:#?}", value_is);

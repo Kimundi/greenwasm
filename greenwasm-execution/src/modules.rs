@@ -1,6 +1,6 @@
 use greenwasm_structure::types::*;
 use greenwasm_structure::modules::*;
-use validation::ValidatedModule;
+use greenwasm_validation::ValidatedModule;
 
 use crate::runtime_structure::*;
 use crate::instructions::*;

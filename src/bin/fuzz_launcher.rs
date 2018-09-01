@@ -1,9 +1,10 @@
-use structure::types::*;
-use binary_format::*;
-use validation::*;
-use execution::modules::*;
-use execution::runtime_structure::*;
-use execution::modules::instantiation::*;
+use greenwasm_structure::types::*;
+use greenwasm_binary_format::*;
+use greenwasm_validation::*;
+use greenwasm_execution::modules::*;
+use greenwasm_execution::runtime_structure::*;
+use greenwasm_execution::modules::instantiation::*;
+use greenwasm::binary_format;
 
 fn main() {
     let details = ::std::env::args().nth(2) == Some("--details".to_string());

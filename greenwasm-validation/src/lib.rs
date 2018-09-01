@@ -1,39 +1,39 @@
 #![feature(macro_at_most_once_rep)]
 
-use structure::types::FuncType;
-use structure::types::TableType;
-use structure::types::MemType;
-use structure::types::GlobalType;
-use structure::types::ValType;
-use structure::types::ResultType;
-use structure::types::Limits;
-use structure::types::Mut;
-use structure::types::ElemType;
-use structure::types::ExternType;
+use greenwasm_structure::types::FuncType;
+use greenwasm_structure::types::TableType;
+use greenwasm_structure::types::MemType;
+use greenwasm_structure::types::GlobalType;
+use greenwasm_structure::types::ValType;
+use greenwasm_structure::types::ResultType;
+use greenwasm_structure::types::Limits;
+use greenwasm_structure::types::Mut;
+use greenwasm_structure::types::ElemType;
+use greenwasm_structure::types::ExternType;
 
-use structure::instructions::Instr;
-use structure::instructions::Expr;
-use structure::instructions::Memarg;
+use greenwasm_structure::instructions::Instr;
+use greenwasm_structure::instructions::Expr;
+use greenwasm_structure::instructions::Memarg;
 
-use structure::modules::Func;
-use structure::modules::Table;
-use structure::modules::Mem;
-use structure::modules::Global;
-use structure::modules::Elem;
-use structure::modules::Data;
-use structure::modules::Start;
-use structure::modules::Export;
-use structure::modules::ExportDesc;
-use structure::modules::Import;
-use structure::modules::ImportDesc;
-use structure::modules::Module;
-use structure::modules::LocalIdx;
-use structure::modules::FuncIdx;
-use structure::modules::GlobalIdx;
-use structure::modules::MemIdx;
-use structure::modules::TableIdx;
-use structure::modules::TypeIdx;
-use structure::modules::LabelIdx;
+use greenwasm_structure::modules::Func;
+use greenwasm_structure::modules::Table;
+use greenwasm_structure::modules::Mem;
+use greenwasm_structure::modules::Global;
+use greenwasm_structure::modules::Elem;
+use greenwasm_structure::modules::Data;
+use greenwasm_structure::modules::Start;
+use greenwasm_structure::modules::Export;
+use greenwasm_structure::modules::ExportDesc;
+use greenwasm_structure::modules::Import;
+use greenwasm_structure::modules::ImportDesc;
+use greenwasm_structure::modules::Module;
+use greenwasm_structure::modules::LocalIdx;
+use greenwasm_structure::modules::FuncIdx;
+use greenwasm_structure::modules::GlobalIdx;
+use greenwasm_structure::modules::MemIdx;
+use greenwasm_structure::modules::TableIdx;
+use greenwasm_structure::modules::TypeIdx;
+use greenwasm_structure::modules::LabelIdx;
 
 pub type VResult<T> = Result<T, ValidationError>;
 #[derive(Debug)]

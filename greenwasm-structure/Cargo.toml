@@ -1,4 +1,4 @@
-cargo-features = ["edition", "rename-dependency"]
+cargo-features = ["edition"]
 
 [package]
 edition = '2018'

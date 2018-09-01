@@ -1,9 +1,9 @@
-cargo-features = ["edition", "rename-dependency"]
+cargo-features = ["edition"]
 
 [package]
 edition = '2018'
 name = "greenwasm-binary-format"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 license = "MIT/Apache-2.0"
 
@@ -16,9 +16,8 @@ keywords = ["nom", "binary-format", "parser"]
 
 workspace = ".."
 
-[dependencies.structure]
+[dependencies.greenwasm-structure]
 version = "0.2.0"
-package = "greenwasm-structure"
 path = "../greenwasm-structure"
 
 [dependencies.nom]
