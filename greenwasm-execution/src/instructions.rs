@@ -1,6 +1,6 @@
-use structure::types::*;
-use structure::modules::*;
-use structure::instructions::*;
+use greenwasm_structure::types::*;
+use greenwasm_structure::modules::*;
+use greenwasm_structure::instructions::*;
 
 use crate::runtime_structure::*;
 use crate::numerics::*;

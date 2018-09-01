@@ -1,5 +1,5 @@
-use structure::types::*;
-use structure::modules::*;
+use greenwasm_structure::types::*;
+use greenwasm_structure::modules::*;
 use validation::ValidatedModule;
 
 use crate::runtime_structure::*;

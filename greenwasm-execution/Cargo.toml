@@ -16,9 +16,8 @@ keywords = ["vm", "execution"]
 
 workspace = ".."
 
-[dependencies.structure]
+[dependencies.greenwasm-structure]
 version = "0.2.0"
-package = "greenwasm-structure"
 path = "../greenwasm-structure"
 
 [dependencies.validation]

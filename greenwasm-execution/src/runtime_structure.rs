@@ -1,6 +1,6 @@
-use structure::types::*;
-use structure::instructions::*;
-use structure::modules::*;
+use greenwasm_structure::types::*;
+use greenwasm_structure::instructions::*;
+use greenwasm_structure::modules::*;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 

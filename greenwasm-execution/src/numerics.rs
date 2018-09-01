@@ -1,4 +1,4 @@
-use structure::types::*;
+use greenwasm_structure::types::*;
 
 macro_rules! define_trait {
     (
