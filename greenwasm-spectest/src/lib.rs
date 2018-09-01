@@ -1,11 +1,38 @@
+#![deny(missing_docs)]
+
+pub extern crate wabt;
+
 use std::path::Path;
 use wabt::script::*;
 
-pub use wabt;
+/// Handles the different script commands of the `*.wast` format.
+pub trait ScriptHandler {
+    /// Reset all state of the handler, specifically
+    /// clearing all loaded modules and assuming a new script file.
+    fn reset(&mut self);
 
-pub trait CommandDispatch {
+    /// Handles an `invoke` action.
+    ///
+    /// Should call a exported function with name `field` and arguments
+    /// `args` from a loaded module.
+    ///
+    /// Targets either the last loaded module if `module` is None, or
+    /// the module registered with the given name otherwise.
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult;
+
+    /// Handles an `get` action.
+    ///
+    /// Should get a exported global with name `field` from a loaded module.
+    ///
+    /// Targets either the last loaded module if `module` is None, or
+    /// the module registered with the given name otherwise.
     fn action_get(&mut self, module: Option<String>, field: String) -> Value;
+
+    /// Handles an `action`.
+    ///
+    /// The default implementation dispatches to `action_get` or `
+    /// action_invoke`, gathers the result in an vector, and panics
+    /// if a function call trapped or exhausted the stack.
     fn action(&mut self, action: Action) -> Vec<Value> {
         match action {
             Action::Invoke { module, field, args } => {
@@ -21,16 +48,37 @@ pub trait CommandDispatch {
         }
     }
 
+    /// Handles a module load.
+    ///
+    /// The webassembly module is passed in its binary format in
+    /// the `bytes` argument.
+    ///
+    /// If `name` is `Some`, it should be registered under that name.
+    /// In any case it should count as the least recently loaded module.
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>);
+
+    /// Handles an `assert_return`.
+    ///
+    /// Per default panics if the result of handling the `action`
+    /// does not result in the `expected` values.
+    ///
+    /// Floating point values should, and per default are,
+    /// compared according to their bit-pattern, and not their normal
+    /// `PartialEq` semantic. See the `NanCompare` wrapper type.
     fn assert_return(&mut self, action: Action, expected: Vec<Value>) {
         let results = self.action(action);
         assert_eq!(NanCompare(&expected), NanCompare(&results));
     }
+
+    /// Handles an `assert_trap`.
+    ///
+    /// Per default panics if the result of handling the `action`
+    /// does not trap, or refers to an global.
     fn assert_trap(&mut self, action: Action) {
         match action {
             Action::Invoke { module, field, args } => {
                 if let InvokationResult::Vals(results) = self.action_invoke(module, field, args) {
-                    panic!("invokation did not trap, but return {:?}", results);
+                    panic!("invokation did not trap, but returned {:?}", results);
                 }
             }
             Action::Get { .. } => {
@@ -38,16 +86,63 @@ pub trait CommandDispatch {
             }
         }
     }
+
+    /// Handles an `assert_malformed`.
+    ///
+    /// The webassembly module is passed in its binary format in
+    /// the `bytes` argument.
+    ///
+    /// Should panic if the module can be successfully decoded.
     fn assert_malformed(&mut self, bytes: Vec<u8>);
+
+    /// Handles an `assert_malformed`.
+    ///
+    /// The webassembly module is passed in its binary format in
+    /// the `bytes` argument.
+    ///
+    /// Should panic if the module can be successfully decoded.
     fn assert_invalid(&mut self, bytes: Vec<u8>);
+
+    /// Handles an `assert_unlinkable`.
+    ///
+    /// The webassembly module is passed in its binary format in
+    /// the `bytes` argument.
+    ///
+    /// Should panic if the module can be successfully linked.
+    ///
+    /// This seems to be a legacy script command, and per default
+    /// just invokes `assert_uninstantiable`.
     fn assert_unlinkable(&mut self, bytes: Vec<u8>) {
         // TODO: figure out the exact difference
         // Currently it looks like a link error is any instantiation error except
         // a runtime error during execution of a start function
         self.assert_uninstantiable(bytes);
     }
+
+    /// Handles an `assert_uninstantiable`.
+    ///
+    /// The webassembly module is passed in its binary format in
+    /// the `bytes` argument.
+    ///
+    /// Should panic if the module can be successfully instantiated.
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>);
+
+    /// Handles an `assert_trap`.
+    ///
+    /// Should panic if the result of handling the `action`
+    /// does not exhaust the stack, or refers to an global.
     fn assert_exhaustion(&mut self, action: Action);
+
+    /// Handles an `assert_return_canonical_nan`.
+    ///
+    /// Per default panics if the result of handling the `action`
+    /// does not result in single canonical NaN floating point value.
+    ///
+    /// Any canonical NaN is also a arithmetic NaN.
+    ///
+    /// Floating point values should, and per default are,
+    /// compared according to their bit-pattern, and not their normal
+    /// `PartialEq` semantic. See the `NanCompare` wrapper type.
     fn assert_return_canonical_nan(&mut self, action: Action) {
         let results = self.action(action);
         match *results {
@@ -58,6 +153,17 @@ pub trait CommandDispatch {
             }
         }
     }
+
+    /// Handles an `assert_return_arithmetic_nan`.
+    ///
+    /// Per default panics if the result of handling the `action`
+    /// does not result in single arithmetic NaN floating point value.
+    ///
+    /// Any canonical NaN is also a arithmetic NaN.
+    ///
+    /// Floating point values should, and per default are,
+    /// compared according to their bit-pattern, and not their normal
+    /// `PartialEq` semantic. See the `NanCompare` wrapper type.
     fn assert_return_arithmetic_nan(&mut self, action: Action) {
         let results = self.action(action);
         match *results {
@@ -68,6 +174,11 @@ pub trait CommandDispatch {
             }
         }
     }
+
+    /// Register a loaded module under the name `as_name`.
+    ///
+    /// If `name` is `Some`, it should be registered under that name.
+    /// In any case it should count as the least recently loaded module.
     fn register(&mut self, name: Option<String>, as_name: String);
 }
 
@@ -212,11 +323,11 @@ impl SpectestResult {
     }
 }
 
-pub fn run_mvp_spectest<C: CommandDispatch, F: FnMut() -> C>(create_dispatcher: F) -> SpectestResult {
+pub fn run_mvp_spectest<C: ScriptHandler, F: FnMut() -> C>(create_dispatcher: F) -> SpectestResult {
     run_all_in_directory(format!("{}/testsuite", env!("CARGO_MANIFEST_DIR")).as_ref(), create_dispatcher)
 }
 
-pub fn run_all_in_directory<C: CommandDispatch, F: FnMut() -> C>(path: &Path, mut create_dispatcher: F) -> SpectestResult {
+pub fn run_all_in_directory<C: ScriptHandler, F: FnMut() -> C>(path: &Path, mut create_dispatcher: F) -> SpectestResult {
     use std::fs;
     let mut res = SpectestResult {
         failures: vec![],
@@ -241,7 +352,7 @@ pub fn run_all_in_directory<C: CommandDispatch, F: FnMut() -> C>(path: &Path, mu
     return res;
 }
 
-pub fn run_single_file<C: CommandDispatch>(path: &Path, sctrl: &mut C) -> SpectestResult {
+pub fn run_single_file<C: ScriptHandler>(path: &Path, sctrl: &mut C) -> SpectestResult {
     use std::fs;
 
     let mut res = SpectestResult {
@@ -274,7 +385,7 @@ pub fn run_single_file<C: CommandDispatch>(path: &Path, sctrl: &mut C) -> Specte
     return res;
 }
 
-pub fn run_single_command<C: CommandDispatch>(kind: CommandKind, sctrl: &mut C) -> Result<(), String> {
+pub fn run_single_command<C: ScriptHandler>(kind: CommandKind, sctrl: &mut C) -> Result<(), String> {
     use std::panic::*;
 
     if let Err(msg) = catch_unwind(AssertUnwindSafe(|| {
@@ -292,7 +403,7 @@ pub fn run_single_command<C: CommandDispatch>(kind: CommandKind, sctrl: &mut C) 
         Ok(())
     }
 }
-pub fn run_single_command_no_catch<C: CommandDispatch>(cmd: CommandKind, c: &mut C) {
+pub fn run_single_command_no_catch<C: ScriptHandler>(cmd: CommandKind, c: &mut C) {
     // TODO: Figure out if the "message" fields need to actually be handled
     use wabt::script::CommandKind::*;
     match cmd {
