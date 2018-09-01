@@ -12,17 +12,46 @@ license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/greenwasm"
 description = "An implementation of the Webassembly spec in Rust."
 readme = "README.md"
+repository = "https://github.com/Kimundi/greenwasm"
+categories = ["wasm"]
+keywords = []
 
-[dependencies]
-structure = { version = "0.2.0", package = "greenwasm-structure", path = "greenwasm-structure" }
-validation = { version = "0.2.0", package = "greenwasm-validation", path = "greenwasm-validation" }
-binary_format = { version = "0.2.0", package = "greenwasm-binary-format", path = "greenwasm-binary-format" }
-execution = { version = "0.2.0", package = "greenwasm-execution", path = "greenwasm-execution" }
-binaryen = "0.4.0"
+[dependencies.structure]
+version = "0.2.0"
+package = "greenwasm-structure"
+path = "greenwasm-structure"
 
-[dev-dependencies]
-spectest = { version = "0.2.0", package = "greenwasm-spectest", path = "greenwasm-spectest" }
+[dependencies.validation]
+version = "0.2.0"
+package = "greenwasm-validation"
+path = "greenwasm-validation"
+
+[dependencies.binary_format]
+version = "0.2.0"
+package = "greenwasm-binary-format"
+path = "greenwasm-binary-format"
+
+[dependencies.execution]
+version = "0.2.0"
+package = "greenwasm-execution"
+path = "greenwasm-execution"
+
+[dependencies.binaryen]
+version = "0.4.0"
+
+[dev-dependencies.spectest]
+version = "0.2.0"
+package = "greenwasm-spectest"
+path = "greenwasm-spectest"
 
 [profile.dev]
-opt-level = 1      # controls the `--opt-level` the compiler builds with.
-                   # 0-1 is good for debugging. 2 is well-optimized. Max is 3.
+opt-level = 1 # The parser is horribly slow otherwise
+
+[badges]
+appveyor = { repository = "Kimundi/greenwasm" }
+travis-ci = { repository = "Kimundi/greenwasm" }
+
+is-it-maintained-issue-resolution = { repository = "Kimundi/greenwasm" }
+is-it-maintained-open-issues = { repository = "Kimundi/greenwasm" }
+
+maintenance = { status = "experimental" }

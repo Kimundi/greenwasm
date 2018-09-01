@@ -8,10 +8,23 @@ authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 license = "MIT/Apache-2.0"
 
 documentation = "https://docs.rs/greenwasm-structure"
-description = "."
+description = "An implementation of the structure section from the Webassembly spec."
 readme = "README.md"
+repository = "https://github.com/Kimundi/greenwasm"
+categories = ["wasm", "data-structures"]
+keywords = ["AST", "structure"]
 
 workspace = ".."
 
-[dependencies]
-smallvec = { version = "0.6.4", features = ["union"] }
+[dependencies.smallvec]
+version = "0.6.4"
+features = ["union"]
+
+[badges]
+appveyor = { repository = "Kimundi/greenwasm" }
+travis-ci = { repository = "Kimundi/greenwasm" }
+
+is-it-maintained-issue-resolution = { repository = "Kimundi/greenwasm" }
+is-it-maintained-open-issues = { repository = "Kimundi/greenwasm" }
+
+maintenance = { status = "experimental" }

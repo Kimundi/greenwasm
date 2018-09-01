@@ -8,12 +8,28 @@ authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 license = "MIT/Apache-2.0"
 
 documentation = "https://docs.rs/greenwasm-binary-format"
-description = "."
+description = "An implementation of the binary format section from the Webassembly spec."
 readme = "README.md"
+repository = "https://github.com/Kimundi/greenwasm"
+categories = ["wasm"]
+keywords = ["nom", "binary-format", "parser"]
 
 workspace = ".."
 
-[dependencies]
-structure = { version = "0.2.0", package = "greenwasm-structure", path = "../greenwasm-structure" }
-nom = { version = "4.0", features = ["verbose-errors"] }
+[dependencies.structure]
+version = "0.2.0"
+package = "greenwasm-structure"
+path = "../greenwasm-structure"
 
+[dependencies.nom]
+version = "4.0"
+features = ["verbose-errors"]
+
+[badges]
+appveyor = { repository = "Kimundi/greenwasm" }
+travis-ci = { repository = "Kimundi/greenwasm" }
+
+is-it-maintained-issue-resolution = { repository = "Kimundi/greenwasm" }
+is-it-maintained-open-issues = { repository = "Kimundi/greenwasm" }
+
+maintenance = { status = "experimental" }

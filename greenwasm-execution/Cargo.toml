@@ -8,12 +8,32 @@ authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 license = "MIT/Apache-2.0"
 
 documentation = "https://docs.rs/greenwasm-execution"
-description = "."
+description = "An implementation of the execution section from the Webassembly spec."
 readme = "README.md"
+repository = "https://github.com/Kimundi/greenwasm"
+categories = ["wasm", "emulators"]
+keywords = ["vm", "execution"]
 
 workspace = ".."
 
-[dependencies]
-structure = { version = "0.2.0", package = "greenwasm-structure", path = "../greenwasm-structure" }
-validation = { version = "0.2.0", package = "greenwasm-validation", path = "../greenwasm-validation" }
-frounding = "0.0.4"
+[dependencies.structure]
+version = "0.2.0"
+package = "greenwasm-structure"
+path = "../greenwasm-structure"
+
+[dependencies.validation]
+version = "0.2.0"
+package = "greenwasm-validation"
+path = "../greenwasm-validation"
+
+[dependencies.frounding]
+version = "0.0.4"
+
+[badges]
+appveyor = { repository = "Kimundi/greenwasm" }
+travis-ci = { repository = "Kimundi/greenwasm" }
+
+is-it-maintained-issue-resolution = { repository = "Kimundi/greenwasm" }
+is-it-maintained-open-issues = { repository = "Kimundi/greenwasm" }
+
+maintenance = { status = "experimental" }

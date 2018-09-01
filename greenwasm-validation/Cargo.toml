@@ -8,10 +8,24 @@ authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 license = "MIT/Apache-2.0"
 
 documentation = "https://docs.rs/greenwasm-validation"
-description = "."
+description = "An implementation of the validation section from the Webassembly spec."
 readme = "README.md"
+repository = "https://github.com/Kimundi/greenwasm"
+categories = ["wasm"]
+keywords = ["validation"]
 
 workspace = ".."
 
-[dependencies]
-structure = { version = "0.2.0", package = "greenwasm-structure", path = "../greenwasm-structure" }
+[dependencies.structure]
+version = "0.2.0"
+package = "greenwasm-structure"
+path = "../greenwasm-structure"
+
+[badges]
+appveyor = { repository = "Kimundi/greenwasm" }
+travis-ci = { repository = "Kimundi/greenwasm" }
+
+is-it-maintained-issue-resolution = { repository = "Kimundi/greenwasm" }
+is-it-maintained-open-issues = { repository = "Kimundi/greenwasm" }
+
+maintenance = { status = "experimental" }
