@@ -8,7 +8,6 @@ use greenwasm_execution::modules::invocation::*;
 use greenwasm_execution::runtime_structure::*;
 use greenwasm_execution::runtime_structure::Result as IResult;
 use greenwasm_spectest::*;
-use greenwasm_spectest::wabt::script::*;
 
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -137,7 +136,11 @@ fn val_greenwasm2wabt(v: Val) -> Value {
     }
 }
 
-impl CommandDispatch for StoreCtrl {
+impl ScriptHandler for StoreCtrl {
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
         let moduleaddr = self.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
             macro_rules! mytry {
@@ -535,5 +538,5 @@ fn spectest_module() -> Module {
 
 #[test]
 fn run_tests() {
-    run_mvp_spectest(StoreCtrl::new).present();
+    run_mvp_spectest(&mut StoreCtrl::new()).present();
 }
