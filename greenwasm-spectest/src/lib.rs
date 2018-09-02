@@ -1,6 +1,78 @@
 #![deny(missing_docs)]
 
+//! A library shim around a mirror of the
+//! official [webassembly MVP testsuite](https://github.com/WebAssembly/spec/tree/master/test/core).
+//!
+//! It can be used as a independent testsuite launcher for other
+//! webassembly implementations by implementing `ScriptHandler`.
+//!
+//! Example:
+//! ```should_fail
+/*!
+use greenwasm_spectest::*;
+
+struct DummyHandler;
+impl ScriptHandler for DummyHandler {
+    fn reset(&mut self) {}
+    fn action_invoke(&mut self,
+                     module: Option<String>,
+                     field: String,
+                     args: Vec<Value>) -> InvokationResult
+    {
+        unimplemented!()
+    }
+    fn action_get(&mut self,
+                  module: Option<String>,
+                  field: String) -> Value
+    {
+        unimplemented!()
+    }
+    fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
+        unimplemented!()
+    }
+    fn assert_malformed(&mut self, bytes: Vec<u8>) {
+        unimplemented!()
+    }
+    fn assert_invalid(&mut self, bytes: Vec<u8>) {
+        unimplemented!()
+    }
+    fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
+        unimplemented!()
+    }
+    fn assert_exhaustion(&mut self, action: Action) {
+        unimplemented!()
+    }
+    fn register(&mut self, name: Option<String>, as_name: String) {
+        unimplemented!()
+    }
+}
+
+run_mvp_spectest(&mut DummyHandler).present();
+*/
+//! ```
+//! This would result in a output like this:
+//! ```text
+/*!
+Executing address.wast ...
+Executing align.wast ...
+Executing binary.wast ...
+Executing block.wast ...
+Executing br.wast ...
+[...]
+
+wast failures:
+    address.wast:3, not yet implemented
+    address.wast:104, <not attempted>
+    address.wast:105, <not attempted>
+    ...
+wast total: 0 passed; 17955 failed
+*/
+//! ```
+
 pub extern crate wabt;
+pub use wabt::script::Value;
+pub use wabt::script::Action;
+pub use wabt::script::CommandKind;
 
 use std::path::Path;
 use wabt::script::*;
@@ -182,7 +254,11 @@ pub trait ScriptHandler {
     fn register(&mut self, name: Option<String>, as_name: String);
 }
 
+/// Wrapper type that compares a list of `wabt` `Value`s
+/// according to their bit-pattern if they contain floating point values,
+/// and according to regular `PartialEq` semantics otherwise.
 pub struct NanCompare<'a>(pub &'a [Value]);
+
 impl<'a> ::std::cmp::PartialEq for NanCompare<'a> {
     fn eq(&self, other: &Self) -> bool {
         if self.0.len() != other.0.len() {
@@ -223,24 +299,43 @@ impl<'a> ::std::fmt::Debug for NanCompare<'a> {
     }
 }
 
+/// Result of invoking a function.
 pub enum InvokationResult {
+    /// The function returned successfully with a number of `Value`s
     Vals(Vec<Value>),
+    /// The function trapped.
     Trap,
+    /// The function exhausted the stack.
     StackExhaustion,
 }
 
+/// Extension trait for floating point values.
+///
+/// Provides methods for accessing the payload
+/// of a NaN according to the webassembly spec.
+///
+/// According to the spec, any canonical NaN is also an arithmetic one.
 pub trait NanPayload {
+    /// Returns the payload bits of a NaN value.
     fn payload(&self) -> u64;
+    /// Returns the number of significant digits in a NaN value.
     fn signif() -> u32;
+    /// Returns positive infinite.
     fn infinite() -> Self;
+    /// Returns the payload of a canonical NaN.
     fn canonical_payload() -> u64;
+    /// Returns an arithmetic NaN with the given payload.
     fn arithmetic_nan(payload: u64) -> Self;
+    /// Returns a canonical NaN.
     fn canonical_nan() -> Self;
+    /// Checks if a value is an arithmetic NaN.
     fn is_arithmetic_nan(&self) -> bool;
+    /// Checks if a value is a canonical NaN.
     fn is_canonical_nan(&self) -> bool;
 }
 impl NanPayload for f32 {
     fn payload(&self) -> u64 {
+        assert!(self.is_nan());
         let bits: u32 = self.to_bits();
         let mask: u32 = (1u32 << 23) - 1;
         let p = bits & mask;
@@ -270,6 +365,7 @@ impl NanPayload for f32 {
 }
 impl NanPayload for f64 {
     fn payload(&self) -> u64 {
+        assert!(self.is_nan());
         let bits: u64 = self.to_bits();
         let mask: u64 = (1u64 << 52) - 1;
         let p = bits & mask;
@@ -298,13 +394,21 @@ impl NanPayload for f64 {
     }
 }
 
+/// Result of running a series of script commands.
 #[must_use]
 pub struct SpectestResult {
+    /// List of failed commands consisting of
+    /// (filename, line number, panic message) tuples.
     pub failures: Vec<(String, u64, String)>,
+    /// Number of successful commands.
     pub successes: usize,
 }
 
 impl SpectestResult {
+    /// Displays the results in `Self` in a form similar
+    /// to Rusts testsuite, and raises an panic if any tests failed.
+    ///
+    /// This is intended to be called from a `#[test]` function.
     pub fn present(self) {
         if self.failures.len() > 0 {
             println!("wast failures:");
@@ -323,11 +427,13 @@ impl SpectestResult {
     }
 }
 
-pub fn run_mvp_spectest<C: ScriptHandler, F: FnMut() -> C>(create_dispatcher: F) -> SpectestResult {
-    run_all_in_directory(format!("{}/testsuite", env!("CARGO_MANIFEST_DIR")).as_ref(), create_dispatcher)
+/// Run all scripts of the bundled webassembly testsuite on `handler`.
+pub fn run_mvp_spectest<T: ScriptHandler>(handler: &mut T) -> SpectestResult {
+    run_all_in_directory(format!("{}/testsuite", env!("CARGO_MANIFEST_DIR")).as_ref(), handler)
 }
 
-pub fn run_all_in_directory<C: ScriptHandler, F: FnMut() -> C>(path: &Path, mut create_dispatcher: F) -> SpectestResult {
+/// Run all scripts in a given directory on `handler`.
+pub fn run_all_in_directory<T: ScriptHandler>(path: &Path, handler: &mut T) -> SpectestResult {
     use std::fs;
     let mut res = SpectestResult {
         failures: vec![],
@@ -339,11 +445,11 @@ pub fn run_all_in_directory<C: ScriptHandler, F: FnMut() -> C>(path: &Path, mut 
         let path = dir.path();
         let filename = path.file_name().unwrap().to_str().unwrap();
 
-        let mut sctrl = create_dispatcher();
+        handler.reset();
 
         if path.metadata().unwrap().file_type().is_file() && filename.ends_with(".wast") {
             println!("Executing {} ...", filename);
-            let res2 = run_single_file(&path, &mut sctrl);
+            let res2 = run_single_file(&path, handler);
             res.successes += res2.successes;
             res.failures.extend(res2.failures);
         }
@@ -352,7 +458,8 @@ pub fn run_all_in_directory<C: ScriptHandler, F: FnMut() -> C>(path: &Path, mut 
     return res;
 }
 
-pub fn run_single_file<C: ScriptHandler>(path: &Path, sctrl: &mut C) -> SpectestResult {
+/// Run `handler` on the single `.wast` script file at `path`.
+pub fn run_single_file<T: ScriptHandler>(path: &Path, handler: &mut T) -> SpectestResult {
     use std::fs;
 
     let mut res = SpectestResult {
@@ -371,7 +478,7 @@ pub fn run_single_file<C: ScriptHandler>(path: &Path, sctrl: &mut C) -> Spectest
             res.failures.push((filename.to_owned(), line, "<not attempted>".to_string()));
             continue;
         }
-        match run_single_command(kind, sctrl) {
+        match run_single_command(kind, handler) {
             Err(msg) => {
                 res.failures.push((filename.to_owned(), line, msg));
                 fatal = true;
@@ -385,11 +492,17 @@ pub fn run_single_file<C: ScriptHandler>(path: &Path, sctrl: &mut C) -> Spectest
     return res;
 }
 
-pub fn run_single_command<C: ScriptHandler>(kind: CommandKind, sctrl: &mut C) -> Result<(), String> {
+/// Run `handler` on a single wabt script command, catching any panic that
+/// might happen in the process.
+///
+/// Note that `T` needs to be exception safe, in the sense that any
+/// panic that happened during a method call should not affect it beyond
+/// a subsequent `reset()` call.
+pub fn run_single_command<T: ScriptHandler>(kind: CommandKind, handler: &mut T) -> Result<(), String> {
     use std::panic::*;
 
     if let Err(msg) = catch_unwind(AssertUnwindSafe(|| {
-        run_single_command_no_catch(kind, sctrl);
+        run_single_command_no_catch(kind, handler);
     })) {
         let msg = if let Some(msg) = msg.downcast_ref::<String>() {
             msg.to_string()
@@ -403,6 +516,10 @@ pub fn run_single_command<C: ScriptHandler>(kind: CommandKind, sctrl: &mut C) ->
         Ok(())
     }
 }
+
+/// Run `handler` on a single wabt script command.
+///
+/// Unlike `run_single_command`, this does not catch a panic.
 pub fn run_single_command_no_catch<C: ScriptHandler>(cmd: CommandKind, c: &mut C) {
     // TODO: Figure out if the "message" fields need to actually be handled
     use wabt::script::CommandKind::*;
