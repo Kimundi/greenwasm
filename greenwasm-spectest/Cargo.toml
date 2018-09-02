@@ -1,9 +1,6 @@
-cargo-features = ["edition"]
-
 [package]
-edition = '2018'
 name = "greenwasm-spectest"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 license = "MIT/Apache-2.0"
 
@@ -16,8 +13,8 @@ keywords = ["testsuite"]
 
 workspace = ".."
 
-[dependencies.wabt]
-version = "0.5.0"
+[dependencies]
+wabt = "0.5.0"
 
 [badges]
 appveyor = { repository = "Kimundi/greenwasm" }
