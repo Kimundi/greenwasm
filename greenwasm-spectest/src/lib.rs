@@ -432,6 +432,12 @@ pub fn run_mvp_spectest<T: ScriptHandler>(handler: &mut T) -> SpectestResult {
     run_all_in_directory(format!("{}/testsuite", env!("CARGO_MANIFEST_DIR")).as_ref(), handler)
 }
 
+/// Module that is expected under the name "spectest" by all spectest testcases.
+///
+/// This is automatically registered by all `run_` functions in this modules
+/// that work at file granularity or higher.
+pub const SPECTEST_MODULE: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/spectest.wasm"));
+
 /// Run all scripts in a given directory on `handler`.
 pub fn run_all_in_directory<T: ScriptHandler>(path: &Path, handler: &mut T) -> SpectestResult {
     use std::fs;
@@ -444,8 +450,6 @@ pub fn run_all_in_directory<T: ScriptHandler>(path: &Path, handler: &mut T) -> S
         let dir = dir.unwrap();
         let path = dir.path();
         let filename = path.file_name().unwrap().to_str().unwrap();
-
-        handler.reset();
 
         if path.metadata().unwrap().file_type().is_file() && filename.ends_with(".wast") {
             println!("Executing {} ...", filename);
@@ -472,6 +476,9 @@ pub fn run_single_file<T: ScriptHandler>(path: &Path, handler: &mut T) -> Specte
 
     let mut script = ScriptParser::<>::from_source_and_name(&source, filename).unwrap();
     let mut fatal = false;
+
+    handler.reset();
+    handler.module(SPECTEST_MODULE.to_vec(), Some("spectest".into()));
 
     while let Some(Command { line, kind }) = script.next().unwrap() {
         if fatal {
@@ -562,3 +569,65 @@ pub fn run_single_command_no_catch<C: ScriptHandler>(cmd: CommandKind, c: &mut C
         }
     }
 }
+
+/*
+Spectest module .wat, based on wabt's spectest-interp.cc
+
+static void InitEnvironment(Environment* env) {
+  HostModule* host_module = env->AppendHostModule("spectest");
+  host_module->AppendFuncExport("print", {{}, {}}, PrintCallback);
+  host_module->AppendFuncExport("print_i32", {{Type::I32}, {}}, PrintCallback);
+  host_module->AppendFuncExport("print_f32", {{Type::F32}, {}}, PrintCallback);
+  host_module->AppendFuncExport("print_f64", {{Type::F64}, {}}, PrintCallback);
+  host_module->AppendFuncExport("print_i32_f32", {{Type::I32, Type::F32}, {}},
+                                PrintCallback);
+  host_module->AppendFuncExport("print_f64_f64", {{Type::F64, Type::F64}, {}},
+                                PrintCallback);
+
+  host_module->AppendTableExport("table", Limits(10, 20));
+  host_module->AppendMemoryExport("memory", Limits(1, 2));
+
+  host_module->AppendGlobalExport("global_i32", false, uint32_t(666));
+  host_module->AppendGlobalExport("global_i64", false, uint64_t(666));
+  host_module->AppendGlobalExport("global_f32", false, float(666.6f));
+  host_module->AppendGlobalExport("global_f64", false, double(666.6));
+}
+
+=>
+
+(module
+  (type (func))
+  (type (func (param i32)))
+  (type (func (param f32)))
+  (type (func (param f64)))
+  (type (func (param i32) (param f32)))
+  (type (func (param f64) (param f64)))
+  (func (type 0))
+  (func (type 1))
+  (func (type 2))
+  (func (type 3))
+  (func (type 4))
+  (func (type 5))
+  (table 10 20 anyfunc)
+  (memory 1 2)
+  (global i32 (i32.const 666))
+  (global i64 (i64.const 666))
+  (global f32 (f32.const 666.6))
+  (global f64 (f64.const 666.6))
+  (export "print" (func 0))
+  (export "print_i32" (func 1))
+  (export "print_f32" (func 2))
+  (export "print_f64" (func 3))
+  (export "print_i32_f32" (func 4))
+  (export "print_f64_f64" (func 5))
+  (export "table" (table 0))
+  (export "memory" (memory 0))
+  (export "global_i32" (global 0))
+  (export "global_i64" (global 1))
+  (export "global_f32" (global 2))
+  (export "global_f64" (global 3))
+)
+
+
+the file spectest.wasm in the crate root contains a copy of it as a binary module
+*/

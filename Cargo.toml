@@ -2,7 +2,7 @@
 
 [package]
 name = "greenwasm"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 license = "MIT/Apache-2.0"
 
@@ -33,7 +33,7 @@ path = "greenwasm-execution"
 version = "0.4.0"
 
 [dev-dependencies.greenwasm-spectest]
-version = "0.3.0"
+version = "0.3.1"
 path = "greenwasm-spectest"
 
 [profile.dev]
