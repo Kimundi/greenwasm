@@ -446,6 +446,8 @@ pub fn run_all_in_directory<T: ScriptHandler>(path: &Path, handler: &mut T) -> S
         successes: 0,
     };
 
+    println!("\n\nRunning testsuite at {}:\n", path.display());
+
     'outer: for dir in fs::read_dir(&path).unwrap() {
         let dir = dir.unwrap();
         let path = dir.path();

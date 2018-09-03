@@ -1,6 +1,6 @@
 [package]
 name = "greenwasm-spectest"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
 license = "MIT/Apache-2.0"
 
