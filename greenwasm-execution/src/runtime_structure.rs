@@ -1,9 +1,10 @@
-use greenwasm_structure::types::*;
-use greenwasm_structure::instructions::*;
-use greenwasm_structure::modules::*;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
+use greenwasm_structure::types::*;
+use greenwasm_structure::instructions::*;
+use greenwasm_structure::modules::*;
+use DEBUG_EXECUTION;
 
 // TODO: util module
 #[derive(Clone, PartialEq)]
@@ -245,7 +246,7 @@ impl<'instr> Stack<'instr> {
     pub fn new() -> Self { Self::default() }
 
     fn debug_printme(&self, msg: &str) {
-        if crate::DEBUG_EXECUTION {
+        if DEBUG_EXECUTION {
             self.printme(msg);
         }
     }

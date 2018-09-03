@@ -1,5 +1,7 @@
 use greenwasm_structure::types::*;
 
+use std::intrinsics;
+
 macro_rules! define_trait {
     (
         trait $traitname:ident for {$implty:ty, $($t:tt)*};
@@ -188,24 +190,24 @@ trait FloatIntrinsics {
 }
 impl FloatIntrinsics for f32 {
     fn copysign(z1: Self, z2: Self) -> Self {
-        unsafe { std::intrinsics::copysignf32(z1, z2) }
+        unsafe { intrinsics::copysignf32(z1, z2) }
     }
     fn rint(z: Self) -> Self {
-        unsafe { std::intrinsics::rintf32(z) }
+        unsafe { intrinsics::rintf32(z) }
     }
     fn nearbyint(z: Self) -> Self {
-        unsafe { std::intrinsics::nearbyintf32(z) }
+        unsafe { intrinsics::nearbyintf32(z) }
     }
 }
 impl FloatIntrinsics for f64 {
     fn copysign(z1: Self, z2: Self) -> Self {
-        unsafe { std::intrinsics::copysignf64(z1, z2) }
+        unsafe { intrinsics::copysignf64(z1, z2) }
     }
     fn rint(z: Self) -> Self {
-        unsafe { std::intrinsics::rintf64(z) }
+        unsafe { intrinsics::rintf64(z) }
     }
     fn nearbyint(z: Self) -> Self {
-        unsafe { std::intrinsics::nearbyintf64(z) }
+        unsafe { intrinsics::nearbyintf64(z) }
     }
 }
 

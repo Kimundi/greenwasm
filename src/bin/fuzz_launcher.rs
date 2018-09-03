@@ -1,9 +1,12 @@
-use greenwasm_structure::types::*;
-use greenwasm_binary_format::*;
-use greenwasm_validation::*;
-use greenwasm_execution::modules::*;
-use greenwasm_execution::runtime_structure::*;
-use greenwasm_execution::modules::instantiation::*;
+#![feature(nll)]
+extern crate greenwasm;
+
+use greenwasm::structure::types::*;
+use greenwasm::binary_format::*;
+use greenwasm::validation::*;
+use greenwasm::execution::modules::*;
+use greenwasm::execution::runtime_structure::*;
+use greenwasm::execution::modules::instantiation::*;
 use greenwasm::binary_format;
 
 fn main() {

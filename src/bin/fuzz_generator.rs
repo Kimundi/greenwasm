@@ -1,3 +1,7 @@
+#![feature(nll)]
+
+extern crate binaryen;
+
 use binaryen::tools::*;
 
 fn main() {

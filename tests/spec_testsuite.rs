@@ -1,12 +1,17 @@
-use greenwasm_structure::types::*;
-use greenwasm_structure::modules::*;
-use greenwasm_structure::instructions::*;
-use greenwasm_binary_format::parse_binary_format;
-use greenwasm_validation::{validate_module};
-use greenwasm_execution::modules::instantiation::instantiate_module;
-use greenwasm_execution::modules::invocation::*;
-use greenwasm_execution::runtime_structure::*;
-use greenwasm_execution::runtime_structure::Result as IResult;
+#![feature(nll)]
+
+extern crate greenwasm;
+extern crate greenwasm_spectest;
+
+use greenwasm::structure::types::*;
+use greenwasm::structure::modules::*;
+use greenwasm::structure::instructions::*;
+use greenwasm::binary_format::parse_binary_format;
+use greenwasm::validation::{validate_module};
+use greenwasm::execution::modules::instantiation::instantiate_module;
+use greenwasm::execution::modules::invocation::*;
+use greenwasm::execution::runtime_structure::*;
+use greenwasm::execution::runtime_structure::Result as IResult;
 use greenwasm_spectest::*;
 
 use std::collections::HashMap;

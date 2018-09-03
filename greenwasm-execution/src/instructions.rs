@@ -2,9 +2,10 @@ use greenwasm_structure::types::*;
 use greenwasm_structure::modules::*;
 use greenwasm_structure::instructions::*;
 
-use crate::runtime_structure::*;
-use crate::numerics::*;
-use crate::modules::*;
+use runtime_structure::*;
+use numerics::*;
+use modules::*;
+use DEBUG_EXECUTION;
 
 #[derive(Debug)]
 pub enum ExecutionError {
@@ -12,8 +13,8 @@ pub enum ExecutionError {
     StackExhaustion,
 }
 use self::ExecutionError::Trap;
-impl From<crate::runtime_structure::StackExhaustion> for ExecutionError {
-    fn from(_: crate::runtime_structure::StackExhaustion) -> Self { ExecutionError::StackExhaustion }
+impl From<StackExhaustion> for ExecutionError {
+    fn from(_: StackExhaustion) -> Self { ExecutionError::StackExhaustion }
 }
 type EResult<T> = ::std::result::Result<T, ExecutionError>;
 
@@ -161,7 +162,7 @@ macro_rules! instrumented_instrs {
     (match $x:expr; $($p:pat => $e:expr),*) => {
         match $x {
             $($p => {
-                if crate::DEBUG_EXECUTION { println!(stringify!($p)); }
+                if DEBUG_EXECUTION { println!(stringify!($p)); }
 
                 $e
             })*
@@ -198,7 +199,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
     }
 
     pub fn evaluate_expr(&mut self, expr: &'instr Expr) -> EResult<Val> {
-        if crate::DEBUG_EXECUTION { println!("eval expr..."); }
+        if DEBUG_EXECUTION { println!("eval expr..."); }
 
         let v = self.stack_cleaner(|s| {
             s.ip = &expr.body;
@@ -206,12 +207,12 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
             Ok(s.stack.pop_val())
         })?;
 
-        if crate::DEBUG_EXECUTION { println!("eval expr DONE"); }
+        if DEBUG_EXECUTION { println!("eval expr DONE"); }
         Ok(v)
     }
 
     pub fn invoke(&mut self, a: FuncAddr) -> EResult<()> {
-        if crate::DEBUG_EXECUTION { println!("invoke func..."); }
+        if DEBUG_EXECUTION { println!("invoke func..."); }
 
         // NB: we need a valid next instruction for the return
         self.ip = &[Instr::Nop];
@@ -219,7 +220,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         let _: JumpWitness = self.invokeop(a)?;
         self.execute_instrs()?;
 
-        if crate::DEBUG_EXECUTION { println!("invoke func DONE"); }
+        if DEBUG_EXECUTION { println!("invoke func DONE"); }
         Ok(())
     }
 
@@ -486,10 +487,10 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
     fn execute_instrs(&mut self) -> EResult<()> {
         loop {
             self.execute_instrs_no_falloff()?;
-            if crate::DEBUG_EXECUTION { println!("fell off instruction stream"); }
+            if DEBUG_EXECUTION { println!("fell off instruction stream"); }
             let _: JumpWitness = match self.stack.top_ctrl_entry() {
                 TopCtrlEntry::Label => {
-                    if crate::DEBUG_EXECUTION { println!("continue after ctrl instr"); }
+                    if DEBUG_EXECUTION { println!("continue after ctrl instr"); }
 
                     let stack = &mut *self.stack;
 
@@ -506,7 +507,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
                     self.jump(next_instr)
                 }
                 TopCtrlEntry::Activation => {
-                    if crate::DEBUG_EXECUTION { println!("continue after call"); }
+                    if DEBUG_EXECUTION { println!("continue after call"); }
 
                     let stack = &mut *self.stack;
 
@@ -535,7 +536,7 @@ impl<'instr, 'ctx> ExecCtx<'instr, 'ctx>
         use self::Instr::*;
 
         while let Some(instr) = self.next_instr() {
-            if crate::DEBUG_EXECUTION {
+            if DEBUG_EXECUTION {
                 println!("exec instr {:?} - {:?}", instr, self.ip);
             }
 

@@ -2,8 +2,13 @@ use greenwasm_structure::types::*;
 use greenwasm_structure::modules::*;
 use greenwasm_validation::ValidatedModule;
 
-use crate::runtime_structure::*;
-use crate::instructions::*;
+use std::result::Result as StdResult;
+use std::iter;
+
+use runtime_structure::*;
+use instructions::*;
+use DEBUG_EXECUTION;
+use frounding;
 
 // TODO: more central definition
 pub const WASM_PAGE_SIZE: usize = 65536;
@@ -109,7 +114,7 @@ pub mod allocation {
         AllocatingMemBeyondMaxLimit,
     }
     use self::AllocError::*;
-    pub type AResult = ::std::result::Result<(), AllocError>;
+    pub type AResult = StdResult<(), AllocError>;
 
     pub fn alloc_function<'ast>(s: &mut Store<'ast>,
                                 func: &'ast Func,
@@ -152,7 +157,7 @@ pub mod allocation {
         } = *tabletype;
         let a = s.tables.next_addr();
         let tableinst = TableInst {
-            elem: ::std::iter::repeat(FuncElem(None)).take(n as usize).collect(),
+            elem: iter::repeat(FuncElem(None)).take(n as usize).collect(),
             max: m,
         };
         s.tables.push(tableinst);
@@ -331,19 +336,19 @@ pub mod instantiation {
         StackExhaustion,
     }
     use self::InstantiationError::*;
-    impl From<crate::instructions::ExecutionError> for InstantiationError {
-        fn from(v: crate::instructions::ExecutionError) -> Self {
+    impl From<ExecutionError> for InstantiationError {
+        fn from(v: ExecutionError) -> Self {
             match v {
-                crate::instructions::ExecutionError::Trap => InstantiationError::Trap,
-                crate::instructions::ExecutionError::StackExhaustion => InstantiationError::StackExhaustion,
+                ExecutionError::Trap => InstantiationError::Trap,
+                ExecutionError::StackExhaustion => InstantiationError::StackExhaustion,
             }
         }
     }
-    impl From<crate::runtime_structure::StackExhaustion> for InstantiationError {
-        fn from(_: crate::runtime_structure::StackExhaustion) -> Self { InstantiationError::StackExhaustion }
+    impl From<super::StackExhaustion> for InstantiationError {
+        fn from(_: super::StackExhaustion) -> Self { InstantiationError::StackExhaustion }
     }
 
-    pub type IResult = std::result::Result<ModuleAddr, InstantiationError>;
+    pub type IResult = StdResult<ModuleAddr, InstantiationError>;
 
     pub fn instantiate_module<'ast>(s: &mut Store<'ast>, stack: &mut Stack<'ast>,
                                     module: &'ast ValidatedModule,
@@ -364,7 +369,7 @@ pub mod instantiation {
                                  module: &'ast ValidatedModule,
                                  externvals: &[ExternVal]) -> IResult
     {
-        let mut rounding = ::frounding::RoundingState::new();
+        let mut rounding = frounding::RoundingState::new();
         rounding.to_nearest();
 
         assert!(stack.is_empty());
@@ -441,7 +446,7 @@ pub mod instantiation {
             // assuming n = 1 due to needing the result
             ctx.stack.push_frame(1, f_im, &[])?;
 
-            if crate::DEBUG_EXECUTION { println!("handle globals"); }
+            if DEBUG_EXECUTION { println!("handle globals"); }
             for globali in &module.globals {
                 let vali = ctx.evaluate_expr(&globali.init)?;
 
@@ -472,7 +477,7 @@ pub mod instantiation {
         // assuming n = 1 due to needing the result
         ctx.stack.push_frame(1, f, &[])?;
 
-        if crate::DEBUG_EXECUTION { println!("handle elems"); }
+        if DEBUG_EXECUTION { println!("handle elems"); }
         let mut eoi_tabeladdri = vec![];
         for elemi in &module.elem {
             let eovali = ctx.evaluate_expr(&elemi.offset)?;
@@ -493,7 +498,7 @@ pub mod instantiation {
             eoi_tabeladdri.push((eoi, tableaddri));
         }
 
-        if crate::DEBUG_EXECUTION { println!("handle data"); }
+        if DEBUG_EXECUTION { println!("handle data"); }
         let mut doi_memaddri = vec![];
         for datai in &module.data {
             let dovali = ctx.evaluate_expr(&datai.offset)?;
@@ -560,18 +565,18 @@ pub mod invocation {
         StackExhaustion,
     }
     use self::InvokeError::*;
-    impl From<crate::runtime_structure::StackExhaustion> for InvokeError {
-        fn from(_: crate::runtime_structure::StackExhaustion) -> Self { InvokeError::StackExhaustion }
+    impl From<super::StackExhaustion> for InvokeError {
+        fn from(_: super::StackExhaustion) -> Self { InvokeError::StackExhaustion }
     }
 
-    pub type CResult = ::std::result::Result<Result, InvokeError>;
+    pub type CResult = StdResult<Result, InvokeError>;
 
     pub fn invoke<'ast>(s: &mut Store<'ast>,
                         stack: &mut Stack<'ast>,
                         funcaddr: FuncAddr,
                         vals: &[Val]) -> CResult
     {
-        let mut rounding = ::frounding::RoundingState::new();
+        let mut rounding = frounding::RoundingState::new();
         rounding.to_nearest();
 
         assert!(stack.is_empty());

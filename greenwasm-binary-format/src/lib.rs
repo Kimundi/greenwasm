@@ -7,6 +7,8 @@
 #[macro_use]
 extern crate nom;
 
+extern crate greenwasm_structure;
+
 pub use nom::ErrorKind as NomErrorKind;
 
 // TODO: Open PR in nom for where applicable
