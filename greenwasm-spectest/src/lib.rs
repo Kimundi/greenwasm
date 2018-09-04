@@ -400,6 +400,7 @@ pub struct SpectestResult {
     /// List of failed commands consisting of
     /// (filename, line number, panic message) tuples.
     pub failures: Vec<(String, u64, String)>,
+
     /// Number of successful commands.
     pub successes: usize,
 }
@@ -480,7 +481,37 @@ pub fn run_single_file<T: ScriptHandler>(path: &Path, handler: &mut T) -> Specte
     let mut fatal = false;
 
     handler.reset();
-    handler.module(SPECTEST_MODULE.to_vec(), Some("spectest".into()));
+    {
+        let module = SPECTEST_MODULE.to_vec();
+        let name = Some("spectest".into());
+
+        use std::panic::*;
+
+        let r = if let Err(msg) = catch_unwind(AssertUnwindSafe(|| {
+            handler.module(module, name);
+        })) {
+            let msg = if let Some(msg) = msg.downcast_ref::<String>() {
+                msg.to_string()
+            } else if let Some(msg) = msg.downcast_ref::<&'static str>() {
+                msg.to_string()
+            } else {
+                "<unknown>".to_string()
+            };
+            Err(msg)
+        } else {
+            Ok(())
+        };
+
+        match r {
+            Err(msg) => {
+                res.failures.push(("<internal spectest module>".to_owned(), 0, msg));
+                fatal = true;
+            }
+            Ok(()) => {
+                res.successes += 1;
+            }
+        }
+    }
 
     while let Some(Command { line, kind }) = script.next().unwrap() {
         if fatal {
