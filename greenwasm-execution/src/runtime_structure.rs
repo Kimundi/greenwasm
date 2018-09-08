@@ -103,6 +103,7 @@ pub struct Store<'ast>
     pub mems: TypedIndexVec<MemInst, MemAddr>,
     pub globals: TypedIndexVec<GlobalInst, GlobalAddr>,
 
+    // TODO: Propose on Webassembly repo?
     /// All instanced modules in the `Store`
     ///
     /// This is a modification of the spec to make it easier to resolve cycles
@@ -135,6 +136,7 @@ pub struct GlobalAddr(pub usize);
 impl Into<usize> for GlobalAddr { fn into(self) -> usize { self.0 } }
 impl From<usize> for GlobalAddr { fn from(a: usize) -> Self { GlobalAddr(a) } }
 
+// TODO: Propose on Webassembly repo?
 /// Address of a `ModuleInst` in the `Store`
 ///
 /// This is a modification of the spec to make it easier to resolve cycles

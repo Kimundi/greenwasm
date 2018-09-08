@@ -80,8 +80,6 @@ trait MemOp<T>: Sized where T: ValCast {
     fn wrap(t: T) -> Self;
 }
 
-// TODO: fix le/be mess once nightly is updated
-
 macro_rules! mem_op {
     (int: $memty:ty, $castty:ty, $opty:ty) => {
         impl MemOp<$opty> for $memty {
