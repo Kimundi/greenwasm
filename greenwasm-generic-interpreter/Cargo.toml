@@ -1,0 +1,38 @@
+[package]
+name = "greenwasm-generic-interpreter"
+version = "0.3.0"
+authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
+license = "MIT/Apache-2.0"
+
+documentation = "https://docs.rs/greenwasm-execution"
+description = "A generic WebAssembly Interpreter."
+readme = "README.md"
+repository = "https://github.com/Kimundi/greenwasm"
+categories = ["wasm", "emulators"]
+keywords = ["vm", "execution", "interpreter"]
+
+workspace = ".."
+
+[dependencies.greenwasm-structure]
+version = "0.3.0"
+path = "../greenwasm-structure"
+
+[dependencies.greenwasm-validation]
+version = "0.3.0"
+path = "../greenwasm-validation"
+
+[dependencies.greenwasm-execution]
+version = "0.3.0"
+path = "../greenwasm-execution"
+
+[dependencies.frounding]
+version = "0.0.4"
+
+[badges]
+appveyor = { repository = "Kimundi/greenwasm" }
+travis-ci = { repository = "Kimundi/greenwasm" }
+
+is-it-maintained-issue-resolution = { repository = "Kimundi/greenwasm" }
+is-it-maintained-open-issues = { repository = "Kimundi/greenwasm" }
+
+maintenance = { status = "experimental" }

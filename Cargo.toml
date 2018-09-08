@@ -29,6 +29,10 @@ path = "greenwasm-binary-format"
 version = "0.3.0"
 path = "greenwasm-execution"
 
+[dependencies.greenwasm-generic-interpreter]
+version = "0.3.0"
+path = "greenwasm-generic-interpreter"
+
 [dependencies.binaryen]
 version = "0.4.0"
 
