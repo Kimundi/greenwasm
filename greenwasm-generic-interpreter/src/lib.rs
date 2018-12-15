@@ -26,6 +26,9 @@ use greenwasm_structure::modules::{
     TypeIdx,
 };
 
+pub mod generic_interface;
+pub mod greenwasm_engine;
+
 #[derive(Default)]
 pub struct Store<HostFunc> {
     pub funcs: TypedIndexVec<FuncInst<HostFunc>, FuncAddr>,
@@ -60,12 +63,12 @@ pub struct Func {
 #[derive(Clone)]
 pub enum FuncInst<HostFunc> {
     Internal {
-        type_: FuncType,
+        r#type: FuncType,
         module: ModuleAddr,
         code: Func,
     },
     Host {
-        type_: FuncType,
+        r#type: FuncType,
         hostcode: HostFunc
     },
 }

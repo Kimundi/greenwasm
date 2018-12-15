@@ -13,6 +13,10 @@ keywords = ["vm", "execution", "interpreter"]
 
 workspace = ".."
 
+[dependencies.greenwasm-binary-format]
+version = "0.3.0"
+path = "../greenwasm-binary-format"
+
 [dependencies.greenwasm-structure]
 version = "0.3.0"
 path = "../greenwasm-structure"
