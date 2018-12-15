@@ -12,6 +12,9 @@ pub type EngineResult<T> = Result<T, EngineError>;
 pub trait Engine {
     fn load_module_from_slice(&mut self, data: &[u8])
         -> EngineResult<ModuleId>;
+
+    fn instance_module(&mut self, module: ModuleId)
+        -> EngineResult<InstancedModuleId>;
 }
 
 /*
