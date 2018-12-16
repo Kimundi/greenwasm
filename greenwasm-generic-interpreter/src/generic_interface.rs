@@ -7,13 +7,31 @@ pub struct ModuleId(pub u64);
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub struct InstancedModuleId(pub u64);
 
+use std::collections::HashMap;
+
+#[derive(Default)]
+pub struct Imports {
+    modules: HashMap<String, InstancedModuleId>
+}
+impl From<HashMap<String, InstancedModuleId>> for Imports {
+    fn from(v: HashMap<String, InstancedModuleId>) -> Self {
+        Self { modules: v }
+    }
+}
+impl Into<HashMap<String, InstancedModuleId>> for Imports {
+    fn into(self) -> HashMap<String, InstancedModuleId> {
+        self.modules
+    }
+}
+
+
 pub type EngineResult<T> = Result<T, EngineError>;
 
 pub trait Engine {
     fn load_module_from_slice(&mut self, data: &[u8])
         -> EngineResult<ModuleId>;
 
-    fn instance_module(&mut self, module: ModuleId)
+    fn instance_module(&mut self, module: ModuleId, imports: Imports)
         -> EngineResult<InstancedModuleId>;
 }
 
