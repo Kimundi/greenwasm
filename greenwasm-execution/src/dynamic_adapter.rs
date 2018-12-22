@@ -100,6 +100,13 @@ impl DynamicAdapter {
         }
     }
 
+    pub fn raise_error(&mut self, e: &'static str) {
+        self.ctrl.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
+            tx.send(Err(e)).unwrap();
+            store_thread_frame(stst)
+        });
+    }
+
     pub fn load_module(&mut self, module: Module, name: Option<String>) {
         use std::cell::RefCell;
         let module = RefCell::new(Some(module));

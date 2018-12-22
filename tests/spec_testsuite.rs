@@ -69,46 +69,14 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     }
 
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
-        let moduleaddr = self.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
-            macro_rules! mytry {
-                ($e:expr, $s:expr, $m:expr) => {
-                    match $e {
-                        Ok(v) => v,
-                        Err(_) => {
-                            tx.send(Err($m)).unwrap();
-                            return store_thread_frame($s);
-                        }
-                    }
-                }
+        match parse_binary_format(&bytes) {
+            Ok((module, _custom_sections)) => {
+                self.int.load_module(module, name);
             }
-
-            let (module, _custom_sections) = mytry!(parse_binary_format(&bytes), stst, "parsing failed");
-            let validated_module = mytry!(validate_module(module), stst, "validation failed");
-
-            let mut stst = stst;
-            let mut exports = vec![];
-            for i in &validated_module.imports {
-                // println!("i: {:?}", i);
-                let exporting_module = *mytry!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
-                let exporting_module = &stst.store.modules[exporting_module];
-                let mut value = None;
-                for e in &exporting_module.exports {
-                    // println!("  e: {:?}", e);
-                    if e.name[..] == i.name[..] {
-                        value = Some(e.value);
-                        break;
-                    }
-                }
-                exports.push(mytry!(value.ok_or(()), stst, "import not found in import modules exports"));
+            Err(_) => {
+                self.int.raise_error("parsing failed");
             }
-
-            let moduleaddr = mytry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
-
-            tx.send(Ok(moduleaddr)).unwrap();
-            store_thread_frame(stst)
-        });
-
-        self.add_module(name, moduleaddr.unwrap());
+        }
     }
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
         self.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<&'static str, &'static str>>| {
