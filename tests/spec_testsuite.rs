@@ -9,89 +9,40 @@ use greenwasm::execution::modules::instantiation::instantiate_module;
 use greenwasm::execution::modules::invocation::*;
 use greenwasm::execution::runtime_structure::*;
 use greenwasm::execution::runtime_structure::Result as IResult;
+use greenwasm::execution::dynamic_adapter::DynamicAdapter;
 use greenwasm_spectest::*;
 
 use std::collections::HashMap;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::thread;
+use std::sync::mpsc::Sender;
 
-struct StSt<'ast> {
-    store: Store<'ast>,
-    stack: Stack<'ast>,
-    recv: Receiver<CmdFn>,
-}
-type CmdFn = Box<for<'ast> Fn(&mut Option<StSt<'ast>>) + Send>;
+// TODO: remove again
+use greenwasm::execution::dynamic_adapter::*;
 
-#[must_use]
-struct FrameWitness;
-
-fn store_thread_frame<'ast>(stst: StSt<'ast>) -> FrameWitness {
-    let mut stst = Some(stst);
-    while stst.is_some() {
-        match stst.as_ref().unwrap().recv.recv() {
-            Ok(cmd) => {
-                cmd(&mut stst);
-            }
-            Err(_) => return FrameWitness,
-        }
-    }
-    FrameWitness
+struct DynamicAdapterScriptHandler {
+    int: DynamicAdapter
 }
 
-struct StoreCtrl {
-    tx: Sender<CmdFn>,
-    _handle: thread::JoinHandle<()>,
-    modules: HashMap<String, ModuleAddr>,
-    last_module: Option<ModuleAddr>,
-}
-
-impl StoreCtrl {
+impl DynamicAdapterScriptHandler {
     fn new() -> Self {
-        let (tx, rx) = channel();
-
-        let _handle = thread::spawn(|| {
-            let _: FrameWitness = store_thread_frame(
-                StSt { store: Store::new(), stack: Stack::new(), recv: rx});
-        });
-
-        StoreCtrl {
-            tx,
-            _handle,
-            modules: HashMap::new(),
-            last_module: None,
+        Self {
+            int: DynamicAdapter::new()
         }
     }
 
     fn new_frame<T: Send + 'static, F: Fn(StSt, &HashMap<String, ModuleAddr>, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
-        let (tx, rx) = channel();
-        let modules = self.modules.clone();
-        self.tx.send(Box::new(move |stst: &mut Option<StSt>| {
-            let stst = stst.take().unwrap();
-            let _: FrameWitness = f(stst, &modules, &tx);
-        })).unwrap();
-        rx.recv().expect("new_frame() closure terminated before producing result")
+        self.int.ctrl.new_frame(f)
     }
 
     fn frame<T: Send + 'static, F: Fn(&mut StSt, &HashMap<String, ModuleAddr>) -> T + Send + 'static>(&self, f: F) -> T {
-        let (tx, rx) = channel();
-        let modules = self.modules.clone();
-        self.tx.send(Box::new(move |stst: &mut Option<StSt>| {
-            let stst = stst.as_mut().unwrap();
-            let r = f(stst, &modules);
-            tx.send(r).unwrap();
-        })).unwrap();
-        rx.recv().expect("action() closure terminated before producing result")
+        self.int.ctrl.frame(f)
     }
 
     fn add_module(&mut self, name: Option<String>, module: ModuleAddr) {
-        if let Some(name) = name {
-            self.modules.insert(name, module);
-        }
-        self.last_module = Some(module);
+        self.int.ctrl.add_module(name, module)
     }
 
     fn get_module(&self, name: Option<String>) -> ModuleAddr {
-        name.map(|name| self.modules[&name]).or(self.last_module).unwrap()
+        self.int.ctrl.get_module(name)
     }
 }
 
@@ -112,7 +63,7 @@ fn val_greenwasm2wabt(v: Val) -> Value {
     }
 }
 
-impl ScriptHandler for StoreCtrl {
+impl ScriptHandler for DynamicAdapterScriptHandler {
     fn reset(&mut self) {
         *self = Self::new();
     }
@@ -281,12 +232,12 @@ impl ScriptHandler for StoreCtrl {
         }
     }
     fn register(&mut self, name: Option<String>, as_name: String) {
-        let moduleaddr = name.map(|n| self.modules[&n]).unwrap_or_else(|| self.last_module.unwrap());
+        let moduleaddr = name.map(|n| self.int.ctrl.modules[&n]).unwrap_or_else(|| self.int.ctrl.last_module.unwrap());
         self.add_module(Some(as_name), moduleaddr);
     }
 }
 
 #[test]
 fn run_tests() {
-    run_mvp_spectest(&mut StoreCtrl::new()).present();
+    run_mvp_spectest(&mut DynamicAdapterScriptHandler::new()).present();
 }
