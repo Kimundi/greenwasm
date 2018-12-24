@@ -29,6 +29,10 @@ path = "../greenwasm-validation"
 version = "0.3.0"
 path = "../greenwasm-execution"
 
+[dependencies.greenwasm-utils]
+version = "0.4.0"
+path = "../greenwasm-utils"
+
 [dependencies.frounding]
 version = "0.0.4"
 

@@ -1,3 +1,6 @@
+extern crate greenwasm_utils;
+use self::greenwasm_utils::IdAppendContainer;
+
 use greenwasm_structure::modules::Module;
 use greenwasm_validation::{validate_module};
 use ::modules::instantiation::instantiate_module;
@@ -89,14 +92,17 @@ impl StoreCtrl {
     }
 }
 
+pub type ModuleId = u64;
 pub struct DynamicAdapter {
-    pub ctrl: StoreCtrl
+    pub ctrl: StoreCtrl,
+    pub loaded_modules: IdAppendContainer<ModuleAddr>,
 }
 
 impl DynamicAdapter {
     pub fn new() -> Self {
         Self {
-            ctrl: StoreCtrl::new()
+            ctrl: StoreCtrl::new(),
+            loaded_modules: Default::default(),
         }
     }
 

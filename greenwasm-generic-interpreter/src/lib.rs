@@ -1,6 +1,7 @@
 extern crate greenwasm_execution;
 extern crate greenwasm_structure;
 extern crate greenwasm_validation;
+extern crate greenwasm_utils;
 
 use greenwasm_execution::runtime_structure::{
     TypedIndexVec,

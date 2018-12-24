@@ -2,34 +2,10 @@ use generic_interface::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use super::*;
+use greenwasm_utils::IdAppendContainer;
 
 // use greenwasm_structure::modules::Module;
 use greenwasm_validation::ValidatedModule;
-
-struct IdAppendContainer<T> {
-    counter: u64,
-    data: HashMap<u64, T>,
-}
-
-impl<T> IdAppendContainer<T> {
-    fn new() -> Self {
-        Self {
-            counter: 0,
-            data: Default::default(),
-        }
-    }
-    fn append(&mut self, t: T) -> u64 {
-        let c = self.counter;
-        self.counter += 1;
-        self.data.insert(c, t);
-        return c;
-    }
-    fn get(&self, id: u64) -> Option<&T> {
-        self.data.get(&id)
-    }
-}
-
-
 
 pub struct GreenwasmEngine {
     modules: IdAppendContainer<Arc<ValidatedModule>>,

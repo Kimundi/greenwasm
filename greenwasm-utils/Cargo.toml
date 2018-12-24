@@ -1,0 +1,21 @@
+[package]
+name = "greenwasm-utils"
+version = "0.4.0"
+authors = ["Marvin Löbel <loebel.marvin@gmail.com>"]
+license = "MIT/Apache-2.0"
+
+documentation = "https://docs.rs/greenwasm-utils"
+description = "Library utils for the greenwasm crates."
+readme = "README.md"
+repository = "https://github.com/Kimundi/greenwasm"
+
+workspace = ".."
+
+[badges]
+appveyor = { repository = "Kimundi/greenwasm" }
+travis-ci = { repository = "Kimundi/greenwasm" }
+
+is-it-maintained-issue-resolution = { repository = "Kimundi/greenwasm" }
+is-it-maintained-open-issues = { repository = "Kimundi/greenwasm" }
+
+maintenance = { status = "experimental" }
