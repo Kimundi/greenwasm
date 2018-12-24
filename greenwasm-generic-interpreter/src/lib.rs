@@ -26,6 +26,9 @@ use greenwasm_structure::modules::{
     TableIdx,
     TypeIdx,
 };
+use greenwasm_validation::ValidatedModule;
+
+use std::sync::Arc;
 
 pub mod generic_interface;
 pub mod greenwasm_engine;
@@ -46,7 +49,8 @@ impl<HostFunc> Store<HostFunc> {
 
 #[derive(Clone)]
 pub struct ModuleInst {
-    pub types: Vec<FuncType>,
+    pub module: Arc<ValidatedModule>,
+    // pub types: Vec<FuncType>, TODO: provided by assoicated module?
     pub funcaddrs: TypedIndexVec<FuncAddr, FuncIdx>,
     pub tableaddrs: TypedIndexVec<TableAddr, TableIdx>,
     pub memaddrs: TypedIndexVec<MemAddr, MemIdx>,
@@ -55,27 +59,20 @@ pub struct ModuleInst {
 }
 
 #[derive(Clone)]
-pub struct Func {
-    pub type_: TypeIdx,
-    pub locals: Vec<ValType>,
-    pub body: (),
-}
-
-#[derive(Clone)]
 pub enum FuncInst<HostFunc> {
     Internal {
-        r#type: FuncType,
         module: ModuleAddr,
-        code: Func,
+        type_: TypeIdx,
+        code: FuncIdx,
     },
     Host {
-        r#type: FuncType,
+        type_: FuncType,
         hostcode: HostFunc
     },
 }
 
 #[derive(Clone, Debug)]
 pub struct ExportInst {
-    pub name: Name,
+    // pub name: Name, // TODO: could derive from module reference
     pub value: ExternVal,
 }
