@@ -2,6 +2,7 @@
 
 extern crate greenwasm;
 extern crate greenwasm_spectest;
+extern crate greenwasm_utils;
 
 use greenwasm::binary_format::parse_binary_format;
 use greenwasm::validation::{validate_module};
@@ -11,16 +12,27 @@ use greenwasm::execution::runtime_structure::*;
 use greenwasm::execution::runtime_structure::Result as IResult;
 use greenwasm::execution::dynamic_adapter::DynamicAdapter;
 use greenwasm_spectest::*;
+use greenwasm_utils::NamedLookup;
 
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 
 // TODO: remove again
 use greenwasm::execution::dynamic_adapter::*;
 
+#[derive(Clone)]
+struct MapNameLookup(Arc<HashMap<String, ModuleAddr>>);
+impl NamedLookup for MapNameLookup {
+    type Element = ModuleAddr;
+    fn lookup(&self, name: &str) -> Option<&ModuleAddr> {
+        self.0.get(name)
+    }
+}
+
 struct DynamicAdapterScriptHandler {
     int: DynamicAdapter,
-    modules: HashMap<String, ModuleAddr>,
+    modules: MapNameLookup,
     last_module: Option<ModuleAddr>,
 }
 
@@ -28,28 +40,30 @@ impl DynamicAdapterScriptHandler {
     fn new() -> Self {
         Self {
             int: DynamicAdapter::new(),
-            modules: HashMap::new(),
+            modules: MapNameLookup(Arc::new(HashMap::new())),
             last_module: None,
         }
     }
 
-    fn new_frame<T: Send + 'static, F: Fn(StSt, &HashMap<String, ModuleAddr>, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
+    fn new_frame<T: Send + 'static, F: Fn(StSt, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
         self.int.ctrl.new_frame(f)
     }
 
-    fn frame<T: Send + 'static, F: Fn(&mut StSt, &HashMap<String, ModuleAddr>) -> T + Send + 'static>(&self, f: F) -> T {
+    fn frame<T: Send + 'static, F: Fn(&mut StSt) -> T + Send + 'static>(&self, f: F) -> T {
         self.int.ctrl.frame(f)
     }
 
     pub fn add_module(&mut self, name: Option<String>, module: ModuleAddr) {
         if let Some(name) = name {
-            self.modules.insert(name, module);
+            let mut nm = (*self.modules.0).clone();
+            nm.insert(name, module);
+            self.modules = MapNameLookup(Arc::new(nm));
         }
         self.last_module = Some(module);
     }
 
     pub fn get_module(&self, name: Option<String>) -> ModuleAddr {
-        name.map(|name| self.modules[&name]).or(self.last_module).unwrap()
+        name.map(|name| self.modules.0[&name]).or(self.last_module).unwrap()
     }
 }
 
@@ -78,7 +92,7 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
         match parse_binary_format(&bytes) {
             Ok((module, _custom_sections)) => {
-                let moduleaddr = self.int.load_module(module);
+                let moduleaddr = self.int.load_module(module, self.modules.clone());
                 self.add_module(name, moduleaddr);
             }
             Err(_) => {
@@ -87,7 +101,8 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
         }
     }
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
-        self.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<&'static str, &'static str>>| {
+        let modules = self.modules.clone();
+        self.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<&'static str, &'static str>>| {
             macro_rules! mytry {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
@@ -117,7 +132,7 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
             let mut exports = vec![];
             for i in &validated_module.imports {
                 // println!("i: {:?}", i);
-                let exporting_module = *antimytry!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
+                let exporting_module = *antimytry!(modules.lookup(&i.module[..]).ok_or(()), stst, "import module not found");
                 let exporting_module = &stst.store.modules[exporting_module];
                 let mut value = None;
                 for e in &exporting_module.exports {
@@ -145,7 +160,7 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     }
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult {
         let moduleaddr = self.get_module(module);
-        self.frame(move |stst, _modules| {
+        self.frame(move |stst| {
             let funcaddr = (|| {
                 let module = &stst.store.modules[moduleaddr];
                 for e in &module.exports {
@@ -179,7 +194,7 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     }
     fn action_get(&mut self, module: Option<String>, field: String) -> Value {
         let moduleaddr = self.get_module(module);
-        self.frame(move |stst, _modules| {
+        self.frame(move |stst| {
             let globaladdr = (|| {
                 let module = &stst.store.modules[moduleaddr];
                 for e in &module.exports {
@@ -208,7 +223,7 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
         }
     }
     fn register(&mut self, name: Option<String>, as_name: String) {
-        let moduleaddr = name.map(|n| self.int.ctrl.modules[&n]).unwrap_or_else(|| self.int.ctrl.last_module.unwrap());
+        let moduleaddr = name.map(|n| self.modules.0[&n]).unwrap_or_else(|| self.last_module.unwrap());
         self.add_module(Some(as_name), moduleaddr);
     }
 }

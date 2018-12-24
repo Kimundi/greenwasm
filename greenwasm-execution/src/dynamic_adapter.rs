@@ -1,5 +1,5 @@
 extern crate greenwasm_utils;
-use self::greenwasm_utils::IdAppendContainer;
+use self::greenwasm_utils::{IdAppendContainer, NamedLookup};
 
 use greenwasm_structure::modules::Module;
 use greenwasm_validation::{validate_module};
@@ -11,6 +11,7 @@ use ::runtime_structure::Result as IResult;
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
+use std::sync::Arc;
 
 pub struct StSt<'ast> {
     pub store: Store<'ast>,
@@ -38,8 +39,6 @@ pub fn store_thread_frame<'ast>(stst: StSt<'ast>) -> FrameWitness {
 pub struct StoreCtrl {
     tx: Sender<CmdFn>,
     _handle: thread::JoinHandle<()>,
-    pub modules: HashMap<String, ModuleAddr>,
-    pub last_module: Option<ModuleAddr>,
 }
 
 impl StoreCtrl {
@@ -54,34 +53,29 @@ impl StoreCtrl {
         StoreCtrl {
             tx,
             _handle,
-            modules: HashMap::new(),
-            last_module: None,
         }
     }
 
-    pub fn new_frame<T: Send + 'static, F: Fn(StSt, &HashMap<String, ModuleAddr>, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
+    pub fn new_frame<T: Send + 'static, F: Fn(StSt, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
         let (tx, rx) = channel();
-        let modules = self.modules.clone();
         self.tx.send(Box::new(move |stst: &mut Option<StSt>| {
             let stst = stst.take().unwrap();
-            let _: FrameWitness = f(stst, &modules, &tx);
+            let _: FrameWitness = f(stst, &tx);
         })).unwrap();
         rx.recv().expect("new_frame() closure terminated before producing result")
     }
 
-    pub fn frame<T: Send + 'static, F: Fn(&mut StSt, &HashMap<String, ModuleAddr>) -> T + Send + 'static>(&self, f: F) -> T {
+    pub fn frame<T: Send + 'static, F: Fn(&mut StSt) -> T + Send + 'static>(&self, f: F) -> T {
         let (tx, rx) = channel();
-        let modules = self.modules.clone();
         self.tx.send(Box::new(move |stst: &mut Option<StSt>| {
             let stst = stst.as_mut().unwrap();
-            let r = f(stst, &modules);
+            let r = f(stst);
             tx.send(r).unwrap();
         })).unwrap();
         rx.recv().expect("action() closure terminated before producing result")
     }
 }
 
-pub type ModuleId = u64;
 pub struct DynamicAdapter {
     pub ctrl: StoreCtrl,
     pub loaded_modules: IdAppendContainer<ModuleAddr>,
@@ -96,19 +90,20 @@ impl DynamicAdapter {
     }
 
     pub fn raise_error(&mut self, e: &'static str) {
-        self.ctrl.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
+        self.ctrl.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
             tx.send(Err(e)).unwrap();
             store_thread_frame(stst)
         });
     }
 
-    pub fn load_module(&mut self, module: Module)
+    pub fn load_module<L>(&mut self, module: Module, lookup: L)
         -> ModuleAddr
+        where L: NamedLookup<Element=ModuleAddr> + Send + 'static
     {
         use std::cell::RefCell;
         let module = RefCell::new(Some(module));
 
-        let moduleaddr = self.ctrl.new_frame(move |stst: StSt, modules: &_, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
+        let moduleaddr = self.ctrl.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
             macro_rules! mytry {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
@@ -128,7 +123,7 @@ impl DynamicAdapter {
             let mut exports = vec![];
             for i in &validated_module.imports {
                 // println!("i: {:?}", i);
-                let exporting_module = *mytry!(modules.get(&i.module[..]).ok_or(()), stst, "import module not found");
+                let exporting_module = *mytry!(lookup.lookup(&i.module[..]).ok_or(()), stst, "import module not found");
                 let exporting_module = &stst.store.modules[exporting_module];
                 let mut value = None;
                 for e in &exporting_module.exports {

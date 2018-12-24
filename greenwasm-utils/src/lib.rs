@@ -33,3 +33,8 @@ impl<T> IdAppendContainer<T> {
         self.data.get_mut(&id)
     }
 }
+
+pub trait NamedLookup {
+    type Element;
+    fn lookup(&self, name: &str) -> Option<&Self::Element>;
+}
