@@ -19,13 +19,17 @@ use std::sync::mpsc::Sender;
 use greenwasm::execution::dynamic_adapter::*;
 
 struct DynamicAdapterScriptHandler {
-    int: DynamicAdapter
+    int: DynamicAdapter,
+    modules: HashMap<String, ModuleAddr>,
+    last_module: Option<ModuleAddr>,
 }
 
 impl DynamicAdapterScriptHandler {
     fn new() -> Self {
         Self {
-            int: DynamicAdapter::new()
+            int: DynamicAdapter::new(),
+            modules: HashMap::new(),
+            last_module: None,
         }
     }
 
@@ -37,12 +41,15 @@ impl DynamicAdapterScriptHandler {
         self.int.ctrl.frame(f)
     }
 
-    fn add_module(&mut self, name: Option<String>, module: ModuleAddr) {
-        self.int.ctrl.add_module(name, module)
+    pub fn add_module(&mut self, name: Option<String>, module: ModuleAddr) {
+        if let Some(name) = name {
+            self.modules.insert(name, module);
+        }
+        self.last_module = Some(module);
     }
 
-    fn get_module(&self, name: Option<String>) -> ModuleAddr {
-        self.int.ctrl.get_module(name)
+    pub fn get_module(&self, name: Option<String>) -> ModuleAddr {
+        name.map(|name| self.modules[&name]).or(self.last_module).unwrap()
     }
 }
 
@@ -71,7 +78,8 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
         match parse_binary_format(&bytes) {
             Ok((module, _custom_sections)) => {
-                self.int.load_module(module, name);
+                let moduleaddr = self.int.load_module(module);
+                self.add_module(name, moduleaddr);
             }
             Err(_) => {
                 self.int.raise_error("parsing failed");

@@ -79,17 +79,6 @@ impl StoreCtrl {
         })).unwrap();
         rx.recv().expect("action() closure terminated before producing result")
     }
-
-    pub fn add_module(&mut self, name: Option<String>, module: ModuleAddr) {
-        if let Some(name) = name {
-            self.modules.insert(name, module);
-        }
-        self.last_module = Some(module);
-    }
-
-    pub fn get_module(&self, name: Option<String>) -> ModuleAddr {
-        name.map(|name| self.modules[&name]).or(self.last_module).unwrap()
-    }
 }
 
 pub type ModuleId = u64;
@@ -113,7 +102,9 @@ impl DynamicAdapter {
         });
     }
 
-    pub fn load_module(&mut self, module: Module, name: Option<String>) {
+    pub fn load_module(&mut self, module: Module)
+        -> ModuleAddr
+    {
         use std::cell::RefCell;
         let module = RefCell::new(Some(module));
 
@@ -156,6 +147,8 @@ impl DynamicAdapter {
             store_thread_frame(stst)
         });
 
-        self.ctrl.add_module(name, moduleaddr.unwrap());
+        let id = moduleaddr.unwrap();
+        //let id = self.loaded_modules.append(id);
+        id
     }
 }
