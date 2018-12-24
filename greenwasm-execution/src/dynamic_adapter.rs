@@ -7,6 +7,7 @@ use ::modules::instantiation::instantiate_module;
 use ::modules::invocation::*;
 use ::runtime_structure::*;
 use ::runtime_structure::Result as IResult;
+use std::result::Result as StdResult;
 
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -97,7 +98,7 @@ impl DynamicAdapter {
     }
 
     pub fn load_module<L>(&mut self, module: Module, lookup: L)
-        -> ModuleAddr
+        -> StdResult<ModuleAddr, &'static str>
         where L: NamedLookup<Element=ModuleAddr> + Send + 'static
     {
         use std::cell::RefCell;
@@ -142,8 +143,66 @@ impl DynamicAdapter {
             store_thread_frame(stst)
         });
 
-        let id = moduleaddr.unwrap();
-        //let id = self.loaded_modules.append(id);
-        id
+        moduleaddr
+    }
+
+    pub fn load_uninstantiable_module<L>(&mut self, module: Module, lookup: L)
+        -> StdResult<(), &'static str>
+        where L: NamedLookup<Element=ModuleAddr> + Send + 'static
+    {
+        use std::cell::RefCell;
+        let module = RefCell::new(Some(module));
+
+        self.ctrl.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<&'static str, &'static str>>| {
+            macro_rules! mytry {
+                ($e:expr, $s:expr, $m:expr) => {
+                    match $e {
+                        Ok(v) => v,
+                        Err(_) => {
+                            tx.send(Err($m)).unwrap();
+                            return store_thread_frame($s);
+                        }
+                    }
+                }
+            }
+            macro_rules! antimytry {
+                ($e:expr, $s:expr, $m:expr) => {
+                    match $e {
+                        Ok(v) => v,
+                        Err(_) => {
+                            tx.send(Ok($m)).unwrap();
+                            return store_thread_frame($s);
+                        }
+                    }
+                }
+            }
+
+            let module = module.borrow_mut().take().unwrap();
+            let validated_module = antimytry!(validate_module(module), stst, "validation failed");
+
+            let mut stst = stst;
+            let mut exports = vec![];
+            for i in &validated_module.imports {
+                // println!("i: {:?}", i);
+                let exporting_module = *antimytry!(lookup.lookup(&i.module[..]).ok_or(()), stst, "import module not found");
+                let exporting_module = &stst.store.modules[exporting_module];
+                let mut value = None;
+                for e in &exporting_module.exports {
+                    // println!("  e: {:?}", e);
+                    if e.name[..] == i.name[..] {
+                        value = Some(e.value);
+                        break;
+                    }
+                }
+                exports.push(antimytry!(value.ok_or(()), stst, "import not found in import modules exports"));
+            }
+
+            antimytry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
+
+            tx.send(Err("instantiation did not fail")).unwrap();
+            store_thread_frame(stst)
+        }).unwrap();
+
+        Ok(())
     }
 }

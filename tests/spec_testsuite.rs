@@ -6,7 +6,6 @@ extern crate greenwasm_utils;
 
 use greenwasm::binary_format::parse_binary_format;
 use greenwasm::validation::{validate_module};
-use greenwasm::execution::modules::instantiation::instantiate_module;
 use greenwasm::execution::modules::invocation::*;
 use greenwasm::execution::runtime_structure::*;
 use greenwasm::execution::runtime_structure::Result as IResult;
@@ -15,7 +14,6 @@ use greenwasm_spectest::*;
 use greenwasm_utils::NamedLookup;
 
 use std::collections::HashMap;
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
 // TODO: remove again
@@ -43,10 +41,6 @@ impl DynamicAdapterScriptHandler {
             modules: MapNameLookup(Arc::new(HashMap::new())),
             last_module: None,
         }
-    }
-
-    fn new_frame<T: Send + 'static, F: Fn(StSt, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
-        self.int.ctrl.new_frame(f)
     }
 
     fn frame<T: Send + 'static, F: Fn(&mut StSt) -> T + Send + 'static>(&self, f: F) -> T {
@@ -92,7 +86,7 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
         match parse_binary_format(&bytes) {
             Ok((module, _custom_sections)) => {
-                let moduleaddr = self.int.load_module(module, self.modules.clone());
+                let moduleaddr = self.int.load_module(module, self.modules.clone()).unwrap();
                 self.add_module(name, moduleaddr);
             }
             Err(_) => {
@@ -101,55 +95,14 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
         }
     }
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
-        let modules = self.modules.clone();
-        self.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<&'static str, &'static str>>| {
-            macro_rules! mytry {
-                ($e:expr, $s:expr, $m:expr) => {
-                    match $e {
-                        Ok(v) => v,
-                        Err(_) => {
-                            tx.send(Err($m)).unwrap();
-                            return store_thread_frame($s);
-                        }
-                    }
-                }
+        match parse_binary_format(&bytes) {
+            Ok((module, _custom_sections)) => {
+                self.int.load_uninstantiable_module(module, self.modules.clone()).unwrap();
             }
-            macro_rules! antimytry {
-                ($e:expr, $s:expr, $m:expr) => {
-                    match $e {
-                        Ok(v) => v,
-                        Err(_) => {
-                            tx.send(Ok($m)).unwrap();
-                            return store_thread_frame($s);
-                        }
-                    }
-                }
+            Err(_) => {
+                self.int.raise_error("parsing failed");
             }
-            let (module, _custom_sections) = mytry!(parse_binary_format(&bytes), stst, "parsing failed");
-            let validated_module = antimytry!(validate_module(module), stst, "validation failed");
-
-            let mut stst = stst;
-            let mut exports = vec![];
-            for i in &validated_module.imports {
-                // println!("i: {:?}", i);
-                let exporting_module = *antimytry!(modules.lookup(&i.module[..]).ok_or(()), stst, "import module not found");
-                let exporting_module = &stst.store.modules[exporting_module];
-                let mut value = None;
-                for e in &exporting_module.exports {
-                    // println!("  e: {:?}", e);
-                    if e.name[..] == i.name[..] {
-                        value = Some(e.value);
-                        break;
-                    }
-                }
-                exports.push(antimytry!(value.ok_or(()), stst, "import not found in import modules exports"));
-            }
-
-            antimytry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
-
-            tx.send(Err("instantiation did not fail")).unwrap();
-            store_thread_frame(stst)
-        }).unwrap();
+        }
     }
     fn assert_malformed(&mut self, bytes: Vec<u8>) {
         assert!(parse_binary_format(&bytes).is_err(), "parsing did not fail");
