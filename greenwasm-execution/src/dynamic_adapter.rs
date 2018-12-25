@@ -9,10 +9,8 @@ use ::runtime_structure::*;
 use ::runtime_structure::Result as IResult;
 use std::result::Result as StdResult;
 
-use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
-use std::sync::Arc;
 
 pub struct StSt<'ast> {
     pub store: Store<'ast>,
@@ -82,6 +80,25 @@ pub struct DynamicAdapter {
     pub loaded_modules: IdAppendContainer<ModuleAddr>,
 }
 
+#[derive(Debug)]
+pub enum LoadModuleError {
+    Validation,
+    ImportModule,
+    ImportSymbol,
+    Instantiation,
+}
+
+// TODO: deduplicate with enum in spectest
+/// Result of invoking a function.
+pub enum InvokationResult {
+    /// The function returned successfully with a number of `Value`s
+    Vals(Vec<Val>),
+    /// The function trapped.
+    Trap,
+    /// The function exhausted the stack.
+    StackExhaustion,
+}
+
 impl DynamicAdapter {
     pub fn new() -> Self {
         Self {
@@ -95,13 +112,13 @@ impl DynamicAdapter {
     }
 
     pub fn load_module<L>(&mut self, module: Module, lookup: L)
-        -> StdResult<ModuleAddr, &'static str>
+        -> StdResult<ModuleAddr, LoadModuleError>
         where L: NamedLookup<Element=ModuleAddr> + Send + 'static
     {
         use std::cell::RefCell;
         let module = RefCell::new(Some(module));
 
-        let moduleaddr = self.ctrl.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
+        let moduleaddr = self.ctrl.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, LoadModuleError>>| {
             macro_rules! mytry {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
@@ -115,13 +132,13 @@ impl DynamicAdapter {
             }
 
             let module = module.borrow_mut().take().unwrap();
-            let validated_module = mytry!(validate_module(module), stst, "validation failed");
+            let validated_module = mytry!(validate_module(module), stst, LoadModuleError::Validation);
 
             let mut stst = stst;
             let mut exports = vec![];
             for i in &validated_module.imports {
                 // println!("i: {:?}", i);
-                let exporting_module = *mytry!(lookup.lookup(&i.module[..]).ok_or(()), stst, "import module not found");
+                let exporting_module = *mytry!(lookup.lookup(&i.module[..]).ok_or(()), stst, LoadModuleError::ImportModule);
                 let exporting_module = &stst.store.modules[exporting_module];
                 let mut value = None;
                 for e in &exporting_module.exports {
@@ -131,10 +148,10 @@ impl DynamicAdapter {
                         break;
                     }
                 }
-                exports.push(mytry!(value.ok_or(()), stst, "import not found in import modules exports"));
+                exports.push(mytry!(value.ok_or(()), stst, LoadModuleError::ImportSymbol));
             }
 
-            let moduleaddr = mytry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
+            let moduleaddr = mytry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, LoadModuleError::Instantiation);
 
             tx.send(Ok(moduleaddr)).unwrap();
             store_thread_frame(stst)
@@ -142,64 +159,52 @@ impl DynamicAdapter {
 
         moduleaddr
     }
-
-    pub fn load_uninstantiable_module<L>(&mut self, module: Module, lookup: L)
-        -> StdResult<(), &'static str>
-        where L: NamedLookup<Element=ModuleAddr> + Send + 'static
-    {
-        use std::cell::RefCell;
-        let module = RefCell::new(Some(module));
-
-        self.ctrl.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<&'static str, &'static str>>| {
-            macro_rules! mytry {
-                ($e:expr, $s:expr, $m:expr) => {
-                    match $e {
-                        Ok(v) => v,
-                        Err(_) => {
-                            tx.send(Err($m)).unwrap();
-                            return store_thread_frame($s);
+    pub fn invoke(&mut self, moduleaddr: ModuleAddr, field: String, args: Vec<Val>) -> InvokationResult {
+        self.ctrl.frame(move |stst| {
+            let funcaddr = (|| {
+                let module = &stst.store.modules[moduleaddr];
+                for e in &module.exports {
+                    if **e.name == *field {
+                        if let ExternVal::Func(funcaddr) = e.value {
+                            return Ok(funcaddr);
                         }
                     }
                 }
-            }
-            macro_rules! antimytry {
-                ($e:expr, $s:expr, $m:expr) => {
-                    match $e {
-                        Ok(v) => v,
-                        Err(_) => {
-                            tx.send(Ok($m)).unwrap();
-                            return store_thread_frame($s);
+                Err("No matching export found")
+            })();
+
+            funcaddr.and_then(|funcaddr| {
+                match invoke(&mut stst.store, &mut stst.stack, funcaddr, &args) {
+                    Ok(IResult::Vals(v)) => {
+                        Ok(InvokationResult::Vals(v))
+                    }
+                    Ok(IResult::Trap) => {
+                        Ok(InvokationResult::Trap)
+                    }
+                    Err(InvokeError::StackExhaustion) => {
+                        Ok(InvokationResult::StackExhaustion)
+                    }
+                    Err(_) => {
+                        Err("Invokation error")
+                    }
+                }
+            })
+        }).unwrap()
+    }
+    pub fn get_global(&mut self, moduleaddr: ModuleAddr, field: String) -> Val {
+        self.ctrl.frame(move |stst| {
+            let globaladdr = (|| {
+                let module = &stst.store.modules[moduleaddr];
+                for e in &module.exports {
+                    if **e.name == *field {
+                        if let ExternVal::Global(globaladdr) = e.value {
+                            return Some(globaladdr);
                         }
                     }
                 }
-            }
-
-            let module = module.borrow_mut().take().unwrap();
-            let validated_module = antimytry!(validate_module(module), stst, "validation failed");
-
-            let mut stst = stst;
-            let mut exports = vec![];
-            for i in &validated_module.imports {
-                // println!("i: {:?}", i);
-                let exporting_module = *antimytry!(lookup.lookup(&i.module[..]).ok_or(()), stst, "import module not found");
-                let exporting_module = &stst.store.modules[exporting_module];
-                let mut value = None;
-                for e in &exporting_module.exports {
-                    // println!("  e: {:?}", e);
-                    if e.name[..] == i.name[..] {
-                        value = Some(e.value);
-                        break;
-                    }
-                }
-                exports.push(antimytry!(value.ok_or(()), stst, "import not found in import modules exports"));
-            }
-
-            antimytry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, "instantiation failed");
-
-            tx.send(Err("instantiation did not fail")).unwrap();
-            store_thread_frame(stst)
-        }).unwrap();
-
-        Ok(())
+                None
+            })();
+            globaladdr.map(|globaladdr| stst.store.globals[globaladdr].value)
+        }).expect("No matching export found")
     }
 }

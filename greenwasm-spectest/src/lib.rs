@@ -17,7 +17,7 @@ impl ScriptHandler for DummyHandler {
     fn action_invoke(&mut self,
                      module: Option<String>,
                      field: String,
-                     args: Vec<Value>) -> InvokationResult
+                     args: Vec<Value>) -> WabtResult
     {
         unimplemented!()
     }
@@ -90,7 +90,7 @@ pub trait ScriptHandler {
     ///
     /// Targets either the last loaded module if `module` is None, or
     /// the module registered with the given name otherwise.
-    fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult;
+    fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> WabtResult;
 
     /// Handles an `get` action.
     ///
@@ -108,7 +108,7 @@ pub trait ScriptHandler {
     fn action(&mut self, action: Action) -> Vec<Value> {
         match action {
             Action::Invoke { module, field, args } => {
-                if let InvokationResult::Vals(v) = self.action_invoke(module, field, args) {
+                if let WabtResult::Vals(v) = self.action_invoke(module, field, args) {
                     v
                 } else {
                     panic!("invokation returned Trap or exhausted the stack");
@@ -149,7 +149,7 @@ pub trait ScriptHandler {
     fn assert_trap(&mut self, action: Action) {
         match action {
             Action::Invoke { module, field, args } => {
-                if let InvokationResult::Vals(results) = self.action_invoke(module, field, args) {
+                if let WabtResult::Vals(results) = self.action_invoke(module, field, args) {
                     panic!("invokation did not trap, but returned {:?}", results);
                 }
             }
@@ -299,8 +299,9 @@ impl<'a> ::std::fmt::Debug for NanCompare<'a> {
     }
 }
 
+// TODO: deduplicate with enum in dynamic adapter
 /// Result of invoking a function.
-pub enum InvokationResult {
+pub enum WabtResult {
     /// The function returned successfully with a number of `Value`s
     Vals(Vec<Value>),
     /// The function trapped.

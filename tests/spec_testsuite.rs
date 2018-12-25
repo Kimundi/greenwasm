@@ -77,6 +77,12 @@ fn val_greenwasm2wabt(v: Val) -> Value {
         Val::F64(v) => Value::F64(v),
     }
 }
+fn vals_wabt2greenwasm(v: Vec<Value>) -> Vec<Val> {
+    v.into_iter().map(val_wabt2greenwasm).collect()
+}
+fn vals_greenwasm2wabt(v: Vec<Val>) -> Vec<Value> {
+    v.into_iter().map(val_greenwasm2wabt).collect()
+}
 
 impl ScriptHandler for DynamicAdapterScriptHandler {
     fn reset(&mut self) {
@@ -84,24 +90,22 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     }
 
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
-        match parse_binary_format(&bytes) {
-            Ok((module, _custom_sections)) => {
-                let moduleaddr = self.int.load_module(module, self.modules.clone()).unwrap();
-                self.add_module(name, moduleaddr);
-            }
-            Err(_) => {
-                self.int.raise_error("parsing failed");
-            }
-        }
+        let (module, _) = parse_binary_format(&bytes).expect("parsing failed");
+
+        let moduleaddr = self.int.load_module(module, self.modules.clone()).unwrap();
+        self.add_module(name, moduleaddr);
     }
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
-        match parse_binary_format(&bytes) {
-            Ok((module, _custom_sections)) => {
-                self.int.load_uninstantiable_module(module, self.modules.clone()).unwrap();
-            }
-            Err(_) => {
-                self.int.raise_error("parsing failed");
-            }
+        let (module, _) = parse_binary_format(&bytes).expect("parsing failed");
+
+        let r = self.int.load_module(module, self.modules.clone());
+        assert!(r.is_err(), "instaniation did not fail");
+        use greenwasm::execution::dynamic_adapter::LoadModuleError::*;
+        match r.err().unwrap() {
+            Validation |
+            ImportModule |
+            ImportSymbol |
+            Instantiation => (), // TODO: check current state of testsuite in regard to the cases that should be covered by this assert
         }
     }
     fn assert_malformed(&mut self, bytes: Vec<u8>) {
@@ -111,61 +115,30 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
         let (module, _) = parse_binary_format(&bytes).unwrap();
         assert!(validate_module(module).is_err(), "validation did not fail");
     }
-    fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> InvokationResult {
+    fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> WabtResult {
         let moduleaddr = self.get_module(module);
-        self.frame(move |stst| {
-            let funcaddr = (|| {
-                let module = &stst.store.modules[moduleaddr];
-                for e in &module.exports {
-                    if **e.name == *field {
-                        if let ExternVal::Func(funcaddr) = e.value {
-                            return Ok(funcaddr);
-                        }
-                    }
-                }
-                Err("No matching export found")
-            })();
-
-            funcaddr.and_then(|funcaddr| {
-                let args = args.iter().cloned().map(val_wabt2greenwasm).collect::<Vec<_>>();
-                match invoke(&mut stst.store, &mut stst.stack, funcaddr, &args) {
-                    Ok(IResult::Vals(v)) => {
-                        Ok(InvokationResult::Vals(v.into_iter().map(val_greenwasm2wabt).collect()))
-                    }
-                    Ok(IResult::Trap) => {
-                        Ok(InvokationResult::Trap)
-                    }
-                    Err(InvokeError::StackExhaustion) => {
-                        Ok(InvokationResult::StackExhaustion)
-                    }
-                    Err(_) => {
-                        Err("Invokation error")
-                    }
-                }
-            })
-        }).unwrap()
+        let r = self.int.invoke(moduleaddr, field, vals_wabt2greenwasm(args));
+        match r {
+            InvokationResult::Vals(v) => {
+                WabtResult::Vals(vals_greenwasm2wabt(v))
+            }
+            InvokationResult::Trap => {
+                WabtResult::Trap
+            }
+            InvokationResult::StackExhaustion => {
+                WabtResult::StackExhaustion
+            }
+        }
     }
     fn action_get(&mut self, module: Option<String>, field: String) -> Value {
         let moduleaddr = self.get_module(module);
-        self.frame(move |stst| {
-            let globaladdr = (|| {
-                let module = &stst.store.modules[moduleaddr];
-                for e in &module.exports {
-                    if **e.name == *field {
-                        if let ExternVal::Global(globaladdr) = e.value {
-                            return Some(globaladdr);
-                        }
-                    }
-                }
-                None
-            })();
-            globaladdr.map(|globaladdr| val_greenwasm2wabt(stst.store.globals[globaladdr].value))
-        }).expect("No matching export found")
+        let r = self.int.get_global(moduleaddr, field);
+        val_greenwasm2wabt(r)
     }
     fn assert_exhaustion(&mut self, action: Action) {
         match action {
             Action::Invoke { module, field, args } => {
-                if let InvokationResult::StackExhaustion = self.action_invoke(module, field, args) {
+                if let WabtResult::StackExhaustion = self.action_invoke(module, field, args) {
                 } else {
                     panic!("invokation should exhaust the stack, but did not");
                 }

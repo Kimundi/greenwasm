@@ -92,6 +92,7 @@ impl Val {
 pub enum Result {
     Vals(Vec<Val>),
     Trap,
+    // TODO: Represent Stack Exhaustion?
 }
 
 #[derive(Default)]
