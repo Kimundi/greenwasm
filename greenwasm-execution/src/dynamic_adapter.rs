@@ -73,7 +73,7 @@ impl StoreCtrl {
             let r = f(stst);
             tx.send(r).unwrap();
         })).unwrap();
-        rx.recv().expect("action() closure terminated before producing result")
+        rx.recv().expect("frame() closure terminated before producing result")
     }
 }
 
@@ -91,10 +91,7 @@ impl DynamicAdapter {
     }
 
     pub fn raise_error(&mut self, e: &'static str) {
-        self.ctrl.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, &'static str>>| {
-            tx.send(Err(e)).unwrap();
-            store_thread_frame(stst)
-        });
+        panic!(e);
     }
 
     pub fn load_module<L>(&mut self, module: Module, lookup: L)
