@@ -104,7 +104,7 @@ impl DynamicAdapter {
 
     pub fn load_module<L>(&mut self, module: Module, lookup: L)
         -> StdResult<ModuleAddr, LoadModuleError>
-        where L: NamedLookup<Element=ModuleAddr> + Send + 'static
+        where L: NamedLookup<ModuleAddr> + Send + 'static
     {
         use std::cell::RefCell;
         let module = RefCell::new(Some(module));
