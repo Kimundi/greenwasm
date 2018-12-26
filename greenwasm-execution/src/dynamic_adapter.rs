@@ -1,5 +1,5 @@
 extern crate greenwasm_utils;
-use self::greenwasm_utils::{IdAppendContainer, NamedLookup};
+use self::greenwasm_utils::{NamedLookup};
 
 use greenwasm_structure::modules::Module;
 use greenwasm_validation::{validate_module};
@@ -8,21 +8,22 @@ use ::modules::invocation::*;
 use ::runtime_structure::*;
 use ::runtime_structure::Result as IResult;
 use std::result::Result as StdResult;
+use ::modules::invocation::InvokeError as ModInvokeError;
 
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 
-pub struct StSt<'ast> {
-    pub store: Store<'ast>,
-    pub stack: Stack<'ast>,
-    pub recv: Receiver<CmdFn>,
+struct StSt<'ast> {
+    store: Store<'ast>,
+    stack: Stack<'ast>,
+    recv: Receiver<CmdFn>,
 }
-pub type CmdFn = Box<for<'ast> Fn(&mut Option<StSt<'ast>>) + Send>;
+type CmdFn = Box<for<'ast> Fn(&mut Option<StSt<'ast>>) + Send>;
 
 #[must_use]
-pub struct FrameWitness;
+struct FrameWitness;
 
-pub fn store_thread_frame<'ast>(stst: StSt<'ast>) -> FrameWitness {
+fn store_thread_frame<'ast>(stst: StSt<'ast>) -> FrameWitness {
     let mut stst = Some(stst);
     while stst.is_some() {
         match stst.as_ref().unwrap().recv.recv() {
@@ -35,7 +36,7 @@ pub fn store_thread_frame<'ast>(stst: StSt<'ast>) -> FrameWitness {
     FrameWitness
 }
 
-pub struct StoreCtrl {
+struct StoreCtrl {
     tx: Sender<CmdFn>,
     _handle: thread::JoinHandle<()>,
 }
@@ -55,7 +56,7 @@ impl StoreCtrl {
         }
     }
 
-    pub fn new_frame<T: Send + 'static, F: Fn(StSt, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
+    fn new_frame<T: Send + 'static, F: Fn(StSt, &Sender<T>) -> FrameWitness + Send + 'static>(&self, f: F) -> T {
         let (tx, rx) = channel();
         self.tx.send(Box::new(move |stst: &mut Option<StSt>| {
             let stst = stst.take().unwrap();
@@ -64,7 +65,7 @@ impl StoreCtrl {
         rx.recv().expect("new_frame() closure terminated before producing result")
     }
 
-    pub fn frame<T: Send + 'static, F: Fn(&mut StSt) -> T + Send + 'static>(&self, f: F) -> T {
+    fn frame<T: Send + 'static, F: Fn(&mut StSt) -> T + Send + 'static>(&self, f: F) -> T {
         let (tx, rx) = channel();
         self.tx.send(Box::new(move |stst: &mut Option<StSt>| {
             let stst = stst.as_mut().unwrap();
@@ -76,8 +77,7 @@ impl StoreCtrl {
 }
 
 pub struct DynamicAdapter {
-    pub ctrl: StoreCtrl,
-    pub loaded_modules: IdAppendContainer<ModuleAddr>,
+    ctrl: StoreCtrl,
 }
 
 #[derive(Debug)]
@@ -88,27 +88,18 @@ pub enum LoadModuleError {
     Instantiation,
 }
 
-// TODO: deduplicate with enum in spectest
-/// Result of invoking a function.
-pub enum InvokationResult {
-    /// The function returned successfully with a number of `Value`s
-    Vals(Vec<Val>),
-    /// The function trapped.
-    Trap,
-    /// The function exhausted the stack.
+#[derive(Debug)]
+pub enum InvokeError {
+    MismatchedArguments,
     StackExhaustion,
+    UnknownSymbol,
 }
 
 impl DynamicAdapter {
     pub fn new() -> Self {
         Self {
             ctrl: StoreCtrl::new(),
-            loaded_modules: Default::default(),
         }
-    }
-
-    pub fn raise_error(&mut self, e: &'static str) {
-        panic!(e);
     }
 
     pub fn load_module<L>(&mut self, module: Module, lookup: L)
@@ -159,7 +150,7 @@ impl DynamicAdapter {
 
         moduleaddr
     }
-    pub fn invoke(&mut self, moduleaddr: ModuleAddr, field: String, args: Vec<Val>) -> InvokationResult {
+    pub fn invoke(&mut self, moduleaddr: ModuleAddr, field: String, args: Vec<Val>) -> StdResult<IResult, InvokeError> {
         self.ctrl.frame(move |stst| {
             let funcaddr = (|| {
                 let module = &stst.store.modules[moduleaddr];
@@ -170,26 +161,20 @@ impl DynamicAdapter {
                         }
                     }
                 }
-                Err("No matching export found")
+                Err(InvokeError::UnknownSymbol)
             })();
 
             funcaddr.and_then(|funcaddr| {
-                match invoke(&mut stst.store, &mut stst.stack, funcaddr, &args) {
-                    Ok(IResult::Vals(v)) => {
-                        Ok(InvokationResult::Vals(v))
-                    }
-                    Ok(IResult::Trap) => {
-                        Ok(InvokationResult::Trap)
-                    }
-                    Err(InvokeError::StackExhaustion) => {
-                        Ok(InvokationResult::StackExhaustion)
-                    }
-                    Err(_) => {
-                        Err("Invokation error")
-                    }
-                }
+                invoke(&mut stst.store, &mut stst.stack, funcaddr, &args)
+                    .map_err(|s| match s {
+                        ModInvokeError::StackExhaustion
+                            => InvokeError::StackExhaustion,
+                        ModInvokeError::MismatchedArgumentCount |
+                        ModInvokeError::MismatchedArgumentType
+                            => InvokeError::MismatchedArguments,
+                    })
             })
-        }).unwrap()
+        })
     }
     pub fn get_global(&mut self, moduleaddr: ModuleAddr, field: String) -> Val {
         self.ctrl.frame(move |stst| {

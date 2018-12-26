@@ -6,18 +6,13 @@ extern crate greenwasm_utils;
 
 use greenwasm::binary_format::parse_binary_format;
 use greenwasm::validation::{validate_module};
-use greenwasm::execution::modules::invocation::*;
 use greenwasm::execution::runtime_structure::*;
-use greenwasm::execution::runtime_structure::Result as IResult;
-use greenwasm::execution::dynamic_adapter::DynamicAdapter;
+use greenwasm::execution::dynamic_adapter::{DynamicAdapter, InvokeError};
 use greenwasm_spectest::*;
 use greenwasm_utils::NamedLookup;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-
-// TODO: remove again
-use greenwasm::execution::dynamic_adapter::*;
 
 #[derive(Clone)]
 struct MapNameLookup(Arc<HashMap<String, ModuleAddr>>);
@@ -41,10 +36,6 @@ impl DynamicAdapterScriptHandler {
             modules: MapNameLookup(Arc::new(HashMap::new())),
             last_module: None,
         }
-    }
-
-    fn frame<T: Send + 'static, F: Fn(&mut StSt) -> T + Send + 'static>(&self, f: F) -> T {
-        self.int.ctrl.frame(f)
     }
 
     pub fn add_module(&mut self, name: Option<String>, module: ModuleAddr) {
@@ -119,15 +110,16 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
         let moduleaddr = self.get_module(module);
         let r = self.int.invoke(moduleaddr, field, vals_wabt2greenwasm(args));
         match r {
-            InvokationResult::Vals(v) => {
+            Ok(Result::Vals(v)) => {
                 WabtResult::Vals(vals_greenwasm2wabt(v))
             }
-            InvokationResult::Trap => {
+            Ok(Result::Trap) => {
                 WabtResult::Trap
             }
-            InvokationResult::StackExhaustion => {
+            Err(InvokeError::StackExhaustion) => {
                 WabtResult::StackExhaustion
             }
+            Err(other) => panic!("{:?}", other),
         }
     }
     fn action_get(&mut self, module: Option<String>, field: String) -> Value {
