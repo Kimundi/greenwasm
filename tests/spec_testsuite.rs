@@ -23,7 +23,7 @@ impl NamedLookup<ModuleAddr> for MapNameLookup {
 }
 
 struct DynamicAdapterScriptHandler {
-    int: DynamicAdapter,
+    da: DynamicAdapter,
     modules: MapNameLookup,
     last_module: Option<ModuleAddr>,
 }
@@ -31,13 +31,13 @@ struct DynamicAdapterScriptHandler {
 impl DynamicAdapterScriptHandler {
     fn new() -> Self {
         Self {
-            int: DynamicAdapter::new(),
+            da: DynamicAdapter::new(),
             modules: MapNameLookup(Arc::new(HashMap::new())),
             last_module: None,
         }
     }
 
-    pub fn add_module(&mut self, name: Option<String>, module: ModuleAddr) {
+    fn add_module(&mut self, name: Option<String>, module: ModuleAddr) {
         if let Some(name) = name {
             let mut nm = (*self.modules.0).clone();
             nm.insert(name, module);
@@ -46,7 +46,7 @@ impl DynamicAdapterScriptHandler {
         self.last_module = Some(module);
     }
 
-    pub fn get_module(&self, name: Option<String>) -> ModuleAddr {
+    fn get_module(&self, name: Option<String>) -> ModuleAddr {
         name.map(|name| self.modules.0[&name]).or(self.last_module).unwrap()
     }
 }
@@ -82,13 +82,13 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
         let (module, _) = parse_binary_format(&bytes).expect("parsing failed");
 
-        let moduleaddr = self.int.load_module(module, self.modules.clone()).unwrap();
+        let moduleaddr = self.da.load_module(module, self.modules.clone()).unwrap();
         self.add_module(name, moduleaddr);
     }
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
         let (module, _) = parse_binary_format(&bytes).expect("parsing failed");
 
-        let r = self.int.load_module(module, self.modules.clone());
+        let r = self.da.load_module(module, self.modules.clone());
         assert!(r.is_err(), "instaniation did not fail");
         use greenwasm::execution::dynamic_adapter::LoadModuleError::*;
         match r.err().unwrap() {
@@ -107,7 +107,7 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     }
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> WabtResult {
         let moduleaddr = self.get_module(module);
-        let r = self.int.invoke(moduleaddr, field, vals_wabt2greenwasm(args));
+        let r = self.da.invoke(moduleaddr, field, vals_wabt2greenwasm(args));
         match r {
             Ok(Result::Vals(v)) => {
                 WabtResult::Vals(vals_greenwasm2wabt(v))
@@ -123,7 +123,7 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     }
     fn action_get(&mut self, module: Option<String>, field: String) -> Value {
         let moduleaddr = self.get_module(module);
-        let r = self.int.get_global(moduleaddr, field);
+        let r = self.da.get_global(moduleaddr, field);
         val_greenwasm2wabt(r)
     }
     fn assert_exhaustion(&mut self, action: Action) {

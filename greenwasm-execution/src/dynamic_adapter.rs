@@ -35,13 +35,13 @@ fn store_thread_frame<'ast>(stst: StSt<'ast>) -> FrameWitness {
     FrameWitness
 }
 
-struct StoreCtrl {
+pub struct DynamicAdapter {
     tx: Sender<CmdFn>,
     _handle: thread::JoinHandle<()>,
 }
 
-impl StoreCtrl {
-    fn new() -> Self {
+impl DynamicAdapter {
+    pub fn new() -> Self {
         let (tx, rx) = channel();
 
         let _handle = thread::spawn(|| {
@@ -49,7 +49,7 @@ impl StoreCtrl {
                 StSt { store: Store::new(), stack: Stack::new(), recv: rx});
         });
 
-        StoreCtrl {
+        DynamicAdapter {
             tx,
             _handle,
         }
@@ -75,10 +75,6 @@ impl StoreCtrl {
     }
 }
 
-pub struct DynamicAdapter {
-    ctrl: StoreCtrl,
-}
-
 #[derive(Debug)]
 pub enum LoadModuleError {
     Validation,
@@ -95,12 +91,6 @@ pub enum InvokeError {
 }
 
 impl DynamicAdapter {
-    pub fn new() -> Self {
-        Self {
-            ctrl: StoreCtrl::new(),
-        }
-    }
-
     pub fn load_module<L>(&mut self, module: Module, lookup: L)
         -> StdResult<ModuleAddr, LoadModuleError>
         where L: NamedLookup<ModuleAddr> + Send + 'static
@@ -108,7 +98,7 @@ impl DynamicAdapter {
         use std::cell::RefCell;
         let module = RefCell::new(Some(module));
 
-        let moduleaddr = self.ctrl.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, LoadModuleError>>| {
+        let moduleaddr = self.new_frame(move |stst: StSt, tx: &Sender<::std::result::Result<ModuleAddr, LoadModuleError>>| {
             macro_rules! mytry {
                 ($e:expr, $s:expr, $m:expr) => {
                     match $e {
@@ -152,7 +142,7 @@ impl DynamicAdapter {
     pub fn invoke(&mut self, moduleaddr: ModuleAddr, field: String, args: Vec<Val>)
         -> StdResult<Result, InvokeError>
     {
-        self.ctrl.frame(move |stst| {
+        self.frame(move |stst| {
             let funcaddr = (|| {
                 let module = &stst.store.modules[moduleaddr];
                 for e in &module.exports {
@@ -178,7 +168,7 @@ impl DynamicAdapter {
         })
     }
     pub fn get_global(&mut self, moduleaddr: ModuleAddr, field: String) -> Val {
-        self.ctrl.frame(move |stst| {
+        self.frame(move |stst| {
             let globaladdr = (|| {
                 let module = &stst.store.modules[moduleaddr];
                 for e in &module.exports {
