@@ -5,10 +5,10 @@ use greenwasm_execution::runtime_structure::ModuleAddr;
 pub struct EngineError;
 
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]
-pub struct ModuleId(pub u64);
+pub struct ModuleId(pub usize);
 
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]
-pub struct InstancedModuleId(pub u64);
+pub struct InstancedModuleId(pub usize);
 
 use std::collections::HashMap;
 
@@ -41,6 +41,10 @@ pub trait Engine {
 
     fn instance_module(&mut self, module: ModuleId, imports: Imports)
         -> EngineResult<InstancedModuleId>;
+
+
+
+    // pub fn invoke(&mut self, moduleaddr: ModuleAddr, field: String, args: Vec<Val>) -> StdResult<Result, InvokeError>
 }
 
 /*
