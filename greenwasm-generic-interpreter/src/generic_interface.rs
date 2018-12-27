@@ -1,3 +1,6 @@
+use greenwasm_utils::NamedLookup;
+use greenwasm_execution::runtime_structure::ModuleAddr;
+
 #[derive(Debug)]
 pub struct EngineError;
 
@@ -24,6 +27,11 @@ impl Into<HashMap<String, InstancedModuleId>> for Imports {
     }
 }
 
+impl NamedLookup<ModuleAddr> for Imports {
+    fn lookup(&self, name: &str) -> Option<ModuleAddr> {
+        self.modules.get(name).map(|x| ((*x).0 as usize).into())
+    }
+}
 
 pub type EngineResult<T> = Result<T, EngineError>;
 

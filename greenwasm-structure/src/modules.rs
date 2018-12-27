@@ -10,7 +10,7 @@ use super::types::U32;
 
 use super::instructions::Expr;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Module {
     pub types:   Wec<FuncType>,
     pub funcs:   Wec<Func>,
@@ -67,48 +67,48 @@ pub struct Func {
     pub body: Expr,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Table {
     pub type_: TableType,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Mem {
     pub type_: MemType,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Global {
     pub type_: GlobalType,
     pub init: Expr,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Elem {
     pub table: TableIdx,
     pub offset: Expr,
     pub init: Wec<FuncIdx>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Data {
     pub data: MemIdx,
     pub offset: Expr,
     pub init: Wec<Byte>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Start {
     pub func: FuncIdx,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Export {
     pub name: Name,
     pub desc: ExportDesc,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ExportDesc {
     Func(FuncIdx),
     Table(TableIdx),
@@ -116,14 +116,14 @@ pub enum ExportDesc {
     Global(GlobalIdx),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Import {
     pub module: Name,
     pub name: Name,
     pub desc: ImportDesc,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ImportDesc {
     Func(TypeIdx),
     Table(TableType),

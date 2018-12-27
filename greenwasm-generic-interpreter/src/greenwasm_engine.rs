@@ -56,7 +56,7 @@ mod tests {
     use super::*;
 
     fn generic_test<T: Engine>(e: &mut T) -> EngineResult<()> {
-        let module_id = e.load_module_from_slice(&[])?;
+        let module_id = e.from_binary_format(&[])?;
 
         let instanced_module_id = e.instance_module(
             module_id, Imports::default())?;

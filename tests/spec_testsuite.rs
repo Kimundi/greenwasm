@@ -17,8 +17,8 @@ use std::sync::Arc;
 #[derive(Clone)]
 struct MapNameLookup(Arc<HashMap<String, ModuleAddr>>);
 impl NamedLookup<ModuleAddr> for MapNameLookup {
-    fn lookup(&self, name: &str) -> Option<&ModuleAddr> {
-        self.0.get(name)
+    fn lookup(&self, name: &str) -> Option<ModuleAddr> {
+        self.0.get(name).cloned()
     }
 }
 

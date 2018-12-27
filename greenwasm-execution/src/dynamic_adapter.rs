@@ -118,7 +118,7 @@ impl DynamicAdapter {
             let mut exports = vec![];
             for i in &validated_module.imports {
                 // println!("i: {:?}", i);
-                let exporting_module = *mytry!(lookup.lookup(&i.module[..]).ok_or(()), stst, LoadModuleError::ImportModule);
+                let exporting_module = mytry!(lookup.lookup(&i.module[..]).ok_or(()), stst, LoadModuleError::ImportModule);
                 let exporting_module = &stst.store.modules[exporting_module];
                 let mut value = None;
                 for e in &exporting_module.exports {
@@ -131,7 +131,13 @@ impl DynamicAdapter {
                 exports.push(mytry!(value.ok_or(()), stst, LoadModuleError::ImportSymbol));
             }
 
-            let moduleaddr = mytry!(instantiate_module(&mut stst.store, &mut stst.stack, &validated_module, &exports), stst, LoadModuleError::Instantiation);
+            let moduleaddr = mytry!(
+                instantiate_module(
+                    &mut stst.store,
+                    &mut stst.stack,
+                    &validated_module, &exports),
+                stst,
+                LoadModuleError::Instantiation);
 
             tx.send(Ok(moduleaddr)).unwrap();
             store_thread_frame(stst)

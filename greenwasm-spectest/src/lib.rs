@@ -299,7 +299,6 @@ impl<'a> ::std::fmt::Debug for NanCompare<'a> {
     }
 }
 
-// TODO: deduplicate with enum in dynamic adapter
 /// Result of invoking a function.
 pub enum WabtResult {
     /// The function returned successfully with a number of `Value`s

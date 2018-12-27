@@ -35,5 +35,5 @@ impl<T> IdAppendContainer<T> {
 }
 
 pub trait NamedLookup<Element> {
-    fn lookup(&self, name: &str) -> Option<&Element>;
+    fn lookup(&self, name: &str) -> Option<Element>;
 }
