@@ -1,8 +1,8 @@
+use super::*;
 use generic_interface::*;
+use greenwasm_utils::IdAppendContainer;
 use std::collections::HashMap;
 use std::sync::Arc;
-use super::*;
-use greenwasm_utils::IdAppendContainer;
 
 // use greenwasm_structure::modules::Module;
 use greenwasm_validation::ValidatedModule;
@@ -32,15 +32,10 @@ impl Engine for GreenwasmEngine {
         let id = self.modules.append(Arc::new(module));
         Ok(ModuleId(id))
     }
-    fn instance_module(&mut self, module: ModuleId, imports: Imports)
-        -> EngineResult<ModuleAddr> {
-
+    fn instance_module(&mut self, module: ModuleId, imports: Imports) -> EngineResult<ModuleAddr> {
         let module = self.modules.get(module.0).ok_or(EngineError)?;
         let imports: HashMap<String, ModuleAddr> = imports.into();
-        for (modulename, instanced_module_id) in imports {
-
-        }
-
+        for (modulename, instanced_module_id) in imports {}
 
         unimplemented!()
 
@@ -58,8 +53,7 @@ mod tests {
     fn generic_test<T: Engine>(e: &mut T) -> EngineResult<()> {
         let module_id = e.from_binary_format(&[])?;
 
-        let instanced_module_id = e.instance_module(
-            module_id, Imports::default())?;
+        let instanced_module_id = e.instance_module(module_id, Imports::default())?;
 
         let _tmp = instanced_module_id;
 

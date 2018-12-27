@@ -1,33 +1,15 @@
+extern crate greenwasm_binary_format;
 extern crate greenwasm_execution;
 extern crate greenwasm_structure;
-extern crate greenwasm_validation;
 extern crate greenwasm_utils;
-extern crate greenwasm_binary_format;
+extern crate greenwasm_validation;
 
 use greenwasm_execution::runtime_structure::{
-    TypedIndexVec,
-    FuncAddr,
-    TableAddr,
-    MemAddr,
-    GlobalAddr,
-    ModuleAddr,
-    TableInst,
-    MemInst,
-    GlobalInst,
-    ExternVal,
+    ExternVal, FuncAddr, GlobalAddr, GlobalInst, MemAddr, MemInst, ModuleAddr, TableAddr,
+    TableInst, TypedIndexVec,
 };
-use greenwasm_structure::types::{
-    FuncType,
-    ValType,
-    Name,
-};
-use greenwasm_structure::modules::{
-    FuncIdx,
-    GlobalIdx,
-    MemIdx,
-    TableIdx,
-    TypeIdx,
-};
+use greenwasm_structure::modules::{FuncIdx, GlobalIdx, MemIdx, TableIdx, TypeIdx};
+use greenwasm_structure::types::{FuncType, Name, ValType};
 use greenwasm_validation::ValidatedModule;
 
 use std::sync::Arc;
@@ -45,7 +27,10 @@ pub struct Store<HostFunc> {
     pub modules: TypedIndexVec<ModuleInst, ModuleAddr>,
 }
 impl<HostFunc> Store<HostFunc> {
-    pub fn new() -> Self where HostFunc: Default {
+    pub fn new() -> Self
+    where
+        HostFunc: Default,
+    {
         Self::default()
     }
 }
@@ -70,7 +55,7 @@ pub enum FuncInst<HostFunc> {
     },
     Host {
         type_: FuncType,
-        hostcode: HostFunc
+        hostcode: HostFunc,
     },
 }
 
