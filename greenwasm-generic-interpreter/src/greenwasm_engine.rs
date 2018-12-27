@@ -22,7 +22,7 @@ impl GreenwasmEngine {
 }
 
 impl Engine for GreenwasmEngine {
-    fn load_module_from_slice(&mut self, data: &[u8]) -> EngineResult<ModuleId> {
+    fn from_binary_format(&mut self, data: &[u8]) -> EngineResult<ModuleId> {
         let module = greenwasm_binary_format::parse_binary_format(data);
         let (module, _custom_sections) = module.map_err(|_| EngineError)?;
 
