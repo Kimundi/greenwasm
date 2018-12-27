@@ -44,9 +44,15 @@ pub trait Engine {
         moduleaddr: ModuleAddr,
         symbol: &str,
         args: &[Val],
-    ) -> Result<InvokeResult, InvokeError> {
-        unimplemented!()
-    }
+    ) -> EngineResult<InvokeResult>;
+
+    fn get_global_export(&mut self, moduleaddr: ModuleAddr, symbol: &str) -> EngineResult<Val>;
+    fn set_global_export(
+        &mut self,
+        moduleaddr: ModuleAddr,
+        symbol: &str,
+        value: Val,
+    ) -> EngineResult<()>;
 }
 
 /*

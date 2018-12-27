@@ -3,6 +3,7 @@ use generic_interface::*;
 use greenwasm_utils::IdAppendContainer;
 use std::collections::HashMap;
 use std::sync::Arc;
+use greenwasm_execution::runtime_structure::{Val, Result as InvokeResult};
 
 // use greenwasm_structure::modules::Module;
 use greenwasm_validation::ValidatedModule;
@@ -43,6 +44,27 @@ impl Engine for GreenwasmEngine {
         - need list of imports to be provided
         - don't automatically transitilvy import modules
         */
+    }
+
+    fn invoke_export(
+        &mut self,
+        moduleaddr: ModuleAddr,
+        symbol: &str,
+        args: &[Val],
+    ) -> EngineResult<InvokeResult> {
+        unimplemented!()
+    }
+
+    fn get_global_export(&mut self, moduleaddr: ModuleAddr, symbol: &str) -> EngineResult<Val> {
+        unimplemented!()
+    }
+    fn set_global_export(
+        &mut self,
+        moduleaddr: ModuleAddr,
+        symbol: &str,
+        value: Val,
+    ) -> EngineResult<()> {
+        unimplemented!()
     }
 }
 
