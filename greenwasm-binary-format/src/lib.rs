@@ -1,5 +1,3 @@
-#![feature(int_to_from_bytes)]
-
 #![recursion_limit="256"]
 
 #![allow(non_snake_case, unused_imports)]
