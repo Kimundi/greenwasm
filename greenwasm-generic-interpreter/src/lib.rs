@@ -2,6 +2,7 @@ extern crate greenwasm_execution;
 extern crate greenwasm_structure;
 extern crate greenwasm_validation;
 extern crate greenwasm_utils;
+extern crate greenwasm_binary_format;
 
 use greenwasm_execution::runtime_structure::{
     TypedIndexVec,
@@ -33,6 +34,7 @@ use std::sync::Arc;
 
 pub mod generic_interface;
 pub mod greenwasm_engine;
+pub mod greenwasm_test_engine;
 
 #[derive(Default)]
 pub struct Store<HostFunc> {
