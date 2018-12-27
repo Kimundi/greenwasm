@@ -1,5 +1,5 @@
 use greenwasm_utils::NamedLookup;
-use greenwasm_execution::runtime_structure::ModuleAddr;
+pub use greenwasm_execution::runtime_structure::ModuleAddr;
 
 #[derive(Debug)]
 pub struct EngineError;
@@ -7,22 +7,19 @@ pub struct EngineError;
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub struct ModuleId(pub usize);
 
-#[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]
-pub struct InstancedModuleId(pub usize);
-
 use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct Imports {
-    modules: HashMap<String, InstancedModuleId>
+    modules: HashMap<String, ModuleAddr>
 }
-impl From<HashMap<String, InstancedModuleId>> for Imports {
-    fn from(v: HashMap<String, InstancedModuleId>) -> Self {
+impl From<HashMap<String, ModuleAddr>> for Imports {
+    fn from(v: HashMap<String, ModuleAddr>) -> Self {
         Self { modules: v }
     }
 }
-impl Into<HashMap<String, InstancedModuleId>> for Imports {
-    fn into(self) -> HashMap<String, InstancedModuleId> {
+impl Into<HashMap<String, ModuleAddr>> for Imports {
+    fn into(self) -> HashMap<String, ModuleAddr> {
         self.modules
     }
 }
@@ -40,7 +37,8 @@ pub trait Engine {
         -> EngineResult<ModuleId>;
 
     fn instance_module(&mut self, module: ModuleId, imports: Imports)
-        -> EngineResult<InstancedModuleId>;
+        -> EngineResult<ModuleAddr>;
+
 
 
 

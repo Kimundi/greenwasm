@@ -33,10 +33,10 @@ impl Engine for GreenwasmEngine {
         Ok(ModuleId(id))
     }
     fn instance_module(&mut self, module: ModuleId, imports: Imports)
-        -> EngineResult<InstancedModuleId> {
+        -> EngineResult<ModuleAddr> {
 
         let module = self.modules.get(module.0).ok_or(EngineError)?;
-        let imports: HashMap<String, InstancedModuleId> = imports.into();
+        let imports: HashMap<String, ModuleAddr> = imports.into();
         for (modulename, instanced_module_id) in imports {
 
         }
