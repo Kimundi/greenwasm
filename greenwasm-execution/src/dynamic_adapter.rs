@@ -6,7 +6,6 @@ use greenwasm_validation::{validate_module};
 use ::modules::instantiation::instantiate_module;
 use ::modules::invocation::*;
 use ::runtime_structure::*;
-use ::runtime_structure::Result as IResult;
 use std::result::Result as StdResult;
 use ::modules::invocation::InvokeError as ModInvokeError;
 
@@ -150,7 +149,9 @@ impl DynamicAdapter {
 
         moduleaddr
     }
-    pub fn invoke(&mut self, moduleaddr: ModuleAddr, field: String, args: Vec<Val>) -> StdResult<IResult, InvokeError> {
+    pub fn invoke(&mut self, moduleaddr: ModuleAddr, field: String, args: Vec<Val>)
+        -> StdResult<Result, InvokeError>
+    {
         self.ctrl.frame(move |stst| {
             let funcaddr = (|| {
                 let module = &stst.store.modules[moduleaddr];
