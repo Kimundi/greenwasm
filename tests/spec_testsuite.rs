@@ -150,6 +150,105 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     }
 }
 
+struct EngineScriptHandler<E> {
+    engine: E,
+    modules: MapNameLookup,
+    last_module: Option<ModuleAddr>,
+}
+
+impl<E: Engine> EngineScriptHandler<E> {
+    fn new() -> Self {
+        Self {
+            engine: E::default(),
+            modules: MapNameLookup(Arc::new(HashMap::new())),
+            last_module: None,
+        }
+    }
+
+    fn add_module(&mut self, name: Option<String>, module: ModuleAddr) {
+        if let Some(name) = name {
+            let mut nm = (*self.modules.0).clone();
+            nm.insert(name, module);
+            self.modules = MapNameLookup(Arc::new(nm));
+        }
+        self.last_module = Some(module);
+    }
+
+    fn get_module(&self, name: Option<String>) -> ModuleAddr {
+        name.map(|name| self.modules.0[&name]).or(self.last_module).unwrap()
+    }
+}
+impl<E: Engine> ScriptHandler for EngineScriptHandler<E> {
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    fn register(&mut self, name: Option<String>, as_name: String) {
+        let moduleaddr = name.map(|n| self.modules.0[&n]).unwrap_or_else(|| self.last_module.unwrap());
+        self.add_module(Some(as_name), moduleaddr);
+    }
+    fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
+        let moduleid = self.engine.from_binary_format_eager_validation(&bytes).unwrap();
+        let moduleaddr = self.engine.instance_module(moduleid, self.modules.clone()).unwrap();
+        self.add_module(name, moduleaddr);
+    }
+    fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
+        let (module, _) = parse_binary_format(&bytes).expect("parsing failed");
+        let module = validate_module(module).expect("validation failed");
+
+        let r = self.da.load_module(module, self.modules.clone());
+        assert!(r.is_err(), "instaniation did not fail");
+        use greenwasm::execution::dynamic_adapter::LoadModuleError::*;
+        match r.err().unwrap() {
+            Validation |
+            ImportModule |
+            ImportSymbol |
+            Instantiation => (), // TODO: check current state of testsuite in regard to the cases that should be covered by this assert
+        }
+    }
+    fn assert_malformed(&mut self, bytes: Vec<u8>) {
+        assert!(parse_binary_format(&bytes).is_err(), "parsing did not fail");
+    }
+    fn assert_invalid(&mut self, bytes: Vec<u8>) {
+        let (module, _) = parse_binary_format(&bytes).unwrap();
+        assert!(validate_module(module).is_err(), "validation did not fail");
+    }
+    fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> WabtResult {
+        let moduleaddr = self.get_module(module);
+        let r = self.da.invoke(moduleaddr, field, vals_wabt2greenwasm(args));
+        match r {
+            Ok(Result::Vals(v)) => {
+                WabtResult::Vals(vals_greenwasm2wabt(v))
+            }
+            Ok(Result::Trap) => {
+                WabtResult::Trap
+            }
+            Err(InvokeError::StackExhaustion) => {
+                WabtResult::StackExhaustion
+            }
+            Err(other) => panic!("{:?}", other),
+        }
+    }
+    fn action_get(&mut self, module: Option<String>, field: String) -> Value {
+        let moduleaddr = self.get_module(module);
+        let r = self.da.get_global(moduleaddr, field);
+        val_greenwasm2wabt(r)
+    }
+    fn assert_exhaustion(&mut self, action: Action) {
+        match action {
+            Action::Invoke { module, field, args } => {
+                if let WabtResult::StackExhaustion = self.action_invoke(module, field, args) {
+                } else {
+                    panic!("invokation should exhaust the stack, but did not");
+                }
+            }
+            Action::Get { .. } => {
+                panic!("a global access can not exhaust the stack!")
+            }
+        }
+    }
+}
+
 #[test]
 fn run_tests() {
     run_mvp_spectest(&mut DynamicAdapterScriptHandler::new()).present();
