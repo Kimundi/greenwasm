@@ -8,12 +8,12 @@ use greenwasm_execution::runtime_structure::Val;
 use greenwasm_execution::runtime_structure::Result as InvokeResult;
 
 #[derive(Default)]
-pub struct SpecEngine {
+pub struct PocEngine {
     da: DynamicAdapter,
     modules: IdAppendContainer<ValidatedModule>,
 }
 
-impl SpecEngine {
+impl PocEngine {
     pub fn new() -> Self {
         Self {
             da: DynamicAdapter::new(),
@@ -22,7 +22,7 @@ impl SpecEngine {
     }
 }
 
-impl Engine for SpecEngine {
+impl Engine for PocEngine {
     fn from_binary_format(&mut self, data: &[u8]) -> EngineResult<ModuleId> {
         let module = parse_binary_format(data);
         let (module, _custom_sections) = module.map_err(|_| EngineError::Parsing)?;

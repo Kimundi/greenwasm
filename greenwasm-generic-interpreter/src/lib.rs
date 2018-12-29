@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 pub mod generic_interface;
 pub mod greenwasm_engine;
-pub mod greenwasm_test_engine;
+pub mod greenwasm_poc_engine;
 
 #[derive(Default)]
 pub struct Store<HostFunc> {

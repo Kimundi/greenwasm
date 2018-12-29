@@ -261,6 +261,6 @@ fn run_tests_poc_greenwasm() {
 
 #[test]
 fn run_tests_engine_poc_greenwasm() {
-    use greenwasm_generic_interpreter::greenwasm_test_engine::SpecEngine;
-    run_mvp_spectest(&mut EngineScriptHandler::<SpecEngine>::new()).present();
+    use greenwasm_generic_interpreter::greenwasm_poc_engine::PocEngine;
+    run_mvp_spectest(&mut EngineScriptHandler::<PocEngine>::new()).present();
 }
