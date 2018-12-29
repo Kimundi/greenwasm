@@ -4,7 +4,13 @@ use greenwasm_execution::runtime_structure::{Result as InvokeResult, Val};
 use greenwasm_utils::NamedLookup;
 
 #[derive(Debug)]
-pub struct EngineError;
+pub enum EngineError {
+    Parsing,
+    Validation,
+    Instantiation,
+    WrongId,
+    Resolution,
+}
 
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]
 pub struct ModuleId(pub usize);
@@ -53,7 +59,12 @@ pub trait Engine {
         symbol: &str,
         value: Val,
     ) -> EngineResult<()>;
+
+    fn from_binary_format_eager_validation(&mut self, data: &[u8]) -> EngineResult<ModuleId> {
+        self.from_binary_format(data)
+    }
 }
+
 
 /*
 

@@ -25,16 +25,16 @@ impl GreenwasmEngine {
 impl Engine for GreenwasmEngine {
     fn from_binary_format(&mut self, data: &[u8]) -> EngineResult<ModuleId> {
         let module = greenwasm_binary_format::parse_binary_format(data);
-        let (module, _custom_sections) = module.map_err(|_| EngineError)?;
+        let (module, _custom_sections) = module.map_err(|_| EngineError::Parsing)?;
 
         let module = greenwasm_validation::validate_module(module);
-        let module = module.map_err(|_| EngineError)?;
+        let module = module.map_err(|_| EngineError::Validation)?;
 
         let id = self.modules.append(Arc::new(module));
         Ok(ModuleId(id))
     }
     fn instance_module(&mut self, module: ModuleId, imports: Imports) -> EngineResult<ModuleAddr> {
-        let module = self.modules.get(module.0).ok_or(EngineError)?;
+        let module = self.modules.get(module.0).ok_or(EngineError::WrongId)?;
         let imports: HashMap<String, ModuleAddr> = imports.into();
         for (modulename, instanced_module_id) in imports {}
 
