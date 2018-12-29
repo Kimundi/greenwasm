@@ -8,9 +8,11 @@ pub enum EngineError {
     Parsing,
     Validation,
     Instantiation,
-    WrongId,
+    UnknownId,
     Resolution,
     StackExhaustion,
+    UnknownSymbol,
+    SignatureMismatch,
 }
 
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]

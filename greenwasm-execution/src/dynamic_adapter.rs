@@ -95,6 +95,11 @@ pub enum InvokeError {
     UnknownSymbol,
 }
 
+#[derive(Debug)]
+pub enum GetGlobalError {
+    UnknownSymbol,
+}
+
 impl DynamicAdapter {
     pub fn load_module<L>(&mut self, module: ValidatedModule, lookup: L)
         -> StdResult<ModuleAddr, LoadModuleError>
@@ -178,7 +183,7 @@ impl DynamicAdapter {
             })
         })
     }
-    pub fn get_global(&mut self, moduleaddr: ModuleAddr, field: String) -> Val {
+    pub fn get_global(&mut self, moduleaddr: ModuleAddr, field: String) -> StdResult<Val, GetGlobalError> {
         self.frame(move |stst| {
             let globaladdr = (|| {
                 let module = &stst.store.modules[moduleaddr];
@@ -192,6 +197,6 @@ impl DynamicAdapter {
                 None
             })();
             globaladdr.map(|globaladdr| stst.store.globals[globaladdr].value)
-        }).expect("No matching export found")
+        }).ok_or(GetGlobalError::UnknownSymbol)
     }
 }

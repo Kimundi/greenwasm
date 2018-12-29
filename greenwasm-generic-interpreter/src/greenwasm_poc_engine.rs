@@ -32,7 +32,7 @@ impl Engine for PocEngine {
     }
 
     fn instance_module(&mut self, module: ModuleId, imports: &Imports) -> EngineResult<ModuleAddr> {
-        let module = self.modules.get(module.0).ok_or(EngineError::WrongId)?;
+        let module = self.modules.get(module.0).ok_or(EngineError::UnknownId)?;
         let (module, imports) = (module.clone(), imports.clone());
         let moduleaddr = self
             .da
@@ -52,11 +52,19 @@ impl Engine for PocEngine {
         symbol: &str,
         args: &[Val],
     ) -> EngineResult<InvokeResult> {
-        unimplemented!()
+        let r = self.da.invoke(moduleaddr, symbol.to_owned(), args.to_owned());
+        r.map_err(|e| match e {
+            InvokeError::StackExhaustion => EngineError::StackExhaustion,
+            InvokeError::MismatchedArguments => EngineError::SignatureMismatch,
+            InvokeError::UnknownSymbol => EngineError::UnknownSymbol,
+        })
     }
 
     fn get_global_export(&mut self, moduleaddr: ModuleAddr, symbol: &str) -> EngineResult<Val> {
-        unimplemented!()
+        let r = self.da.get_global(moduleaddr, symbol.to_owned());
+        r.map_err(|e| match e {
+            GetGlobalError::UnknownSymbol => EngineError::UnknownSymbol,
+        })
     }
     fn set_global_export(
         &mut self,

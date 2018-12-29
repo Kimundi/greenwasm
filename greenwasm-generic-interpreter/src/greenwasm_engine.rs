@@ -35,7 +35,7 @@ impl Engine for GreenwasmEngine {
         Ok(ModuleId(id))
     }
     fn instance_module(&mut self, module: ModuleId, imports: &Imports) -> EngineResult<ModuleAddr> {
-        let module = self.modules.get(module.0).ok_or(EngineError::WrongId)?;
+        let module = self.modules.get(module.0).ok_or(EngineError::UnknownId)?;
         let imports: HashMap<String, ModuleAddr> = imports.clone().into();
         for (modulename, instanced_module_id) in imports {}
 

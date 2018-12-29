@@ -131,7 +131,7 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
     }
     fn action_get(&mut self, module: Option<String>, field: String) -> Value {
         let moduleaddr = self.get_module(module);
-        let r = self.da.get_global(moduleaddr, field);
+        let r = self.da.get_global(moduleaddr, field).unwrap();
         val_greenwasm2wabt(r)
     }
     fn assert_exhaustion(&mut self, action: Action) {
@@ -202,6 +202,7 @@ impl<E: Engine> ScriptHandler for EngineScriptHandler<E> {
     }
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
         match self.try_module(bytes) {
+            Err(EngineError::Resolution) => (),
             Err(EngineError::Instantiation) => (),
             otherwise => panic!("{:?}", otherwise),
         }
