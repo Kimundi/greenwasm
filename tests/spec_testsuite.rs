@@ -189,7 +189,7 @@ impl<E: Engine> ScriptHandler for EngineScriptHandler<E> {
     }
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
         let moduleid = self.engine.from_binary_format_eager_validation(&bytes).unwrap();
-        let moduleaddr = self.engine.instance_module(moduleid, self.modules.clone()).unwrap();
+        let moduleaddr = self.engine.instance_module(moduleid, (*self.modules.0).clone().into()).unwrap();
         self.add_module(name, moduleaddr);
     }
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
