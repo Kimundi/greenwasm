@@ -8,6 +8,7 @@ use greenwasm_execution::runtime_structure::{Val, Result as InvokeResult};
 // use greenwasm_structure::modules::Module;
 use greenwasm_validation::ValidatedModule;
 
+#[derive(Default)]
 pub struct GreenwasmEngine {
     modules: IdAppendContainer<Arc<ValidatedModule>>,
     instanced_modules: IdAppendContainer<ModuleInst>,

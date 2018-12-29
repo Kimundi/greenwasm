@@ -39,6 +39,12 @@ pub struct DynamicAdapter {
     _handle: thread::JoinHandle<()>,
 }
 
+impl Default for DynamicAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DynamicAdapter {
     pub fn new() -> Self {
         let (tx, rx) = channel();

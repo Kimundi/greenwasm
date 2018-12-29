@@ -3,6 +3,7 @@
 extern crate greenwasm;
 extern crate greenwasm_spectest;
 extern crate greenwasm_utils;
+extern crate greenwasm_generic_interpreter;
 
 use greenwasm::binary_format::parse_binary_format;
 use greenwasm::validation::{validate_module};
@@ -74,11 +75,17 @@ fn vals_greenwasm2wabt(v: Vec<Val>) -> Vec<Value> {
     v.into_iter().map(val_greenwasm2wabt).collect()
 }
 
+use greenwasm_generic_interpreter::generic_interface::Engine;
+
 impl ScriptHandler for DynamicAdapterScriptHandler {
     fn reset(&mut self) {
         *self = Self::new();
     }
 
+    fn register(&mut self, name: Option<String>, as_name: String) {
+        let moduleaddr = name.map(|n| self.modules.0[&n]).unwrap_or_else(|| self.last_module.unwrap());
+        self.add_module(Some(as_name), moduleaddr);
+    }
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
         let (module, _) = parse_binary_format(&bytes).expect("parsing failed");
         let module = validate_module(module).expect("validation failed");
@@ -140,10 +147,6 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
                 panic!("a global access can not exhaust the stack!")
             }
         }
-    }
-    fn register(&mut self, name: Option<String>, as_name: String) {
-        let moduleaddr = name.map(|n| self.modules.0[&n]).unwrap_or_else(|| self.last_module.unwrap());
-        self.add_module(Some(as_name), moduleaddr);
     }
 }
 
