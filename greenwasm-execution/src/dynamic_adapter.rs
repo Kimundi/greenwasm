@@ -1,8 +1,7 @@
 extern crate greenwasm_utils;
 use self::greenwasm_utils::{NamedLookup};
 
-use greenwasm_structure::modules::Module;
-use greenwasm_validation::{validate_module};
+use greenwasm_validation::ValidatedModule;
 use ::modules::instantiation::instantiate_module;
 use ::modules::invocation::*;
 use ::runtime_structure::*;
@@ -91,7 +90,7 @@ pub enum InvokeError {
 }
 
 impl DynamicAdapter {
-    pub fn load_module<L>(&mut self, module: Module, lookup: L)
+    pub fn load_module<L>(&mut self, module: ValidatedModule, lookup: L)
         -> StdResult<ModuleAddr, LoadModuleError>
         where L: NamedLookup<ModuleAddr> + Send + 'static
     {
@@ -112,7 +111,7 @@ impl DynamicAdapter {
             }
 
             let module = module.borrow_mut().take().unwrap();
-            let validated_module = mytry!(validate_module(module), stst, LoadModuleError::Validation);
+            let validated_module = module;
 
             let mut stst = stst;
             let mut exports = vec![];

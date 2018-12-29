@@ -1296,6 +1296,7 @@ pub mod validate {
     });
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct ValidatedModule {
     module: Module,
     import_export_mapping: ImportExportMapping

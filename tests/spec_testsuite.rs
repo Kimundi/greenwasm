@@ -81,12 +81,14 @@ impl ScriptHandler for DynamicAdapterScriptHandler {
 
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
         let (module, _) = parse_binary_format(&bytes).expect("parsing failed");
+        let module = validate_module(module).expect("validation failed");
 
         let moduleaddr = self.da.load_module(module, self.modules.clone()).unwrap();
         self.add_module(name, moduleaddr);
     }
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
         let (module, _) = parse_binary_format(&bytes).expect("parsing failed");
+        let module = validate_module(module).expect("validation failed");
 
         let r = self.da.load_module(module, self.modules.clone());
         assert!(r.is_err(), "instaniation did not fail");
