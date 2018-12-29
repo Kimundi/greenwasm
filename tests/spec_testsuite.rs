@@ -11,6 +11,7 @@ use greenwasm::execution::runtime_structure::*;
 use greenwasm::execution::dynamic_adapter::{DynamicAdapter, InvokeError};
 use greenwasm_spectest::*;
 use greenwasm_utils::NamedLookup;
+use greenwasm_generic_interpreter::generic_interface::{Engine, EngineResult, EngineError};
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -74,8 +75,6 @@ fn vals_wabt2greenwasm(v: Vec<Value>) -> Vec<Val> {
 fn vals_greenwasm2wabt(v: Vec<Val>) -> Vec<Value> {
     v.into_iter().map(val_greenwasm2wabt).collect()
 }
-
-use greenwasm_generic_interpreter::generic_interface::Engine;
 
 impl ScriptHandler for DynamicAdapterScriptHandler {
     fn reset(&mut self) {
@@ -177,7 +176,16 @@ impl<E: Engine> EngineScriptHandler<E> {
     fn get_module(&self, name: Option<String>) -> ModuleAddr {
         name.map(|name| self.modules.0[&name]).or(self.last_module).unwrap()
     }
+
+    fn try_module(&mut self, bytes: Vec<u8>) -> EngineResult<ModuleAddr> {
+        let moduleid = self.engine.from_binary_format(&bytes)?;
+
+        let imports = (*self.modules.0).clone();
+        let moduleaddr = self.engine.instance_module(moduleid, &imports.into())?;
+        Ok(moduleaddr)
+    }
 }
+
 impl<E: Engine> ScriptHandler for EngineScriptHandler<E> {
     fn reset(&mut self) {
         *self = Self::new();
@@ -188,34 +196,31 @@ impl<E: Engine> ScriptHandler for EngineScriptHandler<E> {
         self.add_module(Some(as_name), moduleaddr);
     }
     fn module(&mut self, bytes: Vec<u8>, name: Option<String>) {
-        let moduleid = self.engine.from_binary_format_eager_validation(&bytes).unwrap();
-        let moduleaddr = self.engine.instance_module(moduleid, (*self.modules.0).clone().into()).unwrap();
+        let moduleaddr = self.try_module(bytes).unwrap();
+
         self.add_module(name, moduleaddr);
     }
     fn assert_uninstantiable(&mut self, bytes: Vec<u8>) {
-        let (module, _) = parse_binary_format(&bytes).expect("parsing failed");
-        let module = validate_module(module).expect("validation failed");
-
-        let r = self.da.load_module(module, self.modules.clone());
-        assert!(r.is_err(), "instaniation did not fail");
-        use greenwasm::execution::dynamic_adapter::LoadModuleError::*;
-        match r.err().unwrap() {
-            Validation |
-            ImportModule |
-            ImportSymbol |
-            Instantiation => (), // TODO: check current state of testsuite in regard to the cases that should be covered by this assert
+        match self.try_module(bytes) {
+            Err(EngineError::Instantiation) => (),
+            otherwise => panic!("{:?}", otherwise),
         }
     }
     fn assert_malformed(&mut self, bytes: Vec<u8>) {
-        assert!(parse_binary_format(&bytes).is_err(), "parsing did not fail");
+        match self.try_module(bytes) {
+            Err(EngineError::Parsing) => (),
+            otherwise => panic!("{:?}", otherwise),
+        }
     }
     fn assert_invalid(&mut self, bytes: Vec<u8>) {
-        let (module, _) = parse_binary_format(&bytes).unwrap();
-        assert!(validate_module(module).is_err(), "validation did not fail");
+        match self.try_module(bytes) {
+            Err(EngineError::Validation) => (),
+            otherwise => panic!("{:?}", otherwise),
+        }
     }
     fn action_invoke(&mut self, module: Option<String>, field: String, args: Vec<Value>) -> WabtResult {
         let moduleaddr = self.get_module(module);
-        let r = self.da.invoke(moduleaddr, field, vals_wabt2greenwasm(args));
+        let r = self.engine.invoke_export(moduleaddr, &field, &vals_wabt2greenwasm(args));
         match r {
             Ok(Result::Vals(v)) => {
                 WabtResult::Vals(vals_greenwasm2wabt(v))
@@ -223,7 +228,7 @@ impl<E: Engine> ScriptHandler for EngineScriptHandler<E> {
             Ok(Result::Trap) => {
                 WabtResult::Trap
             }
-            Err(InvokeError::StackExhaustion) => {
+            Err(EngineError::StackExhaustion) => {
                 WabtResult::StackExhaustion
             }
             Err(other) => panic!("{:?}", other),
@@ -231,7 +236,7 @@ impl<E: Engine> ScriptHandler for EngineScriptHandler<E> {
     }
     fn action_get(&mut self, module: Option<String>, field: String) -> Value {
         let moduleaddr = self.get_module(module);
-        let r = self.da.get_global(moduleaddr, field);
+        let r = self.engine.get_global_export(moduleaddr, &field).unwrap();
         val_greenwasm2wabt(r)
     }
     fn assert_exhaustion(&mut self, action: Action) {
@@ -250,6 +255,12 @@ impl<E: Engine> ScriptHandler for EngineScriptHandler<E> {
 }
 
 #[test]
-fn run_tests() {
+fn run_tests_poc_greenwasm() {
     run_mvp_spectest(&mut DynamicAdapterScriptHandler::new()).present();
+}
+
+#[test]
+fn run_tests_engine_poc_greenwasm() {
+    use greenwasm_generic_interpreter::greenwasm_test_engine::SpecEngine;
+    run_mvp_spectest(&mut EngineScriptHandler::<SpecEngine>::new()).present();
 }

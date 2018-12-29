@@ -31,8 +31,9 @@ impl Engine for SpecEngine {
         Ok(ModuleId(id))
     }
 
-    fn instance_module(&mut self, module: ModuleId, imports: Imports) -> EngineResult<ModuleAddr> {
-        let module = self.modules.get(module.0).ok_or(EngineError::WrongId)?.clone();
+    fn instance_module(&mut self, module: ModuleId, imports: &Imports) -> EngineResult<ModuleAddr> {
+        let module = self.modules.get(module.0).ok_or(EngineError::WrongId)?;
+        let (module, imports) = (module.clone(), imports.clone());
         let moduleaddr = self
             .da
             .load_module(module, imports)

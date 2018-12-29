@@ -10,6 +10,7 @@ pub enum EngineError {
     Instantiation,
     WrongId,
     Resolution,
+    StackExhaustion,
 }
 
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]
@@ -17,7 +18,7 @@ pub struct ModuleId(pub usize);
 
 use std::collections::HashMap;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Imports {
     modules: HashMap<String, ModuleAddr>,
 }
@@ -43,7 +44,7 @@ pub type EngineResult<T> = Result<T, EngineError>;
 pub trait Engine: Default {
     fn from_binary_format(&mut self, data: &[u8]) -> EngineResult<ModuleId>;
 
-    fn instance_module(&mut self, module: ModuleId, imports: Imports) -> EngineResult<ModuleAddr>;
+    fn instance_module(&mut self, module: ModuleId, imports: &Imports) -> EngineResult<ModuleAddr>;
 
     fn invoke_export(
         &mut self,
@@ -59,10 +60,6 @@ pub trait Engine: Default {
         symbol: &str,
         value: Val,
     ) -> EngineResult<()>;
-
-    fn from_binary_format_eager_validation(&mut self, data: &[u8]) -> EngineResult<ModuleId> {
-        self.from_binary_format(data)
-    }
 }
 
 
