@@ -43,7 +43,7 @@ impl NamedLookup<ModuleAddr> for Imports {
 
 pub type EngineResult<T> = Result<T, EngineError>;
 
-pub trait Engine: Default {
+pub trait Engine {
     fn from_binary_format(&mut self, data: &[u8]) -> EngineResult<ModuleId>;
 
     fn instance_module(&mut self, module: ModuleId, imports: &Imports) -> EngineResult<ModuleAddr>;
@@ -64,6 +64,68 @@ pub trait Engine: Default {
     ) -> EngineResult<()>;
 }
 
+impl<E: Engine + ?Sized> Engine for Box<E> {
+    fn from_binary_format(&mut self, data: &[u8]) -> EngineResult<ModuleId> {
+        E::from_binary_format(self, data)
+    }
+
+    fn instance_module(&mut self, module: ModuleId, imports: &Imports) -> EngineResult<ModuleAddr> {
+        E::instance_module(self, module, imports)
+    }
+
+    fn invoke_export(
+        &mut self,
+        moduleaddr: ModuleAddr,
+        symbol: &str,
+        args: &[Val],
+    ) -> EngineResult<InvokeResult> {
+        E::invoke_export(self, moduleaddr, symbol, args)
+    }
+
+    fn get_global_export(&mut self, moduleaddr: ModuleAddr, symbol: &str) -> EngineResult<Val> {
+        E::get_global_export(self, moduleaddr, symbol)
+    }
+    fn set_global_export(
+        &mut self,
+        moduleaddr: ModuleAddr,
+        symbol: &str,
+        value: Val,
+    ) -> EngineResult<()>{
+        E::set_global_export(self, moduleaddr, symbol, value)
+    }
+}
+
+impl<'a, E: Engine + ?Sized> Engine for &'a mut E {
+    fn from_binary_format(&mut self, data: &[u8]) -> EngineResult<ModuleId> {
+        E::from_binary_format(self, data)
+    }
+
+    fn instance_module(&mut self, module: ModuleId, imports: &Imports) -> EngineResult<ModuleAddr> {
+        E::instance_module(self, module, imports)
+    }
+
+    fn invoke_export(
+        &mut self,
+        moduleaddr: ModuleAddr,
+        symbol: &str,
+        args: &[Val],
+    ) -> EngineResult<InvokeResult> {
+        E::invoke_export(self, moduleaddr, symbol, args)
+    }
+
+    fn get_global_export(&mut self, moduleaddr: ModuleAddr, symbol: &str) -> EngineResult<Val> {
+        E::get_global_export(self, moduleaddr, symbol)
+    }
+    fn set_global_export(
+        &mut self,
+        moduleaddr: ModuleAddr,
+        symbol: &str,
+        value: Val,
+    ) -> EngineResult<()>{
+        E::set_global_export(self, moduleaddr, symbol, value)
+    }
+}
+
 
 /*
 
@@ -79,3 +141,48 @@ let mut engine: Box<DynamicEngine> = Box::new(GreenwasmEngine::<>)
 
 
 */
+
+#[test]
+fn test_trait_object() {
+    #[derive(Default)]
+    struct Foo;
+    impl Engine for Foo {
+        fn from_binary_format(&mut self, data: &[u8]) -> EngineResult<ModuleId> {
+            unimplemented!()
+        }
+
+        fn instance_module(&mut self, module: ModuleId, imports: &Imports) -> EngineResult<ModuleAddr> {
+            unimplemented!()
+        }
+
+        fn invoke_export(
+            &mut self,
+            moduleaddr: ModuleAddr,
+            symbol: &str,
+            args: &[Val],
+        ) -> EngineResult<InvokeResult> {
+            unimplemented!()
+        }
+
+        fn get_global_export(&mut self, moduleaddr: ModuleAddr, symbol: &str) -> EngineResult<Val> {
+            unimplemented!()
+        }
+
+        fn set_global_export(
+            &mut self,
+            moduleaddr: ModuleAddr,
+            symbol: &str,
+            value: Val,
+        ) -> EngineResult<()> {
+            unimplemented!()
+        }
+    }
+
+    fn bar<E: Engine>(_: E) {}
+
+    bar(Foo);
+    bar(&mut Foo);
+    bar(Box::new(Foo));
+    bar(&mut Foo as &mut Engine);
+    bar(Box::new(Foo) as Box<Engine>);
+}

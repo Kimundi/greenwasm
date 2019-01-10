@@ -155,7 +155,7 @@ struct EngineScriptHandler<E> {
     last_module: Option<ModuleAddr>,
 }
 
-impl<E: Engine> EngineScriptHandler<E> {
+impl<E: Engine + Default> EngineScriptHandler<E> {
     fn new() -> Self {
         Self {
             engine: E::default(),
@@ -186,7 +186,7 @@ impl<E: Engine> EngineScriptHandler<E> {
     }
 }
 
-impl<E: Engine> ScriptHandler for EngineScriptHandler<E> {
+impl<E: Engine + Default> ScriptHandler for EngineScriptHandler<E> {
     fn reset(&mut self) {
         *self = Self::new();
     }
